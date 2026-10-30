@@ -1259,7 +1259,8 @@ function moveMe(dt) {
     vx = Math.cos(cam.yaw) * ix - Math.sin(cam.yaw) * iz;
     vy = -Math.sin(cam.yaw) * ix - Math.cos(cam.yaw) * iz;
   }
-  const running = spaceHeld && (ix || iz) && !me.pd;
+  // arrows + Space, or a double-tapped destination
+  const running = !me.pd && (ix || iz ? spaceHeld : Boolean(target?.run));
   me.running = running;
   let step = SPEED * (me.pd ? 0.45 : running ? 2 : 1) * dt;
   if (vx || vy) {
@@ -2392,8 +2393,18 @@ function pick(clientX, clientY) {
   return raycaster.intersectObjects(objs, false)[0] || null;
 }
 
+// two quick taps close together mean "run there"
+let lastTap = { t: 0, x: 0, y: 0 };
 function handleTap(x, y) {
   if (!me.ready || me.s !== -1 || me.rolling) return;
+  const now = performance.now();
+  const run = now - lastTap.t < 380 && Math.hypot(x - lastTap.x, y - lastTap.y) < 40;
+  lastTap = run ? { t: 0, x: 0, y: 0 } : { t: now, x, y };
+  tapTo(x, y);
+  if (run && target) target.run = true;
+}
+
+function tapTo(x, y) {
   const hit = pick(x, y);
   if (!hit) return;
   const i = hit.object.userData.stall;

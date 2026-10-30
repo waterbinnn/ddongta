@@ -2105,18 +2105,19 @@ function onPoop(m) {
   }
   if (m.gold) {
     floatGold();
-    playDing();
-    if (m.id === meId) toast('황금똥이 나왔어요! 오늘은 운수 좋은 날');
+    if (m.id === meId) {
+      playDing();
+      toast('황금똥이 나왔어요! 오늘은 운수 좋은 날');
+    }
   }
   if (m.id === meId) {
     flashUntil = performance.now() + 1300;
     buzz([30, 40, 90]);
   }
-  plop(m.id === meId ? 1 : distVol(m.stall) * 0.3);
+  if (m.id === meId) plop(1); // only your own poop makes a sound; a room of dozens would be a racket
 }
 
 const lastKnockPop = new Map();
-const distVol = (i) => (LAYOUT[i] ? clamp(1 - Math.hypot(LAYOUT[i].x - me.x, LAYOUT[i].y - me.y) / 1800, 0.08, 1) : 0.3);
 
 function onKnock(m) {
   const s = stallObjs[m.stall];
@@ -2133,11 +2134,12 @@ function onKnock(m) {
     pop(at, KNOCK_POPS[stage]);
   }
   const mine = stalls[m.stall] === meId;
-  const vol = mine ? 0.5 : m.by === meId ? 0.35 : distVol(m.stall) * 0.25;
+  if (!mine && m.by !== meId) return; // you only hear knocks on your door, or your own
+  const vol = mine ? 0.5 : 0.35;
   playKnock(vol, stage);
   if (cracked) {
     playCrack(vol * 1.2);
-    if (mine || m.by === meId) buzz([20, 30, 40]);
+    buzz([20, 30, 40]);
   }
 }
 
@@ -2164,7 +2166,7 @@ function onBreak(m) {
   pop(stallWorld(m.stall, STALL_M / 2, 1.9, 0.1), '와장창!');
   if (m.victim === meId) toast('문이 부서졌어요! 바지부터 올리는 중...');
   if (m.by === meId) toast('문을 열고(?) 들어왔어요. 미안해요~');
-  playCrash(m.victim === meId || m.by === meId ? 0.6 : distVol(m.stall) * 0.45);
+  if (m.victim === meId || m.by === meId) playCrash(0.6);
 }
 
 function onBell(m) {
@@ -2178,7 +2180,7 @@ function onBell(m) {
       notes.push({ n, t: -k * 0.6, sway: Math.random() * 0.3, x: n.position.x });
     }
   }
-  playSound('bird', m.id === meId ? 1.6 : Math.max(0.5, distVol(m.stall)) * 1.1);
+  if (m.id === meId) playSound('bird', 1.6); // others' bells show their notes but stay quiet
 }
 
 const washFx = [];
@@ -2224,7 +2226,7 @@ function onWash(m) {
       washFx.push({ o: d, t: -k * 0.25, life: 0.6, kind: 'drop', vx: (Math.random() - 0.5) * 0.8, vz: (Math.random() - 0.5) * 0.8, vy: 1 + Math.random() * 0.8 });
     }
   }
-  playWash(m.id === meId ? 0.5 : 0.15);
+  if (m.id === meId) playWash(0.5);
   if (m.id === meId) setTimeout(() => toast('손 씻기 끝! 뽀송뽀송해졌어요'), 1800);
 }
 

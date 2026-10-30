@@ -210,6 +210,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .act.main { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; padding: 0 20px; font-size: 14px; }
 .act.main:hover { filter: brightness(1.03); }
 .act.main.knock { background: var(--coral); color: var(--coral-ink); }
+/* the knock button gets angrier as the door weakens */
+.act.main.knock.k1 { background: #ff7a5c; color: #4a160c; }
+.act.main.knock.k2 { background: #f0503a; color: #fff4ec; }
+.act.main.knock.k3 { background: #c62a1e; color: #ffffff; animation: rattle 0.35s ease-in-out infinite; }
+@keyframes rattle {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25% { transform: translateX(-2px) rotate(-1.5deg); }
+  75% { transform: translateX(2px) rotate(1.5deg); }
+}
 .act.main:disabled { opacity: 0.7; cursor: default; }
 
 .act.mini { padding: 0 14px; font-size: 12px; color: var(--text); }

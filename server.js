@@ -33,7 +33,7 @@ const THEMES = {
 const OPEN_THEMES = ['usa'];
 
 const TICK_MS = 150;
-const PUSH_PER_TICK = 3; // about 5s of holding = one poop
+const PUSH_PER_TICK = 5; // about 3s of holding = one poop
 const GOLD_CHANCE = Number(process.env.GOLD_CHANCE) || 0.05; // now and then a golden one
 const CHAT_MAX = 80;
 const CHAT_GAP_MS = 700;

@@ -1204,6 +1204,11 @@ function tryEnter(i) {
   send({ t: 'enter', stall: i });
 }
 
+// how far a door has gone: 0 fine, 1 rattling, 2 cracking, 3 about to give (same steps as the cracks drawn on it)
+const knockStage = (h) => (h < 25 ? 3 : h < 55 ? 2 : h < 85 ? 1 : 0);
+const KNOCK_LABELS = ['똑똑, 계세요?', '쾅쾅! 빨리 나와요', '문이 흔들려요 · 쾅!', '문 부수기!'];
+const KNOCK_POPS = ['똑똑', '쾅쾅', '쾅!!', '우지끈'];
+
 function tryKnock(i) {
   if (i < 0) return;
   sendMove(true);
@@ -1635,14 +1640,24 @@ const distVol = (i) => (LAYOUT[i] ? clamp(1 - Math.hypot(LAYOUT[i].x - me.x, LAY
 function onKnock(m) {
   const s = stallObjs[m.stall];
   if (!s) return;
-  s.shake = 0.2;
+  const stage = knockStage(m.hp ?? 100);
+  const cracked = stage > (s.knockStage ?? 0);
+  s.knockStage = stage;
+  s.shake = 0.2 + stage * 0.08;
   const now = performance.now();
-  if (now - (lastKnockPop.get(m.stall) || 0) > 500) {
+  const at = stallWorld(m.stall, STALL_M / 2 + (Math.random() - 0.5) * 0.4, 1.2, 0.2);
+  if (cracked) pop(at, '쩌적!');
+  else if (now - (lastKnockPop.get(m.stall) || 0) > 500) {
     lastKnockPop.set(m.stall, now);
-    pop(stallWorld(m.stall, STALL_M / 2 + (Math.random() - 0.5) * 0.4, 1.2, 0.2), '똑똑');
+    pop(at, KNOCK_POPS[stage]);
   }
   const mine = stalls[m.stall] === meId;
-  playKnock(mine ? 0.5 : m.by === meId ? 0.35 : distVol(m.stall) * 0.25);
+  const vol = mine ? 0.5 : m.by === meId ? 0.35 : distVol(m.stall) * 0.25;
+  playKnock(vol, stage);
+  if (cracked) {
+    playCrack(vol * 1.2);
+    if (mine || m.by === meId) buzz([20, 30, 40]);
+  }
 }
 
 function onBreak(m) {
@@ -2003,7 +2018,7 @@ function renderActions() {
   const bench = out && !me.b ? nearBench() : -1;
   const anyFree = stalls.some((_, i) => freeFor(i));
   const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : nearSink() ? 'sink'
-    : near ? 'near' : nearOcc ? 'knock' : bench >= 0 ? `bench${bench}` : anyFree ? 'far' : 'full';
+    : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}` : anyFree ? 'far' : 'full';
   if (mode === actionMode) return;
   actionMode = mode;
   const bar = $('#actions');
@@ -2034,8 +2049,9 @@ function renderActions() {
     bar.append(mainBtn('wash', '손 씻기', washHands));
   } else if (mode === 'near') {
     bar.append(mainBtn('door', '이 칸에 앉기', () => tryEnter(nearestEmptyStall(me.x, me.y))));
-  } else if (mode === 'knock') {
-    bar.append(mainBtn('knock', '똑똑, 계세요?', () => tryKnock(nearestOccupiedStall(me.x, me.y)), 'knock'));
+  } else if (mode.startsWith('knock')) {
+    const stage = Number(mode.slice(5));
+    bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
     bar.append(mainBtn('bench', '벤치에 앉기', () => goSitOnBench(bench)));
   } else if (mode === 'full') {
@@ -2183,10 +2199,39 @@ function plop(volume) {
   else tone('square', 620, 120, 0.2, volume * 0.5);
 }
 
-function playKnock(volume) {
+// knocks get heavier as the door weakens: a polite tap-tap, then thumps, then bangs
+function playKnock(volume, stage = 0) {
   if (!soundOn || volume <= 0) return;
-  tone('triangle', 190, 70, 0.09, volume);
-  tone('triangle', 175, 65, 0.09, volume * 0.85, 0.13);
+  const low = 1 - stage * 0.18;
+  const v = volume * (1 + stage * 0.25);
+  tone('triangle', 190 * low, 70 * low, 0.09 + stage * 0.03, v);
+  tone('triangle', 175 * low, 65 * low, 0.09 + stage * 0.03, v * 0.85, 0.13);
+  if (stage >= 2) noiseBurst(0.12, v * 0.5, 600);
+}
+
+// a short burst of filtered noise
+function noiseBurst(dur, volume, highpass, delay = 0) {
+  const ctx = actx();
+  const len = Math.floor(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = highpass;
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  src.connect(filter).connect(gain).connect(ctx.destination);
+  src.start(ctx.currentTime + delay);
+}
+
+// wood splitting: a few sharp crackles
+function playCrack(volume) {
+  if (!soundOn || volume <= 0) return;
+  for (let k = 0; k < 4; k++) noiseBurst(0.05 + Math.random() * 0.05, volume * (1 - k * 0.15), 2000 + Math.random() * 1500, k * 0.06 + Math.random() * 0.03);
+  tone('square', 140, 60, 0.12, volume * 0.25);
 }
 
 function playWash(volume) {

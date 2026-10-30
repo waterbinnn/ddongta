@@ -1,5 +1,5 @@
-# Every push to main is a release: tag it and publish a GitHub Release with notes
-# generated from the commits since the last one. Render deploys main on its own.
+# Every push to main is a release: tag it and publish a GitHub Release listing
+# the commits since the last one. Render deploys main on its own.
 name: Release
 
 on:
@@ -26,7 +26,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="v1.0.${{ github.run_number }}"
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          # notes: one line per commit since the last release (we push straight to main, so there are no PRs)
+          {
+            echo "## 바뀐 것"
+            git log --no-merges --format='- %s' ${prev:+$prev..}HEAD
+            [ -n "$prev" ] && echo && echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$prev...$tag"
+          } > notes.md
           gh release create "$tag" \
             --target "$GITHUB_SHA" \
             --title "$tag · $(date -u +%Y-%m-%d)" \
-            --generate-notes
+            --notes-file notes.md

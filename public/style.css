@@ -422,3 +422,36 @@ button, .act { -webkit-touch-callout: none; }
 body.typing .push-pad,
 body.typing .actions,
 body.typing .keys { display: none; }
+
+/* on-screen stick, phones only, while walking around */
+.joy { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .joy {
+    display: block;
+    position: fixed;
+    left: 18px;
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    background: rgba(255, 252, 242, 0.45);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+    touch-action: none;
+    z-index: 12;
+  }
+  .joy .knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 46px;
+    margin: -23px 0 0 -23px;
+    border-radius: 50%;
+    background: var(--glass-strong);
+    box-shadow: var(--shadow);
+    transition: transform 0.12s;
+  }
+  .joy.on .knob { transition: none; }
+  body.typing .joy, body.seated .joy { display: none; }
+}

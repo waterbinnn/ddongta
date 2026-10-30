@@ -1139,6 +1139,7 @@ function applyState(st) {
       }
       if (me.s === -1 && u.s !== -1) setHold(false);
       me.s = u.s;
+      document.body.classList.toggle('seated', me.s !== -1);
       me.p = u.p;
       me.rolling = Boolean(u.r);
       me.pd = Boolean(u.pd);
@@ -1253,6 +1254,13 @@ function moveMe(dt) {
   if (keys.has('ArrowRight') || keys.has('KeyD')) ix += 1;
   if (keys.has('ArrowUp') || keys.has('KeyW')) iz += 1;
   if (keys.has('ArrowDown') || keys.has('KeyS')) iz -= 1;
+  let joyRun = false;
+  if (!ix && !iz && Math.hypot(joy.x, joy.y) > 0.2) {
+    // the on-screen stick: push it, walk; push it all the way, run
+    ix = joy.x;
+    iz = -joy.y;
+    joyRun = Math.hypot(joy.x, joy.y) > 0.85;
+  }
   let vx = 0;
   let vy = 0;
   if (ix || iz) {
@@ -1260,7 +1268,7 @@ function moveMe(dt) {
     vy = -Math.sin(cam.yaw) * ix - Math.cos(cam.yaw) * iz;
   }
   // arrows + Space, or a double-tapped destination
-  const running = !me.pd && (ix || iz ? spaceHeld : Boolean(target?.run));
+  const running = !me.pd && (ix || iz ? spaceHeld || joyRun : Boolean(target?.run));
   me.running = running;
   let step = SPEED * (me.pd ? 0.45 : running ? 2 : 1) * dt;
   if (vx || vy) {
@@ -1363,7 +1371,7 @@ function focusCamera() {
   if (key) {
     cam.tYaw = yaw + Math.PI * 2 * Math.round((cam.tYaw - yaw) / (Math.PI * 2)); // the short way round
     cam.tPitch = pitch;
-    cam.tDist = clamp(5.5, DIST_MIN, DIST_MAX);
+    cam.tDist = clamp(8, DIST_MIN, DIST_MAX);
   } else if (camBefore) {
     cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;
@@ -1382,8 +1390,6 @@ function updateCamera(dt) {
   }
   const k = 1 - Math.exp(-dt * 7);
   cam.yaw = lerpAngle(cam.yaw, cam.tYaw, k);
-  cam.pitch = lerp(cam.pitch, cam.tPitch, k);
-  cam.dist = lerp(cam.dist, cam.tDist, k);
   let fx = toX(me.x);
   let fz = toZ(me.y);
   if (me.s !== -1) {
@@ -1394,18 +1400,26 @@ function updateCamera(dt) {
   const kf = 1 - Math.exp(-dt * 5);
   cam.fx = lerp(cam.fx, fx, kf);
   cam.fz = lerp(cam.fz, fz, kf);
-  const cp = Math.cos(cam.pitch);
-  // always stay in front of the stall banks, so you never see the stalls (or anyone in them) from behind
+  // always stay in front of the stall banks, so you never see the stalls (or anyone in them) from behind.
+  // Near a wall the camera first tilts up to look down from above, and only comes closer if it still
+  // doesn't fit; both glide there instead of jumping.
   const rw = toX(ROOM_W);
-  let d = cam.dist;
-  const at = (dd) => [cam.fx + Math.sin(cam.yaw) * cp * dd, 0.9 + Math.sin(cam.pitch) * dd, cam.fz + Math.cos(cam.yaw) * cp * dd];
-  let [px, py, pz] = at(d);
-  while (d > 2 && (px < 0.4 || px > rw - 0.4 || pz < 0.4)) {
-    d -= 0.25;
-    [px, py, pz] = at(d);
-  }
-  px = clamp(px, 0.4, rw - 0.4);
-  pz = Math.max(pz, 0.4);
+  const sy = Math.sin(cam.yaw);
+  const cy = Math.cos(cam.yaw);
+  const m = 0.3;
+  let room = Infinity; // how far back the camera can go, measured along the floor
+  if (sy < -1e-3) room = Math.min(room, (cam.fx - m) / -sy);
+  if (sy > 1e-3) room = Math.min(room, (rw - m - cam.fx) / sy);
+  if (cy < -1e-3) room = Math.min(room, (cam.fz - m) / -cy);
+  room = Math.max(0.3, room);
+  const wantPitch = Math.min(1.35, Math.max(cam.tPitch, Math.acos(Math.min(1, room / cam.tDist))));
+  const wantDist = Math.max(1.5, Math.min(cam.tDist, room / Math.cos(wantPitch)));
+  cam.pitch = lerp(cam.pitch, wantPitch, k);
+  cam.dist = lerp(cam.dist, wantDist, k);
+  const cp = Math.cos(cam.pitch);
+  const px = clamp(cam.fx + sy * cp * cam.dist, m, rw - m);
+  const py = 0.9 + Math.sin(cam.pitch) * cam.dist;
+  const pz = Math.max(cam.fz + cy * cp * cam.dist, m);
   camera.position.set(px, py, pz);
   camera.lookAt(cam.fx, 0.9, cam.fz);
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
@@ -2297,8 +2311,10 @@ function startMusic() {
   verb.buffer = reverbImpulse(2.6);
   bus.connect(dry).connect(ctx.destination);
   bus.connect(verb).connect(wet).connect(ctx.destination);
-  music = { bus, t0: ctx.currentTime + 0.2, loop: 0, i: 0, timer: 0 };
+  const state = { bus, t0: ctx.currentTime + 0.2, loop: 0, i: 0, timer: 0 };
+  music = state;
   const schedule = () => {
+    if (music !== state) return; // stopped (or restarted) since this timer was set
     const horizon = actx().currentTime + (document.hidden ? 1.6 : 0.5); // hidden tabs tick slowly
     for (;;) {
       const ev = SONG.events[music.i];
@@ -2510,9 +2526,51 @@ canvasEl.addEventListener('pointercancel', endPointer);
 
 canvasEl.addEventListener('wheel', (e) => {
   e.preventDefault();
-  cam.tDist = clamp(cam.tDist * (1 + e.deltaY * 0.0015), DIST_MIN, DIST_MAX);
+  cam.tDist = clamp(cam.tDist * Math.exp(clamp(e.deltaY, -60, 60) * 0.004), DIST_MIN, DIST_MAX); // one notch never jumps too far
 }, { passive: false });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+// ---------- on-screen stick for phones ----------
+
+const joy = { x: 0, y: 0, id: null };
+{
+  const pad = $('#joy');
+  const knob = pad.querySelector('.knob');
+  const R = 38;
+  const set = (e) => {
+    const r = pad.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy);
+    if (d > R) {
+      dx = (dx / d) * R;
+      dy = (dy / d) * R;
+    }
+    joy.x = dx / R;
+    joy.y = dy / R;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  };
+  const release = (e) => {
+    if (e.pointerId !== joy.id) return;
+    joy.id = null;
+    joy.x = joy.y = 0;
+    knob.style.transform = '';
+    pad.classList.remove('on');
+  };
+  pad.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    joy.id = e.pointerId;
+    try {
+      pad.setPointerCapture(e.pointerId);
+    } catch {}
+    pad.classList.add('on');
+    set(e);
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (e.pointerId === joy.id) set(e);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => pad.addEventListener(ev, release));
+}
 
 // ---------- start ----------
 

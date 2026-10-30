@@ -441,7 +441,7 @@ function drawNumber(g, n, cx, y, color) {
 // ---------- three.js setup ----------
 
 const sceneEl = $('#scene');
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); // softer edges
 renderer.setPixelRatio(1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
@@ -450,8 +450,8 @@ sceneEl.append(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(PAL.sky);
-scene.fog = new THREE.Fog(PAL.sky, 34, 80);
-const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 140);
+scene.fog = new THREE.Fog(PAL.sky, 60, 230);
+const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 600);
 const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
 const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // the sun by day, the moon at night
 sun.castShadow = true;
@@ -474,7 +474,7 @@ let PIX = 3;
 function resize() {
   W = innerWidth;
   H = innerHeight;
-  PIX = W >= 900 ? 3 : 2; // render small, then scale up so the 3D looks like pixel art too
+  PIX = W >= 900 ? 1.5 : 1.25; // render a little small and scale up: a light pixel-art touch, not too rough
   renderer.setSize(Math.ceil(W / PIX), Math.ceil(H / PIX), false);
   renderer.domElement.style.width = `${W}px`;
   renderer.domElement.style.height = `${H}px`;
@@ -539,34 +539,34 @@ const wallCanvas = canvas(16, 16, (g) => {
   g.fillRect(7, 0, 1, 16);
   g.fillRect(15, 0, 1, 16);
 });
-// the windows show the sky at the visitor's own time of day (redrawn by applyTimeOfDay)
-const windowCanvas = canvas(16, 20, () => {});
-const winTex = pixelTex(windowCanvas);
-function drawWindow(top, bottom, night) {
-  const g = windowCanvas.getContext('2d');
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, 16, 20);
-  const grad = g.createLinearGradient(0, 0, 0, 20);
-  grad.addColorStop(0, top);
-  grad.addColorStop(1, bottom);
-  g.fillStyle = grad;
-  g.fillRect(1, 1, 14, 18);
-  if (night > 0.5) {
-    g.fillStyle = '#ffffff'; // stars
-    for (const [x, y] of [[3, 3], [11, 4], [5, 12], [12, 15], [2, 16]]) g.fillRect(x, y, 1, 1);
-    g.fillStyle = '#ffe9a8'; // the moon
-    g.fillRect(10, 11, 2, 2);
-    g.fillRect(11, 10, 1, 1);
-  } else {
-    g.fillStyle = 'rgba(255,255,255,0.8)'; // glare
-    g.fillRect(2, 2, 3, 1);
-    g.fillRect(10, 11, 3, 1);
+// outside the building: brick walls, a grass world that curves away like a small planet, trees, hills and sky
+const brickCanvas = canvas(16, 8, (g) => {
+  g.fillStyle = '#d6b39a';
+  g.fillRect(0, 0, 16, 8);
+  const bricks = ['#b5523b', '#a9492f', '#bd5c44'];
+  for (let y = 0; y < 2; y++) {
+    for (let x = -1; x < 3; x++) {
+      g.fillStyle = bricks[(x + y * 2 + 3) % 3];
+      g.fillRect(x * 8 + (y % 2) * 4, y * 4, 7, 3);
+    }
   }
-  g.fillStyle = '#ffffff';
-  g.fillRect(7, 1, 2, 18);
-  g.fillRect(1, 9, 14, 1);
-  winTex.needsUpdate = true;
-}
+});
+const grassCanvas = canvas(16, 16, (g) => {
+  g.fillStyle = '#7fb35a';
+  g.fillRect(0, 0, 16, 16);
+  const tufts = ['#8cc063', '#72a54f', '#93c76b'];
+  for (let k = 0; k < 40; k++) {
+    g.fillStyle = tufts[k % 3];
+    g.fillRect((k * 7 + (k >> 2) * 3) % 16, (k * 11 + (k >> 1)) % 16, 1, 1);
+  }
+});
+const pavementCanvas = canvas(16, 16, (g) => {
+  g.fillStyle = '#ece5d6';
+  g.fillRect(0, 0, 16, 16);
+  g.fillStyle = '#d8cfbd';
+  g.fillRect(0, 15, 16, 1);
+  g.fillRect(15, 0, 1, 16);
+});
 
 // glowing neon text
 const neonCanvas = (text, color, w) => canvas(w, 16, (g) => {
@@ -752,34 +752,112 @@ function buildRoom() {
   const wallH = 5;
   const back = -STALL_D;
 
-  // floor
+  // floor: the checked tiles stop at the walls and the open front
   const ft = pixelTex(floorCanvas, true);
-  ft.repeat.set((rw + 6) / 0.9, (rd + 20) / 0.9);
-  floorMesh = mesh(new THREE.PlaneGeometry(rw + 6, rd + 20), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
+  const fw = rw + 2 * STALL_D;
+  const fd = rd + STALL_D;
+  ft.repeat.set(fw / 0.9, fd / 0.9);
+  floorMesh = mesh(new THREE.PlaneGeometry(fw, fd), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
   floorMesh.rotation.x = -Math.PI / 2;
-  floorMesh.position.set(rw / 2, 0, rd / 2 + 6); // runs out past the entrance
+  floorMesh.position.set(rw / 2, 0, (rd + back) / 2);
   worldRoot.add(floorMesh);
+  buildOutside(rw, rd, back);
 
-  // three tiled walls behind the stall banks, with a red band and sunny windows
-  const wall = (w, x, z, rotY) => {
+  // three walls with some thickness: tiles inside, red brick outside, real window openings in the back
+  const T = 0.3; // wall thickness
+  const tiles = (w, h) => {
     const t = pixelTex(wallCanvas, true);
-    t.repeat.set(w / 0.6, wallH / 0.6);
-    const m = mesh(new THREE.PlaneGeometry(w, wallH), new THREE.MeshLambertMaterial({ map: t }), { receive: true });
-    m.position.set(x, wallH / 2, z);
-    m.rotation.y = rotY;
-    const band = mesh(new THREE.PlaneGeometry(w, 0.12), mat(PAL.band, { emissive: PAL.bandGlow }));
-    band.position.set(x, 2.05, z);
-    band.rotation.y = rotY;
-    band.translateZ(0.01);
-    worldRoot.add(m, band);
+    t.repeat.set(w / 0.6, h / 0.6);
+    return new THREE.MeshLambertMaterial({ map: t });
   };
-  wall(rw + 2 * STALL_D, rw / 2, back, 0);
-  wall(rd + STALL_D, back, (rd - STALL_D) / 2, Math.PI / 2);
-  wall(rd + STALL_D, rw - back, (rd - STALL_D) / 2, -Math.PI / 2);
-  for (let x = 2.2; x < rw - 1; x += 4.4) {
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.5), new THREE.MeshBasicMaterial({ map: winTex }));
-    win.position.set(x, 3.2, back + 0.02);
-    worldRoot.add(win);
+  const bricks = (w, h) => {
+    const t = pixelTex(brickCanvas, true);
+    t.repeat.set(w / 0.8, h / 0.4);
+    return new THREE.MeshLambertMaterial({ map: t });
+  };
+  const band = (w, x, z, rotY) => {
+    const m = mesh(new THREE.PlaneGeometry(w, 0.12), mat(PAL.band, { emissive: PAL.bandGlow }));
+    m.position.set(x, 2.05, z);
+    m.rotation.y = rotY;
+    m.translateZ(0.01);
+    worldRoot.add(m);
+  };
+  // side walls are plain boxes: the inner face gets tiles, everything else brick
+  const sideLen = rd + STALL_D;
+  for (const [x, inner] of [[back - T / 2, 0], [rw - back + T / 2, 1]]) {
+    const mats = Array.from({ length: 6 }, (_, k) => (k === inner ? tiles(sideLen, wallH) : bricks(k < 2 ? sideLen : T, k === 2 || k === 3 ? sideLen : wallH)));
+    const m = mesh(new THREE.BoxGeometry(T, wallH, sideLen), mats, { cast: true, receive: true });
+    m.position.set(x, wallH / 2, (rd + back) / 2);
+    worldRoot.add(m);
+  }
+  band(sideLen, back, (rd + back) / 2, Math.PI / 2);
+  band(sideLen, rw - back, (rd + back) / 2, -Math.PI / 2);
+
+  // the back wall: a slab with window holes, tiled inside, brick outside, glazed and framed
+  const bw = fw + 2 * T;
+  const winW = 1.3;
+  const winH = 1.6;
+  const winY = 3.25;
+  const winXs = [2.2, 6.6, rw - 6.6, rw - 2.2]; // the middle is left for the sign
+  const shape = new THREE.Shape();
+  shape.moveTo(-bw / 2, 0);
+  shape.lineTo(bw / 2, 0);
+  shape.lineTo(bw / 2, wallH);
+  shape.lineTo(-bw / 2, wallH);
+  shape.closePath();
+  for (const wx of winXs) {
+    const hole = new THREE.Path();
+    const x0 = wx - rw / 2 - winW / 2;
+    hole.moveTo(x0, winY - winH / 2);
+    hole.lineTo(x0, winY + winH / 2);
+    hole.lineTo(x0 + winW, winY + winH / 2);
+    hole.lineTo(x0 + winW, winY - winH / 2);
+    hole.closePath();
+    shape.holes.push(hole);
+  }
+  const slab = new THREE.ShapeGeometry(shape);
+  const inner = new THREE.MeshLambertMaterial({ map: pixelTex(wallCanvas, true) });
+  inner.map.repeat.set(1 / 0.6, 1 / 0.6); // shape UVs are in metres
+  const outer = new THREE.MeshLambertMaterial({ map: pixelTex(brickCanvas, true), side: THREE.BackSide });
+  outer.map.repeat.set(1 / 0.8, 1 / 0.4);
+  const backIn = mesh(slab, inner, { receive: true });
+  backIn.position.set(rw / 2, 0, back);
+  const backOut = mesh(slab, outer, { cast: true, receive: true });
+  backOut.position.set(rw / 2, 0, back - T);
+  const wallTop = mesh(new THREE.BoxGeometry(bw, 0.06, T), bricks(bw, T));
+  wallTop.position.set(rw / 2, wallH, back - T / 2);
+  worldRoot.add(backIn, backOut, wallTop);
+  band(fw, rw / 2, back, 0);
+
+  const frameMat = mat('#fffaf0');
+  const glassMat = new THREE.MeshBasicMaterial({ color: '#d6eef8', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+  const glareMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
+  for (const wx of winXs) {
+    const z = back - T / 2;
+    // reveals: the four inner sides of the opening
+    for (const [w, h, dx, dy] of [[winW, 0.05, 0, -winH / 2], [winW, 0.05, 0, winH / 2], [0.05, winH, -winW / 2, 0], [0.05, winH, winW / 2, 0]]) {
+      const r = mesh(new THREE.BoxGeometry(w + 0.05, h, T), frameMat, { receive: true });
+      r.position.set(wx + dx, winY + dy, z);
+      worldRoot.add(r);
+    }
+    // mullions: a cross of white bars
+    const v = mesh(new THREE.BoxGeometry(0.06, winH, 0.06), frameMat);
+    v.position.set(wx, winY, z);
+    const hz = mesh(new THREE.BoxGeometry(winW, 0.06, 0.06), frameMat);
+    hz.position.set(wx, winY + 0.12, z);
+    // glass, with two pale glare strips
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), glassMat);
+    glass.position.set(wx, winY, z);
+    const g1 = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.7), glareMat);
+    g1.position.set(wx - 0.32, winY + 0.25, z + 0.01);
+    g1.rotation.z = -0.5;
+    const g2 = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.45), glareMat);
+    g2.position.set(wx - 0.18, winY + 0.32, z + 0.01);
+    g2.rotation.z = -0.5;
+    // a sill on the inside
+    const sill = mesh(new THREE.BoxGeometry(winW + 0.2, 0.06, 0.16), frameMat, { cast: true });
+    sill.position.set(wx, winY - winH / 2 - 0.03, back + 0.08);
+    worldRoot.add(v, hz, glass, g1, g2, sill);
   }
 
   // glowing signs: the name over the back bank, RESTROOM over the open entrance
@@ -903,6 +981,123 @@ function buildRoom() {
   applyTimeOfDay();
 }
 
+// the world around the building: a sidewalk out front, then grass that stays flat near the walls and
+// curves away further out like a small planet, ringed by trees and low hills under a sky dome
+const FLAT_R = 26; // the ground stays level this far from the middle of the room
+const CURVE_R = 70; // then drops away along a curve this tight
+const groundY = (r) => (r <= FLAT_R ? -0.02 : -0.02 - ((r - FLAT_R) ** 2) / (2 * CURVE_R));
+function buildOutside(rw, rd, back) {
+  const cx = rw / 2;
+  const cz = (rd + back) / 2;
+  // grass: a polar grid bent by groundY, denser near the middle
+  const rings = 60;
+  const segs = 96;
+  const verts = [];
+  const uvs = [];
+  const idx = [];
+  for (let i = 0; i <= rings; i++) {
+    const r = (220 * i * i) / (rings * rings); // denser near the middle
+    for (let j = 0; j <= segs; j++) {
+      const a = (j / segs) * Math.PI * 2;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      verts.push(x, groundY(r), z);
+      uvs.push(x / 1.6, z / 1.6);
+    }
+  }
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const p0 = i * (segs + 1) + j;
+      const p1 = p0 + segs + 1;
+      idx.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1);
+    }
+  }
+  const ground = new THREE.BufferGeometry();
+  ground.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  ground.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  ground.setIndex(idx);
+  ground.computeVertexNormals();
+  const gt = pixelTex(grassCanvas, true);
+  const grass = mesh(ground, new THREE.MeshLambertMaterial({ map: gt }), { receive: true });
+  grass.position.set(cx, 0, cz);
+  worldRoot.add(grass);
+
+  // a sidewalk along the open front, leading out from the entrance
+  const pt = pixelTex(pavementCanvas, true);
+  const sw = rw + 2 * STALL_D + 8;
+  pt.repeat.set(sw / 0.9, 8 / 0.9);
+  const walk = mesh(new THREE.PlaneGeometry(sw, 8), new THREE.MeshLambertMaterial({ map: pt }), { receive: true });
+  walk.rotation.x = -Math.PI / 2;
+  walk.position.set(cx, -0.005, rd + 4);
+  worldRoot.add(walk);
+
+  // trees all around, leaving the walls and the front walk clear
+  const rnd = (k) => {
+    const v = Math.sin(k * 91.3 + 7.1) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const trunkMat = mat('#8a5a3a');
+  for (let k = 0; k < 70; k++) {
+    const a = rnd(k) * Math.PI * 2;
+    const r = 24 + rnd(k + 100) * 60;
+    const x = cx + Math.cos(a) * r;
+    const z = cz + Math.sin(a) * r;
+    if (z > rd - 2 && Math.abs(x - cx) < rw / 2 + 6 && z < rd + 12) continue; // keep the front walk open
+    const size = 1.2 + rnd(k + 200) * 1.6;
+    const t = new THREE.Group();
+    const trunk = mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.2, 6), trunkMat);
+    trunk.position.y = 0.6;
+    t.add(trunk);
+    for (let n = 0; n < 3; n++) {
+      const leaf = mesh(new THREE.IcosahedronGeometry(0.75 - n * 0.12, 0), LEAF_MATS[(k + n) % 3]);
+      leaf.position.set((rnd(k * 3 + n) - 0.5) * 0.5, 1.4 + n * 0.55, (rnd(k * 5 + n) - 0.5) * 0.5);
+      leaf.rotation.set(rnd(k + n) * 3, rnd(k * 2 + n) * 3, 0);
+      t.add(leaf);
+    }
+    t.scale.setScalar(size);
+    t.position.set(x, groundY(r), z);
+    worldRoot.add(t);
+  }
+
+  // low hills on the far rim, softened by the haze
+  const hillMat = new THREE.MeshLambertMaterial({ color: '#8fbf78', flatShading: true });
+  for (let k = 0; k < 14; k++) {
+    const a = (k / 14) * Math.PI * 2 + rnd(k + 300) * 0.3;
+    const r = 120 + rnd(k + 400) * 30;
+    const hill = mesh(new THREE.SphereGeometry(18 + rnd(k + 500) * 14, 10, 6), hillMat);
+    hill.scale.y = 0.45;
+    hill.position.set(cx + Math.cos(a) * r, groundY(r) - 2, cz + Math.sin(a) * r);
+    worldRoot.add(hill);
+  }
+}
+
+// the sky: a dome that blends from the zenith colour to the horizon colour, with stars at night
+const skyUniforms = { top: { value: new THREE.Color('#7fb8e6') }, horizon: { value: new THREE.Color('#e8f4fb') } };
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(400, 32, 16),
+  new THREE.ShaderMaterial({
+    uniforms: skyUniforms,
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+    vertexShader: 'varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 horizon; varying vec3 vPos; void main() { float h = clamp(normalize(vPos).y * 1.6, 0.0, 1.0); gl_FragColor = vec4(mix(horizon, top, h), 1.0); #include <colorspace_fragment> }',
+  }),
+);
+const stars = (() => {
+  const pts = [];
+  for (let k = 0; k < 260; k++) {
+    const a = Math.random() * Math.PI * 2;
+    const y = 0.15 + Math.random() * 0.85;
+    const r = Math.sqrt(1 - y * y);
+    pts.push(Math.cos(a) * r * 380, y * 380, Math.sin(a) * r * 380);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+})();
+scene.add(sky, stars);
+
 // a potted plant: white pot with a red band, chunky low-poly leaves
 const LEAF_MATS = ['#5fae57', '#4b9446', '#7cc26a'].map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 function planter(x, z, size, seed) {
@@ -965,19 +1160,19 @@ function buildEntrance(cx, z) {
 }
 
 // ---------- time of day ----------
-// The windows and the light follow the visitor's clock: blue sky by day, a pink-orange sunset,
+// The sky and the light follow the visitor's clock: blue sky by day, a pink-orange sunset,
 // a starry night with the ceiling lights turned up, and a lilac dawn. ?hour=21 previews an hour.
 const lampLights = []; // [light, share of PAL.lampPower]
 const DAYTIME = [
-  // hour, window top, window bottom, sky outside, sky light, sun, sun colour, ceiling lights
-  [0, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
-  [5, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
-  [6.5, '#9fb3e0', '#ffc8b0', '#e2c39c', 0.8, 0.75, '#ffd0b0', 1.5],
-  [8, '#a8d4ef', '#e8f4fb', PAL.sky, PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
-  [17, '#a8d4ef', '#e8f4fb', PAL.sky, PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
-  [18.5, '#ee8a5e', '#ffd39a', '#e3a874', 0.85, 0.85, '#ffaa6a', 1.5],
-  [20, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
-  [24, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
+  // hour, sky at the top, sky at the horizon, sky light, sun, sun colour, ceiling lights
+  [0, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
+  [5, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
+  [6.5, '#8ea4d8', '#ffd0b8', 0.8, 0.75, '#ffd0b0', 1.5],
+  [8, '#6fb1e3', '#dff0f7', PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
+  [17, '#6fb1e3', '#dff0f7', PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
+  [18.5, '#6d6fb4', '#ffb27a', 0.85, 0.85, '#ffaa6a', 1.5],
+  [20, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
+  [24, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
 ];
 const forcedHour = new URLSearchParams(location.search).get('hour');
 function applyTimeOfDay() {
@@ -991,16 +1186,15 @@ function applyTimeOfDay() {
   const [h1, ...b] = DAYTIME[k + 1];
   const f = h1 > h0 ? (h - h0) / (h1 - h0) : 0;
   const mix = (x, y) => new THREE.Color(x).lerp(new THREE.Color(y), f);
-  const top = mix(a[0], b[0]);
-  const bottom = mix(a[1], b[1]);
-  const night = h < 6 || h > 19.3 ? 1 : 0;
-  drawWindow(`#${top.getHexString()}`, `#${bottom.getHexString()}`, night);
-  scene.background.copy(mix(a[2], b[2]));
-  scene.fog.color.copy(scene.background);
-  hemi.intensity = lerp(a[3], b[3], f);
-  sun.intensity = lerp(a[4], b[4], f);
-  sun.color.copy(mix(a[5], b[5]));
-  const lampScale = lerp(a[6], b[6], f);
+  skyUniforms.top.value.copy(mix(a[0], b[0]));
+  skyUniforms.horizon.value.copy(mix(a[1], b[1]));
+  scene.background.copy(skyUniforms.horizon.value);
+  scene.fog.color.copy(skyUniforms.horizon.value); // far things fade into the same sky
+  stars.material.opacity = clamp(h < 12 ? (5.5 - h) / 1 : (h - 19.5) / 1, 0, 1);
+  hemi.intensity = lerp(a[2], b[2], f);
+  sun.intensity = lerp(a[3], b[3], f);
+  sun.color.copy(mix(a[4], b[4]));
+  const lampScale = lerp(a[5], b[5], f);
   for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
 }
 setInterval(applyTimeOfDay, 60 * 1000);
@@ -2900,3 +3094,4 @@ Promise.all([document.fonts.load('9px Galmuri9'), document.fonts.load('11px Galm
   connect();
   requestAnimationFrame(frame);
 });
+

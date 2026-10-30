@@ -307,7 +307,7 @@ wss.on('connection', (ws, req) => {
     name: isValidName(q.get('name')) ? q.get('name') : `${pick(ADJ)} ${pick(NOUN)}`,
     color: pick(COLORS),
     ws,
-    x: 60 + Math.random() * 80,
+    x: 110 + Math.random() * 60,
     y: 250 + Math.random() * 250,
     dir: 1,
     stall: -1,
@@ -346,7 +346,7 @@ wss.on('connection', (ws, req) => {
     const validStall = Number.isInteger(i) && i >= 0 && i < room.stalls.length;
 
     if (m.t === 'move' && user.stall === -1 && !user.roll) {
-      user.x = clamp(Number(m.x) || 0, 20, worldW(room) - 40);
+      user.x = clamp(Number(m.x) || 0, 95, worldW(room) - 40); // keep clear of the sinks
       user.y = clamp(Number(m.y) || 0, 0, FLOOR_H);
       user.dir = m.d === -1 ? -1 : 1;
       user.bench = false; // moving gets you up off the bench

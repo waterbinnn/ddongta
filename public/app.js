@@ -9,6 +9,7 @@ const FLOOR_H = 700;
 const ENTER_X = 70;
 const ENTER_Y = 100;
 const SPEED = 300;
+const WALL_GAP = 95; // stand in front of the sinks, not inside them (server units)
 
 // server units -> meters
 const U = 0.01;
@@ -469,6 +470,7 @@ const M = {
   sink: new THREE.MeshPhongMaterial({ color: '#ffffff', shininess: 40 }),
   wood: mat('#b88a5c'),
   metal: new THREE.MeshPhongMaterial({ color: '#c9ced3', shininess: 80 }),
+  mosaic: null, // filled in below once the pixel helpers exist
 };
 const G = {
   partition: new THREE.BoxGeometry(0.04, PART_TOP - PART_BOT, STALL_D),
@@ -484,7 +486,23 @@ const G = {
   hit: new THREE.BoxGeometry(STALL_M, 2, 0.6),
   blob: new THREE.CircleGeometry(0.28, 14),
   chip: new THREE.BoxGeometry(0.06, 0.04, 0.03),
+  card: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), // bottom-anchored upright card
+  mosaic: new THREE.PlaneGeometry(STALL_M - 0.1, STALL_D - 0.15),
 };
+
+// censorship mosaic: chunky blocks in skin and clothing tones
+M.mosaic = new THREE.MeshBasicMaterial({
+  map: pixelTex(canvas(6, 8, (g) => {
+    const tones = ['#ffd9b8', '#f2c4a0', '#e8b48e', '#ffe6cf', '#d9a37f', '#c9d3da'];
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 6; x++) {
+      g.fillStyle = tones[(x * 7 + y * 13 + x * y) % tones.length];
+      g.fillRect(x, y, 1, 1);
+    }
+  })),
+  transparent: true,
+  opacity: 0.92,
+  side: THREE.DoubleSide,
+});
 
 function mesh(geo, material, { cast = false, receive = false } = {}) {
   const m = new THREE.Mesh(geo, material);
@@ -655,9 +673,14 @@ function makeStall(i) {
   toilet.add(bowl, seat, water, tank);
 
   // whoever sits here: upper body peeks over the door, feet show under it
-  const sitter = pixelSprite(PROPS.poop);
+  const sitter = new THREE.Mesh(G.card, new THREE.MeshBasicMaterial({ map: texOf(PROPS.poop), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
   sitter.position.set(STALL_M / 2, 0, -0.5);
   sitter.visible = false;
+  // a mosaic sheet over the stall so peeking from above shows nothing rude
+  const mosaic = new THREE.Mesh(G.mosaic, M.mosaic);
+  mosaic.rotation.x = -Math.PI / 2;
+  mosaic.position.set(STALL_M / 2 + 0.02, DOOR_TOP + 0.02, -STALL_D / 2 + 0.05);
+  mosaic.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
@@ -675,11 +698,11 @@ function makeStall(i) {
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
 
-  g.add(part, cap, post, rail, hinge, toilet, sitter, feet, marker, halo, pile, hit);
+  g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
   stallRoot.add(g);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, feet, marker, halo, pile,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, mosaic, feet, marker, halo, pile,
     open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0,
   };
 }
@@ -928,7 +951,7 @@ const jump = () => me.s === -1 && !me.rolling && send({ t: 'jump' });
 const washHands = () => send({ t: 'wash' });
 
 function nearSink() {
-  return me.x < 140 && SINK_YS.some((y) => Math.abs(me.y - y) < 70);
+  return me.x < WALL_GAP + 60 && SINK_YS.some((y) => Math.abs(me.y - y) < 70);
 }
 
 function nearBench() {
@@ -988,7 +1011,7 @@ function moveMe(dt) {
   }
   if (vx || vy) {
     const len = Math.hypot(vx, vy);
-    me.x = clamp(me.x + (vx / len) * step, 20, worldW() - 40);
+    me.x = clamp(me.x + (vx / len) * step, WALL_GAP, worldW() - 40);
     me.y = clamp(me.y + (vy / len) * step, 0, FLOOR_H);
     // walking into the door of an empty stall goes inside
     if (me.y <= 0 && vy < 0 && (ix || iz)) {
@@ -1150,6 +1173,7 @@ function animateStalls(dt, t) {
 
     const occ = occId ? users.get(occId) : null;
     s.sitter.visible = Boolean(occ);
+    s.mosaic.visible = Boolean(occ);
     s.feet.visible = false;
     s.marker.visible = occId === meId;
     if (occ) {
@@ -1158,6 +1182,7 @@ function animateStalls(dt, t) {
       setSpriteCanvas(s.sitter, sitterSprite(occ.look, face));
       const jig = u.h && Math.floor(t / 70) % 2 ? 0.02 : 0;
       s.sitter.position.x = STALL_M / 2 + jig;
+      s.sitter.rotation.y = cam.yaw; // turn toward the camera, but stay upright
       s.halo.visible = face === 'bliss';
       s.marker.position.y = 2.17 + (Math.floor(t / 300) % 2) * 0.04;
     } else {
@@ -1739,7 +1764,7 @@ function handleTap(x, y) {
     }
     return;
   }
-  target = { x: clamp(hit.point.x / U, 20, worldW() - 40), y: clamp((hit.point.z - Z0) / U, 0, FLOOR_H) };
+  target = { x: clamp(hit.point.x / U, WALL_GAP, worldW() - 40), y: clamp((hit.point.z - Z0) / U, 0, FLOOR_H) };
   pendingEnter = -1;
   showTapMark(toX(target.x), toZ(target.y));
 }

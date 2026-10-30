@@ -418,6 +418,8 @@ const ICONS = {
   chat: icon(['.WWWWWWW.', 'WWWWWWWWW', 'WGWWGWWGW', 'WWWWWWWWW', '.WWWWWWW.', '..WW.....', '.W.......']),
   find: icon(['.GGG....', 'GgggG...', 'GgggG...', 'GgggG...', '.GGGHH..', '....HH..', '.....HH.', '......HH']),
   people: icon(['.HHHH.', 'HFFFFH', '.FFFF.', '..FF..', '.AAAA.', 'AAAAAA', 'AAAAAA']),
+  chat: icon(['.SSSSSSS.', 'SWWWWWWWS', 'SWSSSSSWS', 'SWWWWWWWS', '.SSSSSSS.', '..SS.....', '..S......']),
+  chatOff: icon(['xSSSSSSS.', 'SxWWWWWWS', 'SWxSSSSWS', 'SWWxWWWWS', '.SSSxSSS.', '..SS.x...', '..S...x..']),
   recenter: icon(['...S...', '.SSSSS.', '.S...S.', 'SS.S.SS', '.S...S.', '.SSSSS.', '...S...']),
   soundOn: icon(['...S.....', '..SS..W..', 'SSSS.W.W.', 'SSSS.W.W.', '..SS..W..', '...S.....']),
   soundOff: icon(['...S.....', '..SS.....', 'SSSS.x.x.', 'SSSS..x..', '..SS.x.x.', '...S.....']),
@@ -3262,13 +3264,34 @@ const startSoundOnce = () => {
 document.addEventListener('pointerdown', startSoundOnce, true);
 document.addEventListener('keydown', startSoundOnce, true);
 
+// hide the chat feed on the left (the bubbles over heads stay); remembered for next time
+let chatHidden = false;
+try {
+  chatHidden = localStorage.getItem('ddongta.chatHidden') === '1';
+} catch {}
+function setChatHidden(on) {
+  chatHidden = on;
+  document.body.classList.toggle('chat-hidden', on);
+  const btn = $('#chatToggle');
+  btn.innerHTML = icoImg(on ? 'chatOff' : 'chat');
+  btn.setAttribute('aria-label', on ? '채팅 목록 보이기' : '채팅 목록 숨기기');
+  btn.title = on ? '채팅 목록 보이기 (H)' : '채팅 목록 숨기기 (H)';
+  try {
+    localStorage.setItem('ddongta.chatHidden', on ? '1' : '0');
+  } catch {}
+}
+setChatHidden(chatHidden);
+$('#chatToggle').addEventListener('click', () => {
+  setChatHidden(!chatHidden);
+  toast(chatHidden ? '채팅 목록을 숨겼어요' : '채팅 목록을 다시 보여줘요');
+});
 $('#recenterBtn').innerHTML = icoImg('recenter');
 $('#recenterBtn').addEventListener('click', recenterCam);
 $('#soundBtn').addEventListener('click', async () => {
   soundOn = !soundOn;
   if (soundOn) unlockAudio();
   else silentLoop?.pause();
-  $('#soundBtn').innerHTML = soundOn ? icoImg('soundOn') : `${icoImg('soundOff')}<span>소리 켜기</span>`;
+  $('#soundBtn').innerHTML = icoImg(soundOn ? 'soundOn' : 'soundOff'); // icon only
   $('#soundBtn').setAttribute('aria-label', soundOn ? '소리 끄기' : '소리 켜기');
   if (soundOn) {
     startMusic(); // queued now, heard as soon as the phone lets the sound through
@@ -3326,6 +3349,9 @@ window.addEventListener('keydown', (e) => {
     jump();
   } else if (e.code === 'KeyR') {
     recenterCam();
+  } else if (e.code === 'KeyH') {
+    setChatHidden(!chatHidden);
+    toast(chatHidden ? '채팅 목록을 숨겼어요' : '채팅 목록을 다시 보여줘요');
   } else if (e.code === 'KeyQ') {
     cam.tYaw = clamp(cam.tYaw + 0.35, -YAW_MAX, YAW_MAX);
     manualCamAt = performance.now();

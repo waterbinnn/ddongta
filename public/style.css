@@ -384,6 +384,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .loading.done { opacity: 0; pointer-events: none; }
 
 /* ---------- room-wide chat feed, top-left ---------- */
+.chat-hidden .feed { display: none; }
 .feed {
   position: fixed;
   top: calc(58px + var(--vv-top, 0px));

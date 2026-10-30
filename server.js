@@ -18,7 +18,8 @@ const SIDE_START = 170; // side banks start a little away from the back corners
 const BACK_COUNT = 20;
 const SIDE_COUNT = 15;
 const ENTER_RANGE = 75; // how close to a stall's door you must be
-const BASIN = { x: ROOM_W / 2, y: 1050, r: 130 };
+// the wash island down the middle: centre, half-width, half-length (sinks line both long sides)
+const BASIN = { x: ROOM_W / 2, y: 1050, w: 100, d: 420 };
 
 const MAX_STALLS = 50;
 const ROOM_CAP = 70; // 50 stalls + a line of 20
@@ -154,6 +155,17 @@ const LAYOUT = (() => {
 })();
 const clampX = (x) => clamp(x, 45, ROOM_W - 45);
 const clampY = (y) => clamp(y, 45, ROOM_D - 40);
+// nobody stands inside the wash island: push a position out along the shallower side
+const ISLAND_PAD = 55;
+function outOfIsland(u) {
+  const ex = BASIN.w + ISLAND_PAD;
+  const ey = BASIN.d + ISLAND_PAD;
+  const dx = u.x - BASIN.x;
+  const dy = u.y - BASIN.y;
+  if (Math.abs(dx) >= ex || Math.abs(dy) >= ey) return;
+  if (ex - Math.abs(dx) < ey - Math.abs(dy)) u.x = BASIN.x + Math.sign(dx || 1) * ex;
+  else u.y = BASIN.y + Math.sign(dy || 1) * ey;
+}
 const isReserved = (room, i, now = Date.now()) => room.meta[i].reservedFor && room.meta[i].reservedUntil > now;
 
 // The line only exists once all 50 stalls are taken.
@@ -425,6 +437,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'move' && user.stall === -1 && !user.roll) {
       user.x = clampX(Number(m.x) || 0);
       user.y = clampY(Number(m.y) || 0);
+      outOfIsland(user);
       user.dir = m.d === -1 ? -1 : 1;
       user.bench = false; // moving gets you up off the bench
       room.dirty = true;

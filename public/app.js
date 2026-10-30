@@ -1371,7 +1371,9 @@ function focusCamera() {
   if (key) {
     cam.tYaw = yaw + Math.PI * 2 * Math.round((cam.tYaw - yaw) / (Math.PI * 2)); // the short way round
     cam.tPitch = pitch;
-    cam.tDist = clamp(8, DIST_MIN, DIST_MAX);
+    // far enough back that about four stalls fit across the screen, so the neighbours show on a phone too
+    const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+    cam.tDist = clamp(Math.max(8, 4.4 / (2 * halfW)), DIST_MIN, 16);
   } else if (camBefore) {
     cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;

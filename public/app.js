@@ -831,17 +831,13 @@ function planter(x, z, size, seed) {
   worldRoot.add(g);
 }
 
-// the entrance fades out while the camera looks in through it, so it never hides anyone
-const entrance = { x: 0, z: 0, mats: [], fade: 1 };
-
 // the open entrance: red pillars, a lit RESTROOM sign box, a striped awning, a welcome mat and a wet-floor sign
 function buildEntrance(cx, z) {
   const red = mat(PAL.band);
   const white = mat('#fffaf0');
-  Object.assign(entrance, { x: cx, z, fade: 1 });
   for (const dx of [-2.1, 2.1]) {
-    const pillar = mesh(new THREE.BoxGeometry(0.36, 3.7, 0.36), red, { cast: true });
-    pillar.position.set(cx + dx, 1.85, z);
+    const pillar = mesh(new THREE.BoxGeometry(0.36, 4.5, 0.36), red, { cast: true });
+    pillar.position.set(cx + dx, 2.25, z);
     const foot = mesh(new THREE.BoxGeometry(0.46, 0.22, 0.46), white, { cast: true });
     foot.position.set(cx + dx, 0.11, z);
     worldRoot.add(pillar, foot);
@@ -849,24 +845,22 @@ function buildEntrance(cx, z) {
   const signTex = pixelTex(entranceSignCanvas());
   const face = new THREE.MeshBasicMaterial({ map: signTex });
   const box = mesh(new THREE.BoxGeometry(4.6, 0.86, 0.3), [red, red, red, red, face, face], { cast: true });
-  box.position.set(cx, 4.05, z);
+  box.position.set(cx, 4.85, z);
   const at = pixelTex(awningCanvas, true);
   at.repeat.set(4.6 / 0.8, 1);
   const awning = mesh(new THREE.PlaneGeometry(4.6, 0.75), new THREE.MeshLambertMaterial({ map: at, side: THREE.DoubleSide }), { cast: true });
   awning.rotation.x = -1.0;
-  awning.position.set(cx, 3.42, z + 0.32);
+  awning.position.set(cx, 4.22, z + 0.32);
   const vt = pixelTex(valanceCanvas, true);
   vt.repeat.set(4.6 / 0.8, 1);
   const valance = mesh(new THREE.PlaneGeometry(4.6, 0.2), new THREE.MeshLambertMaterial({ map: vt, side: THREE.DoubleSide, transparent: true, alphaTest: 0.5 }));
-  valance.position.set(cx, 3.12, z + 0.63);
+  valance.position.set(cx, 3.92, z + 0.63);
   const mat2 = mesh(new THREE.PlaneGeometry(2.8, 1.1), new THREE.MeshLambertMaterial({ map: pixelTex(matCanvas()), polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
   mat2.rotation.x = -Math.PI / 2;
   mat2.position.set(cx, 0.006, z - 0.75);
   const wet = pixelSprite(wetSign(), 0.065);
   wet.position.set(cx + 2.9, 0, z - 0.6);
   worldRoot.add(box, awning, valance, mat2, wet);
-  entrance.mats = [red, white, face, awning.material, valance.material];
-  for (const m of entrance.mats) m.transparent = true;
 }
 
 // a point in a stall's local space, in world space
@@ -1329,7 +1323,8 @@ function sendMove(force) {
 
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
-const cam = { yaw: 0, pitch: 0.6, dist: 13, tYaw: 0, tPitch: 0.6, tDist: 13, fx: 11, fz: 20 };
+// starts low and far back, looking in through the entrance at the whole plaza
+const cam = { yaw: 0, pitch: 0.22, dist: 16, tYaw: 0, tPitch: 0.22, tDist: 16, fx: 11, fz: 20 };
 const DIST_MIN = 3.5;
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 26;
@@ -1406,12 +1401,6 @@ function updateCamera(dt) {
   camera.lookAt(cam.fx, 0.9, cam.fz);
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
   sun.target.position.set(cam.fx, 0, cam.fz - 1);
-  const lookingIn = pz > entrance.z - 0.5 && cam.fz < entrance.z && Math.abs(px - entrance.x) < 9;
-  entrance.fade = lerp(entrance.fade, lookingIn ? 0.2 : 1, k);
-  for (const m of entrance.mats) {
-    m.opacity = entrance.fade;
-    m.depthWrite = entrance.fade > 0.95;
-  }
 }
 
 // ---------- per-frame placement ----------

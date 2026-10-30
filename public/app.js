@@ -31,12 +31,29 @@ const PILE_MAX = 10;
 const INK = '#2a1f2b';
 const SKIN = '#ffd9b8';
 const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a', '#d8b26a', '#7a7a86'];
-// a late-night restroom: deep navy tile, dark terrazzo, warm wood doors, brass trim, sage stalls
-const PAL = {
-  sky: '#12161f', wall: '#273040', wallLine: '#202837', band: '#c9a25a',
-  floorA: '#323a47', floorB: '#2c333f', floorLine: '#242a34',
-  door: '#b98552', doorDark: '#8a5f38', doorLight: '#d9a46c', part: '#3f5b5d', partTop: '#6e958f', rail: '#c9a25a',
+// two looks, switched with ?look=neon (the button in the top-right flips between them)
+const LOOKS = {
+  // a late-night restroom: deep navy tile, dark terrazzo, warm wood doors, brass trim, sage stalls
+  night: {
+    sky: '#12161f', wall: '#273040', wallLine: '#202837', band: '#c9a25a', bandGlow: '#3a2a10',
+    floorA: '#323a47', floorB: '#2c333f', floorLine: '#242a34', floorGrid: null,
+    door: '#b98552', doorDark: '#8a5f38', doorLight: '#d9a46c', number: '#ffffff',
+    part: '#3f5b5d', partTop: '#6e958f', partGlow: '#000000', rail: '#c9a25a', railGlow: '#000000',
+    hemi: ['#8a98c8', '#151820', 1.15], moon: ['#a9b8ff', 0.7],
+    lamps: ['#ffc983'], wash: '#ffb978', shade: '#ffd38a', water: ['#5fb4d6', '#14384a'], bench: '#8a5f38', stone: '#d9dde3',
+  },
+  // neon arcade: purple-black everything, a synthwave grid floor, pink and cyan neon trim
+  neon: {
+    sky: '#0b0814', wall: '#15111f', wallLine: '#221a33', band: '#ff4fa3', bandGlow: '#ff2f8f',
+    floorA: '#120f1a', floorB: '#100d17', floorLine: '#1c1628', floorGrid: '#5a2a8a',
+    door: '#1d1828', doorDark: '#2c2440', doorLight: '#3a3052', number: '#5ff2ff',
+    part: '#1a1626', partTop: '#3fe0ff', partGlow: '#1fb8d8', rail: '#ff4fa3', railGlow: '#d82a80',
+    hemi: ['#7a5fd0', '#07050c', 0.9], moon: ['#b18cff', 0.5],
+    lamps: ['#ff4fa3', '#3fe0ff'], wash: '#a86bff', shade: '#ffffff', water: ['#3fe0ff', '#1a8fb0'], bench: '#2a2238', stone: '#2a2438',
+  },
 };
+const LOOK = new URLSearchParams(location.search).get('look') === 'neon' ? 'neon' : 'night';
+const PAL = LOOKS[LOOK];
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -370,8 +387,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(PAL.sky);
 scene.fog = new THREE.Fog(PAL.sky, 26, 60);
 const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 140);
-const hemi = new THREE.HemisphereLight('#8a98c8', '#151820', 1.15);
-const sun = new THREE.DirectionalLight('#a9b8ff', 0.7); // cool moonlight
+const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
+const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // cool moonlight
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
 Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 10, bottom: -10, near: 1, far: 40 });
@@ -438,7 +455,7 @@ const floorCanvas = canvas(32, 32, (g) => {
       g.fillRect(x * 16, y * 16, 16, 16);
     }
   }
-  g.fillStyle = PAL.floorLine;
+  g.fillStyle = PAL.floorGrid || PAL.floorLine; // neon look: a glowing synthwave grid
   g.fillRect(0, 15, 32, 1);
   g.fillRect(0, 31, 32, 1);
   g.fillRect(15, 0, 1, 32);
@@ -527,7 +544,7 @@ function drawDoorCanvas(c, n, crack) {
   g.fillRect(3, 9, 1, h - 12);
   g.fillStyle = PAL.doorLight;
   g.fillRect(4, 10, w - 8, 1);
-  drawNumber(g, n, w / 2, 2, '#ffffff');
+  drawNumber(g, n, w / 2, 2, PAL.number);
   if (crack > 0) {
     g.fillStyle = INK;
     const pts = [
@@ -546,8 +563,8 @@ function drawDoorCanvas(c, n, crack) {
 const mat = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 const M = {
   part: mat(PAL.part),
-  partTop: mat(PAL.partTop),
-  rail: mat(PAL.rail),
+  partTop: mat(PAL.partTop, { emissive: PAL.partGlow }),
+  rail: mat(PAL.rail, { emissive: PAL.railGlow }),
   porcelain: new THREE.MeshPhongMaterial({ color: '#fbfbfb', shininess: 60 }),
   water: mat('#9fd3ec'),
   lockRed: new THREE.MeshBasicMaterial({ color: '#e5484d' }),
@@ -644,7 +661,7 @@ function buildRoom() {
     const m = mesh(new THREE.PlaneGeometry(w, wallH), new THREE.MeshLambertMaterial({ map: t }), { receive: true });
     m.position.set(x, wallH / 2, z);
     m.rotation.y = rotY;
-    const band = mesh(new THREE.PlaneGeometry(w, 0.12), mat(PAL.band, { emissive: '#3a2a10' }));
+    const band = mesh(new THREE.PlaneGeometry(w, 0.12), mat(PAL.band, { emissive: PAL.bandGlow }));
     band.position.set(x, 2.05, z);
     band.rotation.y = rotY;
     band.translateZ(0.01);
@@ -678,10 +695,10 @@ function buildRoom() {
   const bx = toX(BASIN.x);
   const bz = toZ(BASIN.y);
   const br = toX(BASIN.r);
-  const stone = new THREE.MeshPhongMaterial({ color: '#d9dde3', shininess: 50 });
+  const stone = new THREE.MeshPhongMaterial({ color: PAL.stone, shininess: 50 });
   const island = mesh(new THREE.CylinderGeometry(br, br * 1.08, 0.85, 20), stone, { cast: true, receive: true });
   island.position.set(bx, 0.425, bz);
-  const water = mesh(new THREE.CylinderGeometry(br * 0.82, br * 0.82, 0.02, 20), new THREE.MeshPhongMaterial({ color: '#5fb4d6', emissive: '#14384a', shininess: 120 }));
+  const water = mesh(new THREE.CylinderGeometry(br * 0.82, br * 0.82, 0.02, 20), new THREE.MeshPhongMaterial({ color: PAL.water[0], emissive: PAL.water[1], shininess: 120 }));
   water.position.set(bx, 0.86, bz);
   const pillar = mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.1, 10), mat(PAL.rail, { emissive: '#2a2010' }), { cast: true });
   pillar.position.set(bx, 1.4, bz);
@@ -695,7 +712,7 @@ function buildRoom() {
 
   // benches in a ring around the basin, plants in the corners
   benchSpots.length = 0;
-  const wood = mat('#8a5f38');
+  const wood = mat(PAL.bench);
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2 + Math.PI / 6;
     const r = 3.4;
@@ -718,18 +735,22 @@ function buildRoom() {
   }
 
   // warm pendant lamps over the plaza
-  const shade = new THREE.MeshBasicMaterial({ color: '#ffd38a' });
+  const shade = new THREE.MeshBasicMaterial({ color: PAL.shade });
   const cord = new THREE.MeshBasicMaterial({ color: '#0d0f14' });
   // soft wash lights along each stall bank so the doors read in the dark
   for (const [x, z] of [[rw * 0.25, 1.2], [rw * 0.75, 1.2], [1.4, rd * 0.3], [1.4, rd * 0.65], [rw - 1.4, rd * 0.3], [rw - 1.4, rd * 0.65]]) {
-    const wash = new THREE.PointLight('#ffb978', 9, 9, 1.4);
+    const wash = new THREE.PointLight(PAL.wash, 9, 9, 1.4);
     wash.position.set(x, 2.8, z);
     lamps.add(wash);
   }
-  for (const [x, z] of [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72], [bx, bz]]) {
-    const light = new THREE.PointLight('#ffc983', 22, 15, 1.6);
+  const spots = [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72], [bx, bz]];
+  for (const [k, [x, z]] of spots.entries()) {
+    const light = new THREE.PointLight(PAL.lamps[k % PAL.lamps.length], 22, 15, 1.6);
     light.position.set(x, 3.4, z);
-    const bulb = mesh(new THREE.ConeGeometry(0.35, 0.3, 10, 1, true), shade);
+    const bulb = LOOK === 'neon'
+      ? mesh(new THREE.TorusGeometry(0.4, 0.05, 6, 20), new THREE.MeshBasicMaterial({ color: PAL.lamps[k % PAL.lamps.length] }))
+      : mesh(new THREE.ConeGeometry(0.35, 0.3, 10, 1, true), shade);
+    if (LOOK === 'neon') bulb.rotation.x = Math.PI / 2;
     bulb.position.set(x, 3.6, z);
     const line = mesh(new THREE.CylinderGeometry(0.01, 0.01, 2.5, 4), cord);
     line.position.set(x, 5, z);
@@ -2122,6 +2143,11 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 // ---------- start ----------
 
 $('#soundBtn').innerHTML = `${icoImg('soundOff')}<span>소리 켜기</span>`;
+document.body.dataset.look = LOOK;
+$('#lookBtn').textContent = LOOK === 'neon' ? '밤 스타일로' : '네온 스타일로';
+$('#lookBtn').addEventListener('click', () => {
+  location.search = LOOK === 'neon' ? '' : '?look=neon';
+});
 $('#peopleIcon').innerHTML = icoImg('people');
 $('#todayIcon').innerHTML = icoImg('poop');
 

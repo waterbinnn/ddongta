@@ -405,3 +405,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
   from { opacity: 0; transform: translateX(-40px) scale(0.9); }
   to { opacity: 1; transform: none; }
 }
+
+.top .right { display: flex; gap: 6px; }
+.look { height: 36px; padding: 0 14px; color: var(--muted); font-size: 12px; }
+.look:hover, .sound:hover { color: var(--text); }
+
+/* neon look: pink/cyan accents and glowing edges on the UI */
+[data-look="neon"] {
+  --bg: #0b0814;
+  --glass: rgba(20, 14, 32, 0.66);
+  --glass-strong: rgba(26, 18, 42, 0.9);
+  --line: rgba(255, 79, 163, 0.28);
+  --accent: #ff6fb5;
+  --accent-ink: #ffffff;
+  --coral: #5ff2ff;
+  --coral-ink: #0b0814;
+}
+
+[data-look="neon"] .chip,
+[data-look="neon"] .act,
+[data-look="neon"] .chat { box-shadow: 0 0 0 1px rgba(255, 79, 163, 0.15), 0 0 16px rgba(255, 79, 163, 0.18); }
+[data-look="neon"] .chat:focus-within { box-shadow: 0 0 0 1px rgba(95, 242, 255, 0.5), 0 0 22px rgba(95, 242, 255, 0.3); }
+[data-look="neon"] .status b { color: #5ff2ff; }
+[data-look="neon"] .feed .line.mine { background: rgba(255, 111, 181, 0.2); border-color: rgba(255, 111, 181, 0.45); }
+[data-look="neon"] .bubble { background: rgba(26, 18, 42, 0.92); color: #f3eaff; box-shadow: 0 0 0 1px rgba(95, 242, 255, 0.35), 0 0 14px rgba(95, 242, 255, 0.25); }
+[data-look="neon"] .bubble.mine { background: rgba(255, 111, 181, 0.92); color: #fff; }

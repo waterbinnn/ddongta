@@ -2142,13 +2142,171 @@ function playCrash(volume) {
   tone('sawtooth', 140, 40, 0.4, volume * 0.5);
 }
 
+// ---------- background music ----------
+// a little violin waltz in D, composed and synthesized right here: no recordings, nothing to license
+
+const BEAT = 60 / 92; // seconds per beat, 3 beats a bar
+const MELODY = [
+  ['F#5', 2], ['E5', 1], ['D5', 2], ['B4', 1], ['B4', 1], ['D5', 1], ['G5', 1], ['F#5', 2], ['E5', 1],
+  ['A5', 2], ['F#5', 1], ['D5', 1.5], ['E5', 0.5], ['F#5', 1], ['G5', 2], ['E5', 1], ['E5', 3],
+  ['G5', 2], ['F#5', 1], ['F#5', 1], ['E5', 1], ['D5', 1], ['E5', 2], ['G5', 1], ['A5', 1.5], ['G5', 0.5], ['E5', 1],
+  ['F#5', 2], ['A5', 1], ['B5', 1], ['A5', 1], ['F#5', 1], ['G5', 1.5], ['E5', 0.5], ['C#5', 1], ['D5', 3],
+];
+// one chord per bar, or one per beat
+const CHORDS = ['D', 'Bm', 'G', 'A', 'D', 'Bm', 'Em', 'A', 'G', 'D', 'Em', 'A', 'D', 'Bm', ['G', 'G', 'A'], 'D'];
+const CHORD_NOTES = { D: ['D4', 'F#4', 'A4'], Bm: ['B3', 'D4', 'F#4'], G: ['G3', 'B3', 'D4'], A: ['A3', 'C#4', 'E4'], Em: ['G3', 'B3', 'E4'] };
+const ROOTS = { D: 'D3', Bm: 'B2', G: 'G2', A: 'A2', Em: 'E3' };
+const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function noteFreq(n) {
+  const [, letter, acc, oct] = n.match(/^([A-G])(#|b)?(\d)$/);
+  const midi = 12 * (Number(oct) + 1) + SEMI[letter] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0);
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
+// the whole tune as a flat list of timed notes
+const SONG = (() => {
+  const ev = [];
+  let beat = 0;
+  for (const [n, len] of MELODY) {
+    ev.push({ beat, kind: 'violin', f: noteFreq(n), len });
+    beat += len;
+  }
+  CHORDS.forEach((c, bar) => {
+    for (let b = 0; b < 3; b++) {
+      const chord = Array.isArray(c) ? c[b] : c;
+      const at = bar * 3 + b;
+      if (b === 0 || (Array.isArray(c) && c[b] !== c[b - 1])) ev.push({ beat: at, kind: 'bass', f: noteFreq(ROOTS[chord]) });
+      if (b > 0) for (const n of CHORD_NOTES[chord]) ev.push({ beat: at, kind: 'pluck', f: noteFreq(n) });
+    }
+  });
+  ev.sort((a, b) => a.beat - b.beat);
+  return { events: ev, beats: CHORDS.length * 3 };
+})();
+
+function reverbImpulse(seconds) {
+  const ctx = actx();
+  const len = Math.floor(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const ch = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  }
+  return buf;
+}
+
+// two slightly detuned saws, a soft filter, a delayed vibrato and a bowed swell
+function violinNote(bus, f, t, dur, vol) {
+  const ctx = actx();
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 2400;
+  filter.Q.value = 0.7;
+  const body = ctx.createBiquadFilter();
+  body.type = 'peaking';
+  body.frequency.value = 1000;
+  body.gain.value = 5;
+  const out = ctx.createGain();
+  filter.connect(body).connect(out).connect(bus);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 5.5;
+  const depth = ctx.createGain();
+  depth.gain.setValueAtTime(0, t);
+  depth.gain.linearRampToValueAtTime(f * 0.007, t + Math.min(0.4, dur * 0.6));
+  lfo.connect(depth);
+  const end = t + dur + 0.35;
+  for (const detune of [-5, 5]) {
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = f;
+    o.detune.value = detune;
+    depth.connect(o.frequency);
+    o.connect(filter);
+    o.start(t);
+    o.stop(end);
+  }
+  lfo.start(t);
+  lfo.stop(end);
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.linearRampToValueAtTime(vol, t + Math.min(0.12, dur * 0.3));
+  out.gain.linearRampToValueAtTime(vol * 0.75, t + dur * 0.8);
+  out.gain.linearRampToValueAtTime(0.0001, end);
+}
+
+// a plucked string for the oom-pah-pah underneath
+function pluckNote(bus, f, t, vol, decay) {
+  const ctx = actx();
+  const o = ctx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.value = f;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  o.connect(g).connect(bus);
+  o.start(t);
+  o.stop(t + decay + 0.05);
+}
+
+const MUSIC_VOLUME = 0.32;
+let music = null;
+function startMusic() {
+  if (music) return;
+  const ctx = actx();
+  const bus = ctx.createGain();
+  bus.gain.setValueAtTime(0.0001, ctx.currentTime);
+  bus.gain.linearRampToValueAtTime(MUSIC_VOLUME, ctx.currentTime + 2.5);
+  const dry = ctx.createGain();
+  dry.gain.value = 0.85;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.4;
+  const verb = ctx.createConvolver();
+  verb.buffer = reverbImpulse(2.6);
+  bus.connect(dry).connect(ctx.destination);
+  bus.connect(verb).connect(wet).connect(ctx.destination);
+  music = { bus, t0: ctx.currentTime + 0.2, loop: 0, i: 0, timer: 0 };
+  const schedule = () => {
+    const horizon = actx().currentTime + (document.hidden ? 1.6 : 0.5); // hidden tabs tick slowly
+    for (;;) {
+      const ev = SONG.events[music.i];
+      const t = music.t0 + (music.loop * SONG.beats + ev.beat) * BEAT;
+      if (t > horizon) break;
+      const low = music.loop % 2 === 1; // every other time round, the tune drops an octave
+      if (ev.kind === 'violin') violinNote(bus, low ? ev.f / 2 : ev.f, t, ev.len * BEAT, low ? 0.16 : 0.12);
+      else if (ev.kind === 'bass') pluckNote(bus, ev.f, t, 0.3, 0.9);
+      else pluckNote(bus, ev.f, t, 0.06, 0.35);
+      if (++music.i === SONG.events.length) {
+        music.i = 0;
+        music.loop++;
+      }
+    }
+  };
+  schedule();
+  music.timer = setInterval(schedule, 120);
+}
+function stopMusic() {
+  if (!music) return;
+  const { bus, timer } = music;
+  music = null;
+  const now = actx().currentTime;
+  bus.gain.cancelScheduledValues(now);
+  bus.gain.setValueAtTime(bus.gain.value, now);
+  bus.gain.linearRampToValueAtTime(0.0001, now + 0.6);
+  setTimeout(() => {
+    clearInterval(timer);
+    bus.disconnect();
+  }, 800);
+}
+
 $('#soundBtn').addEventListener('click', async () => {
   soundOn = !soundOn;
   $('#soundBtn').innerHTML = soundOn ? icoImg('soundOn') : `${icoImg('soundOff')}<span>소리 켜기</span>`;
   $('#soundBtn').setAttribute('aria-label', soundOn ? '소리 끄기' : '소리 켜기');
   if (soundOn) {
     await actx().resume();
+    startMusic();
     await loadSounds();
+  } else {
+    stopMusic();
   }
 });
 

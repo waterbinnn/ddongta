@@ -295,8 +295,15 @@ setInterval(() => {
   }
 }, TICK_MS);
 
+// the public address; visits to the Render address are sent here so it never shows
+const SITE = 'https://ddongta.com';
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  if ((req.headers.host || '').endsWith('.onrender.com')) {
+    res.writeHead(301, { location: SITE + url.pathname + url.search });
+    return res.end();
+  }
   if (url.pathname === '/api/rooms') {
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify(rooms.map((r) => ({ id: r.id, theme: r.theme, label: r.label, no: r.no, online: r.users.size, max: ROOM_CAP }))));

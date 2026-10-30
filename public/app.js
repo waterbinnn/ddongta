@@ -3,19 +3,19 @@ import * as THREE from '/vendor/three.module.js';
 
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
-const ENTRANCE_W = 220;
-const END_PAD = 180;
-const FLOOR_H = 700;
-const ENTER_X = 70;
-const ENTER_Y = 100;
+const ENTER_RANGE = 75;
 const SPEED = 300;
-const WALL_GAP = 95; // stand in front of the sinks, not inside them (server units)
 
-// server units -> meters
+// the room layout arrives from the server on welcome (stalls in a U around a plaza)
+let LAYOUT = [];
+let ROOM_W = 2200;
+let ROOM_D = 2300;
+let BASIN = { x: 1100, y: 1050, r: 130 };
+
+// server units (cm) -> meters
 const U = 0.01;
-const Z0 = 0.55; // walkers stay this far in front of the doors
 const toX = (x) => x * U;
-const toZ = (y) => Z0 + y * U;
+const toZ = (y) => y * U;
 const STALL_M = STALL_W * U;
 const STALL_D = 1.6;
 const DOOR_W = 0.94;
@@ -26,18 +26,15 @@ const PART_TOP = 1.75;
 const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at -1.1)
 const PX_M = 0.05; // meters per sprite pixel
 const PILE_MAX = 10;
-const stallLeftM = (i) => toX(ENTRANCE_W + i * STALL_W);
-const stallCenter = (i) => ENTRANCE_W + i * STALL_W + STALL_W / 2; // server units
-const worldW = () => ENTRANCE_W + stalls.length * STALL_W + END_PAD;
 
 const INK = '#2a1f2b';
 const SKIN = '#ffd9b8';
 const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a', '#d8b26a', '#7a7a86'];
-// a classic American public restroom: pale tile walls, navy trim, gray floor, beige metal stalls
+// a late-night restroom: deep navy tile, dark terrazzo, warm wood doors, brass trim, sage stalls
 const PAL = {
-  sky: '#c9d3da', wall: '#e9eef1', wallLine: '#cfd8de', band: '#2f5d8a',
-  floorA: '#babec3', floorB: '#afb3b9', floorLine: '#9b9fa6',
-  door: '#cdb68a', doorDark: '#a08b62', doorLight: '#e6d3ab', part: '#b8a179', partTop: '#e8d6ae', rail: '#8a9098',
+  sky: '#12161f', wall: '#273040', wallLine: '#202837', band: '#c9a25a',
+  floorA: '#323a47', floorB: '#2c333f', floorLine: '#242a34',
+  door: '#b98552', doorDark: '#8a5f38', doorLight: '#d9a46c', part: '#3f5b5d', partTop: '#6e958f', rail: '#c9a25a',
 };
 
 const $ = (s) => document.querySelector(s);
@@ -367,15 +364,17 @@ sceneEl.append(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(PAL.sky);
-scene.fog = new THREE.Fog(PAL.sky, 24, 52);
+scene.fog = new THREE.Fog(PAL.sky, 26, 60);
 const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 140);
-const hemi = new THREE.HemisphereLight('#f6f9ff', '#a3a8ae', 1.75);
-const sun = new THREE.DirectionalLight('#fff6e6', 1.9);
+const hemi = new THREE.HemisphereLight('#8a98c8', '#151820', 1.15);
+const sun = new THREE.DirectionalLight('#a9b8ff', 0.7); // cool moonlight
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
 Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 10, bottom: -10, near: 1, far: 40 });
 sun.shadow.bias = -0.001;
 scene.add(hemi, sun, sun.target);
+const lamps = new THREE.Group(); // warm pendant lights over the plaza
+scene.add(lamps);
 
 const worldRoot = new THREE.Group();
 const stallRoot = new THREE.Group();
@@ -457,16 +456,34 @@ const windowCanvas = canvas(16, 20, (g) => {
   g.fillStyle = '#8a7a62';
   g.fillRect(0, 0, 16, 20);
   const grad = g.createLinearGradient(0, 0, 0, 20);
-  grad.addColorStop(0, '#a8d4ef');
-  grad.addColorStop(1, '#e8f4fb');
+  grad.addColorStop(0, '#162447');
+  grad.addColorStop(1, '#2f4a7a');
   g.fillStyle = grad;
   g.fillRect(1, 1, 14, 18);
   g.fillStyle = '#8a7a62';
   g.fillRect(7, 1, 2, 18);
   g.fillRect(1, 9, 14, 1);
   g.fillStyle = '#ffffff';
-  g.fillRect(2, 2, 3, 1);
-  g.fillRect(10, 11, 3, 1);
+  g.fillRect(3, 3, 1, 1);
+  g.fillRect(11, 5, 1, 1);
+  g.fillRect(5, 13, 1, 1);
+  g.fillStyle = '#ffe9a8';
+  g.fillRect(11, 12, 2, 2); // the moon
+});
+
+// glowing neon text
+const neonCanvas = (text, color, w) => canvas(w, 16, (g) => {
+  g.font = '11px Galmuri11';
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  g.shadowColor = color;
+  g.shadowBlur = 4;
+  g.fillStyle = color;
+  g.fillText(text, w / 2, 8);
+  g.shadowBlur = 0;
+  g.fillStyle = '#ffffff';
+  g.globalAlpha = 0.55;
+  g.fillText(text, w / 2, 8);
 });
 const mirrorCanvas = canvas(12, 16, (g) => {
   g.fillStyle = '#8a7a62';
@@ -598,97 +615,128 @@ function setSpriteCanvas(s, c, density = PX_M) {
 
 let floorMesh = null;
 let builtFor = 0;
-const benchXs = []; // bench centers in meters
-const BENCH_Z = toZ(FLOOR_H) + 0.5;
-const SINK_YS = [105, 265, 425]; // sink spots along the left wall, in server units
+const benchSpots = []; // where people sit, in server units
 
 function buildRoom() {
   worldRoot.clear();
-  const ww = toX(worldW());
-  const depth = toZ(FLOOR_H) + 4;
+  lamps.clear();
+  const rw = toX(ROOM_W);
+  const rd = toZ(ROOM_D);
+  const wallH = 5;
+  const back = -STALL_D;
 
   // floor
   const ft = pixelTex(floorCanvas, true);
-  ft.repeat.set((ww + 8) / 1.2, (depth + STALL_D + 2) / 1.2);
-  floorMesh = mesh(new THREE.PlaneGeometry(ww + 8, depth + STALL_D + 2), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
+  ft.repeat.set((rw + 6) / 1.2, (rd + 6) / 1.2);
+  floorMesh = mesh(new THREE.PlaneGeometry(rw + 6, rd + 6), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
   floorMesh.rotation.x = -Math.PI / 2;
-  floorMesh.position.set(ww / 2, 0, (depth - STALL_D) / 2);
+  floorMesh.position.set(rw / 2, 0, rd / 2 - 1);
   worldRoot.add(floorMesh);
 
-  // back wall with a red band and sunny windows
-  const wallH = 5;
-  const wt = pixelTex(wallCanvas, true);
-  wt.repeat.set((ww + 8) / 0.6, wallH / 0.6);
-  const back = mesh(new THREE.PlaneGeometry(ww + 8, wallH), new THREE.MeshLambertMaterial({ map: wt }), { receive: true });
-  back.position.set(ww / 2, wallH / 2, -STALL_D);
-  const band = mesh(new THREE.PlaneGeometry(ww + 8, 0.14), mat(PAL.band));
-  band.position.set(ww / 2, 2.05, -STALL_D + 0.01);
-  worldRoot.add(back, band);
+  // three tiled walls behind the stall banks, with a brass band and night windows
+  const wall = (w, x, z, rotY) => {
+    const t = pixelTex(wallCanvas, true);
+    t.repeat.set(w / 0.6, wallH / 0.6);
+    const m = mesh(new THREE.PlaneGeometry(w, wallH), new THREE.MeshLambertMaterial({ map: t }), { receive: true });
+    m.position.set(x, wallH / 2, z);
+    m.rotation.y = rotY;
+    const band = mesh(new THREE.PlaneGeometry(w, 0.12), mat(PAL.band, { emissive: '#3a2a10' }));
+    band.position.set(x, 2.05, z);
+    band.rotation.y = rotY;
+    band.translateZ(0.01);
+    worldRoot.add(m, band);
+  };
+  wall(rw + 2 * STALL_D, rw / 2, back, 0);
+  wall(rd + STALL_D, back, (rd - STALL_D) / 2, Math.PI / 2);
+  wall(rd + STALL_D, rw - back, (rd - STALL_D) / 2, -Math.PI / 2);
   const winTex = pixelTex(windowCanvas);
-  for (let x = 3.2; x < ww - 1; x += 4.4) {
+  for (let x = 2.2; x < rw - 1; x += 4.4) {
     const win = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.5), new THREE.MeshBasicMaterial({ map: winTex }));
-    win.position.set(x, 3.15, -STALL_D + 0.02);
+    win.position.set(x, 3.2, back + 0.02);
     worldRoot.add(win);
   }
 
-  // left wall: entrance, sign, sinks and mirrors
-  const sideT = pixelTex(wallCanvas, true);
-  sideT.repeat.set((depth + STALL_D) / 0.6, wallH / 0.6);
-  const left = mesh(new THREE.PlaneGeometry(depth + STALL_D, wallH), new THREE.MeshLambertMaterial({ map: sideT }), { receive: true });
-  left.rotation.y = Math.PI / 2;
-  left.position.set(0, wallH / 2, (depth - STALL_D) / 2);
-  const leftBand = mesh(new THREE.PlaneGeometry(depth + STALL_D, 0.14), mat(PAL.band));
-  leftBand.rotation.y = Math.PI / 2;
-  leftBand.position.set(0.01, 2.05, (depth - STALL_D) / 2);
-  worldRoot.add(left, leftBand);
-  const doorway = mesh(new THREE.PlaneGeometry(1.3, 2.2), new THREE.MeshBasicMaterial({ color: '#e9f3f8' }));
-  doorway.rotation.y = Math.PI / 2;
-  doorway.position.set(0.02, 1.1, 7.6);
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ map: pixelTex(makeSignCanvas()) }));
-  sign.rotation.y = Math.PI / 2;
-  sign.position.set(0.03, 2.6, 7.6);
-  worldRoot.add(doorway, sign);
-  const mirrorTex = pixelTex(mirrorCanvas);
-  for (const z of [1.6, 3.2, 4.8]) {
-    const counter = mesh(new THREE.BoxGeometry(0.6, 0.12, 1.2), M.sink, { cast: true });
-    counter.position.set(0.3, 0.85, z);
-    const basin = mesh(new THREE.BoxGeometry(0.4, 0.06, 0.5), M.water);
-    basin.position.set(0.32, 0.9, z);
-    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.2), new THREE.MeshBasicMaterial({ map: mirrorTex }));
-    mirror.rotation.y = Math.PI / 2;
-    mirror.position.set(0.02, 1.7, z);
-    const tap = mesh(new THREE.BoxGeometry(0.06, 0.18, 0.06), M.metal);
-    tap.position.set(0.1, 1.0, z);
-    worldRoot.add(counter, basin, mirror, tap);
+  // glowing signs: the name over the back bank, RESTROOM over the open entrance
+  const title = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ map: pixelTex(neonCanvas('똥타', '#ff8fb8', 64)), transparent: true }));
+  title.position.set(rw / 2, 4.2, back + 0.03);
+  const archMat = mat('#1c222d');
+  const postL = mesh(new THREE.BoxGeometry(0.25, 3.2, 0.25), archMat, { cast: true });
+  postL.position.set(rw / 2 - 2, 1.6, rd + 0.2);
+  const postR = postL.clone();
+  postR.position.x = rw / 2 + 2;
+  const beam = mesh(new THREE.BoxGeometry(4.25, 0.3, 0.25), archMat);
+  beam.position.set(rw / 2, 3.2, rd + 0.2);
+  const neon = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.8), new THREE.MeshBasicMaterial({ map: pixelTex(neonCanvas('RESTROOM', '#7fe3ff', 96)), transparent: true, side: THREE.DoubleSide }));
+  neon.position.set(rw / 2, 3.85, rd + 0.2);
+  worldRoot.add(title, postL, postR, beam, neon);
+
+  // the round wash basin in the middle of the plaza
+  const bx = toX(BASIN.x);
+  const bz = toZ(BASIN.y);
+  const br = toX(BASIN.r);
+  const stone = new THREE.MeshPhongMaterial({ color: '#d9dde3', shininess: 50 });
+  const island = mesh(new THREE.CylinderGeometry(br, br * 1.08, 0.85, 20), stone, { cast: true, receive: true });
+  island.position.set(bx, 0.425, bz);
+  const water = mesh(new THREE.CylinderGeometry(br * 0.82, br * 0.82, 0.02, 20), new THREE.MeshPhongMaterial({ color: '#5fb4d6', emissive: '#14384a', shininess: 120 }));
+  water.position.set(bx, 0.86, bz);
+  const pillar = mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.1, 10), mat(PAL.rail, { emissive: '#2a2010' }), { cast: true });
+  pillar.position.set(bx, 1.4, bz);
+  worldRoot.add(island, water, pillar);
+  for (let k = 0; k < 4; k++) {
+    const tap = mesh(new THREE.BoxGeometry(0.06, 0.06, 0.32), mat(PAL.rail));
+    tap.position.set(bx + Math.sin((k * Math.PI) / 2) * 0.22, 1.7, bz + Math.cos((k * Math.PI) / 2) * 0.22);
+    tap.rotation.y = (k * Math.PI) / 2;
+    worldRoot.add(tap);
   }
 
-  // right end wall
-  const endT = pixelTex(wallCanvas, true);
-  endT.repeat.set((depth + STALL_D) / 0.6, wallH / 0.6);
-  const end = mesh(new THREE.PlaneGeometry(depth + STALL_D, wallH), new THREE.MeshLambertMaterial({ map: endT }), { receive: true });
-  end.rotation.y = -Math.PI / 2;
-  end.position.set(ww, wallH / 2, (depth - STALL_D) / 2);
-  worldRoot.add(end);
-
-  // cozy bits: plants and benches along the open side
-  benchXs.length = 0;
-  for (let x = 4; x < ww - 2; x += 6.6) {
-    benchXs.push(x + 2.2);
-    const p = pixelSprite(PROPS.bigPlant, 0.07);
-    p.position.set(x, 0, toZ(FLOOR_H) + 0.6);
-    const bench = mesh(new THREE.BoxGeometry(1.6, 0.12, 0.45), M.wood, { cast: true });
-    bench.position.set(x + 2.2, 0.45, toZ(FLOOR_H) + 0.5);
-    const legL = mesh(new THREE.BoxGeometry(0.08, 0.45, 0.4), M.rail);
-    legL.position.set(x + 1.55, 0.22, toZ(FLOOR_H) + 0.5);
-    const legR = legL.clone();
-    legR.position.x = x + 2.85;
-    worldRoot.add(p, bench, legL, legR);
+  // benches in a ring around the basin, plants in the corners
+  benchSpots.length = 0;
+  const wood = mat('#8a5f38');
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + Math.PI / 6;
+    const r = 3.4;
+    const x = bx + Math.sin(a) * r;
+    const z = bz + Math.cos(a) * r;
+    const bench = mesh(new THREE.BoxGeometry(1.5, 0.12, 0.45), wood, { cast: true });
+    bench.position.set(x, 0.45, z);
+    bench.rotation.y = a + Math.PI / 2;
+    const legs = mesh(new THREE.BoxGeometry(1.3, 0.42, 0.3), mat('#1c222d'));
+    legs.position.set(x, 0.21, z);
+    legs.rotation.y = a + Math.PI / 2;
+    worldRoot.add(bench, legs);
+    benchSpots.push({ x: x / U, y: z / U });
   }
-  for (let x = 1.1; x < ww; x += 13.2) {
-    const p = pixelSprite(PROPS.plant, 0.06);
-    p.position.set(x, 0, 0.25);
+  const corners = [[2.6, 2.6], [rw - 2.6, 2.6], [2.6, rd - 2.4], [rw - 2.6, rd - 2.4], [bx - 1.6, bz + 1.6], [bx + 1.6, bz - 1.6]];
+  for (const [x, z] of corners) {
+    const p = pixelSprite(PROPS.bigPlant, 0.075);
+    p.position.set(x, 0, z);
     worldRoot.add(p);
   }
+
+  // warm pendant lamps over the plaza
+  const shade = new THREE.MeshBasicMaterial({ color: '#ffd38a' });
+  const cord = new THREE.MeshBasicMaterial({ color: '#0d0f14' });
+  // soft wash lights along each stall bank so the doors read in the dark
+  for (const [x, z] of [[rw * 0.25, 1.2], [rw * 0.75, 1.2], [1.4, rd * 0.3], [1.4, rd * 0.65], [rw - 1.4, rd * 0.3], [rw - 1.4, rd * 0.65]]) {
+    const wash = new THREE.PointLight('#ffb978', 9, 9, 1.4);
+    wash.position.set(x, 2.8, z);
+    lamps.add(wash);
+  }
+  for (const [x, z] of [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72], [bx, bz]]) {
+    const light = new THREE.PointLight('#ffc983', 22, 15, 1.6);
+    light.position.set(x, 3.4, z);
+    const bulb = mesh(new THREE.ConeGeometry(0.35, 0.3, 10, 1, true), shade);
+    bulb.position.set(x, 3.6, z);
+    const line = mesh(new THREE.CylinderGeometry(0.01, 0.01, 2.5, 4), cord);
+    line.position.set(x, 5, z);
+    lamps.add(light, bulb, line);
+  }
+}
+
+// a point in a stall's local space, in world space
+function stallWorld(i, lx, ly, lz) {
+  const s = stallObjs[i];
+  return s ? s.group.localToWorld(new THREE.Vector3(lx, ly, lz)) : new THREE.Vector3();
 }
 
 // ---------- stalls ----------
@@ -698,7 +746,9 @@ const stallHits = [];
 
 function makeStall(i) {
   const g = new THREE.Group();
-  g.position.x = stallLeftM(i);
+  const L = LAYOUT[i];
+  g.position.set(toX(L.cx), 0, toZ(L.cy));
+  g.rotation.y = L.rot;
   const part = mesh(G.partition, M.part, { cast: true, receive: true });
   part.position.set(0.02, (PART_TOP + PART_BOT) / 2, -STALL_D / 2);
   const cap = mesh(G.cap, M.partTop);
@@ -766,6 +816,7 @@ function makeStall(i) {
 
   g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
   stallRoot.add(g);
+  g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
     i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, mosaic, feet, marker, halo, pile,
@@ -774,6 +825,7 @@ function makeStall(i) {
 }
 
 function syncStalls() {
+  if (!LAYOUT.length) return; // wait for the layout from the server
   if (stalls.length !== stallObjs.length) {
     for (const s of stallObjs) stallRoot.remove(s.group);
     stallObjs.length = 0;
@@ -859,6 +911,16 @@ let greeted = false;
 function handle(m) {
   if (m.t === 'welcome') {
     meId = m.you;
+    if (m.layout) {
+      LAYOUT = m.layout.stalls;
+      ROOM_W = m.layout.w;
+      ROOM_D = m.layout.d;
+      BASIN = m.layout.basin;
+      builtFor = 0;
+      for (const st of stallObjs) stallRoot.remove(st.group);
+      stallObjs.length = 0;
+      stallHits.length = 0;
+    }
     for (const e of users.values()) removeWalker(e);
     users.clear();
     for (const f of floats) f.el.remove();
@@ -965,13 +1027,12 @@ function applyState(st) {
 
 const freeFor = (i) => !stalls[i] && (!held[i] || held[i] === meId);
 
-function nearestStall(x, y, ok, range = ENTER_X) {
-  if (y > ENTER_Y) return -1;
+function nearestStall(x, y, ok, range = ENTER_RANGE) {
   let best = -1;
   let bestD = Infinity;
-  stalls.forEach((_, i) => {
-    const d = Math.abs(stallCenter(i) - x);
-    if (ok(i) && d <= range && d < bestD) {
+  LAYOUT.forEach((L, i) => {
+    const d = Math.hypot(L.x - x, L.y - y);
+    if (i < stalls.length && ok(i) && d <= range && d < bestD) {
       best = i;
       bestD = d;
     }
@@ -982,20 +1043,11 @@ const nearestEmptyStall = (x, y, range) => nearestStall(x, y, freeFor, range);
 const nearestOccupiedStall = (x, y) => nearestStall(x, y, (i) => stalls[i] && stalls[i] !== meId);
 
 function closestAnywhere(ok) {
-  let best = -1;
-  let bestD = Infinity;
-  stalls.forEach((_, i) => {
-    const d = Math.hypot(stallCenter(i) - me.x, me.y);
-    if (ok(i) && d < bestD) {
-      best = i;
-      bestD = d;
-    }
-  });
-  return best;
+  return nearestStall(me.x, me.y, ok, Infinity);
 }
 
 function walkToStall(i) {
-  target = { x: stallCenter(i), y: 6 };
+  target = { x: LAYOUT[i].x, y: LAYOUT[i].y };
   pendingEnter = i;
   showTapMark(toX(target.x), toZ(target.y));
 }
@@ -1017,16 +1069,15 @@ const jump = () => me.s === -1 && !me.rolling && send({ t: 'jump' });
 const washHands = () => send({ t: 'wash' });
 
 function nearSink() {
-  return me.x < WALL_GAP + 60 && SINK_YS.some((y) => Math.abs(me.y - y) < 70);
+  return Math.hypot(me.x - BASIN.x, me.y - BASIN.y) < BASIN.r + 110;
 }
 
 function nearBench() {
-  if (me.y < FLOOR_H - 90) return -1;
-  return benchXs.findIndex((bx) => Math.abs(me.x - bx / U) < 100);
+  return benchSpots.findIndex((b) => Math.hypot(me.x - b.x, me.y - b.y) < 110);
 }
 
 function goSitOnBench(k) {
-  target = { x: benchXs[k] / U, y: FLOOR_H };
+  target = { x: benchSpots[k].x, y: benchSpots[k].y };
   pendingEnter = -1;
   pendingBench = true;
 }
@@ -1079,12 +1130,21 @@ function moveMe(dt) {
   }
   if (vx || vy) {
     const len = Math.hypot(vx, vy);
-    me.x = clamp(me.x + (vx / len) * step, WALL_GAP, worldW() - 40);
-    me.y = clamp(me.y + (vy / len) * step, 0, FLOOR_H);
+    me.x = clamp(me.x + (vx / len) * step, 45, ROOM_W - 45);
+    me.y = clamp(me.y + (vy / len) * step, 45, ROOM_D - 40);
+    // walk around the wash basin, not through it
+    const bdx = me.x - BASIN.x;
+    const bdy = me.y - BASIN.y;
+    const bd = Math.hypot(bdx, bdy);
+    const keepOut = BASIN.r + 35;
+    if (bd < keepOut && bd > 0) {
+      me.x = BASIN.x + (bdx / bd) * keepOut;
+      me.y = BASIN.y + (bdy / bd) * keepOut;
+    }
     // walking into the door of an empty stall goes inside
-    if (me.y <= 0 && vy < 0 && (ix || iz)) {
+    if (ix || iz) {
       const i = nearestEmptyStall(me.x, me.y, 40);
-      if (i >= 0) tryEnter(i);
+      if (i >= 0 && (vx / len) * -LAYOUT[i].fx + (vy / len) * -LAYOUT[i].fy > 0.6) tryEnter(i);
     }
   }
   sendMove(false);
@@ -1100,9 +1160,9 @@ function sendMove(force) {
 
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
-const cam = { yaw: -0.45, pitch: 0.55, dist: 11, tYaw: -0.45, tPitch: 0.55, tDist: 11, fx: 3, fz: 4 };
+const cam = { yaw: 0, pitch: 0.6, dist: 13, tYaw: 0, tPitch: 0.6, tDist: 13, fx: 11, fz: 20 };
 const DIST_MIN = 3.5;
-const YAW_MAX = 1.35; // keep the camera on the open side, never behind the stall wall
+const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 26;
 
 function updateCamera(dt) {
@@ -1113,14 +1173,24 @@ function updateCamera(dt) {
   let fx = toX(me.x);
   let fz = toZ(me.y);
   if (me.s !== -1) {
-    fx = stallLeftM(me.s) + STALL_M / 2;
-    fz = 0.2;
+    const door = stallWorld(me.s, STALL_M / 2, 0, 0.3);
+    fx = door.x;
+    fz = door.z;
   }
   const kf = 1 - Math.exp(-dt * 5);
   cam.fx = lerp(cam.fx, fx, kf);
   cam.fz = lerp(cam.fz, fz, kf);
   const cp = Math.cos(cam.pitch);
-  camera.position.set(cam.fx + Math.sin(cam.yaw) * cp * cam.dist, 0.9 + Math.sin(cam.pitch) * cam.dist, cam.fz + Math.cos(cam.yaw) * cp * cam.dist);
+  // stay inside the room (or above the walls) so a wall never blocks the view
+  const rw = toX(ROOM_W);
+  let d = cam.dist;
+  const at = (dd) => [cam.fx + Math.sin(cam.yaw) * cp * dd, 0.9 + Math.sin(cam.pitch) * dd, cam.fz + Math.cos(cam.yaw) * cp * dd];
+  let [px, py, pz] = at(d);
+  while (d > 2 && py < 5.4 && (px < 0.4 || px > rw - 0.4 || pz < 0.4)) {
+    d -= 0.25;
+    [px, py, pz] = at(d);
+  }
+  camera.position.set(px, py, pz);
   camera.lookAt(cam.fx, 0.9, cam.fz);
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
   sun.target.position.set(cam.fx, 0, cam.fz - 1);
@@ -1189,10 +1259,10 @@ function placeWalkers(dt, t) {
       setSpriteCanvas(e.spr, body('front', { face, look: e.look, mode: 'bench' }));
       e.spr.center.set(0.5, 0);
       e.spr.material.rotation = 0;
-      e.spr.position.set(X, 0.3 + lift, BENCH_Z - 0.12);
-      e.blob.position.set(X, 0.01, BENCH_Z - 0.12);
+      e.spr.position.set(X, 0.3 + lift, Z);
+      e.blob.position.set(X, 0.01, Z);
       e.halo.visible = false;
-      e.marker.position.set(X, 1.25 + lift + (Math.floor(t / 300) % 2) * 0.04, BENCH_Z - 0.12);
+      e.marker.position.set(X, 1.25 + lift + (Math.floor(t / 300) % 2) * 0.04, Z);
       continue;
     }
     if (washing) e.view = 'left';
@@ -1251,7 +1321,7 @@ function animateStalls(dt, t) {
       setSpriteCanvas(s.sitter, body('front', { face, look: occ.look, mode: 'toilet' }));
       const jig = u.h && Math.floor(t / 70) % 2 ? 0.02 : 0;
       s.sitter.position.x = STALL_M / 2 + jig;
-      s.sitter.rotation.y = cam.yaw; // turn toward the camera, but stay upright
+      s.sitter.rotation.y = cam.yaw - LAYOUT[i].rot; // turn toward the camera, but stay upright
       s.halo.visible = face === 'bliss';
       s.marker.position.y = 2.17 + (Math.floor(t / 300) % 2) * 0.04;
     } else {
@@ -1278,9 +1348,8 @@ function onPoop(m) {
   if (s) {
     s.pending++;
     const k = Math.min(m.pile, PILE_MAX) - 1;
-    const x0 = stallLeftM(m.stall);
-    const from = new THREE.Vector3(x0 + STALL_M / 2, 0.6, -1.0);
-    const to = new THREE.Vector3(x0 + 0.84, PART_TOP + 0.05 + k * 0.2, 0.02);
+    const from = stallWorld(m.stall, STALL_M / 2, 0.6, -1.0);
+    const to = stallWorld(m.stall, 0.84, PART_TOP + 0.05 + k * 0.2, 0.02);
     const p = pixelSprite(PROPS.poop, 0.035);
     p.position.copy(from);
     fxRoot.add(p);
@@ -1295,7 +1364,7 @@ function onPoop(m) {
 }
 
 const lastKnockPop = new Map();
-const distVol = (i) => clamp(1 - Math.abs(stallCenter(i) - me.x) / 1600, 0.08, 1);
+const distVol = (i) => (LAYOUT[i] ? clamp(1 - Math.hypot(LAYOUT[i].x - me.x, LAYOUT[i].y - me.y) / 1800, 0.08, 1) : 0.3);
 
 function onKnock(m) {
   const s = stallObjs[m.stall];
@@ -1304,7 +1373,7 @@ function onKnock(m) {
   const now = performance.now();
   if (now - (lastKnockPop.get(m.stall) || 0) > 500) {
     lastKnockPop.set(m.stall, now);
-    pop(new THREE.Vector3(stallLeftM(m.stall) + STALL_M / 2 + (Math.random() - 0.5) * 0.4, 1.2, 0.2), '똑똑');
+    pop(stallWorld(m.stall, STALL_M / 2 + (Math.random() - 0.5) * 0.4, 1.2, 0.2), '똑똑');
   }
   const mine = stalls[m.stall] === meId;
   playKnock(mine ? 0.5 : m.by === meId ? 0.35 : distVol(m.stall) * 0.25);
@@ -1312,34 +1381,36 @@ function onKnock(m) {
 
 function onBreak(m) {
   const s = stallObjs[m.stall];
-  const x0 = stallLeftM(m.stall);
-  if (s) {
+  const L = LAYOUT[m.stall];
+  if (s && L) {
     s.gone = 1.2;
     s.open = 0;
+    // the door flies out of the stall into the plaza
+    const out = (speed, side) => new THREE.Vector3(L.fx * speed + L.fy * side, 0, L.fy * speed - L.fx * side);
     const door = mesh(G.door, [M.doorEdge, M.doorEdge, M.doorEdge, M.doorEdge, s.face, s.face], { cast: true });
-    door.position.set(x0 + 0.08 + DOOR_W / 2, (DOOR_TOP + DOOR_BOT) / 2, 0.05);
+    door.position.copy(stallWorld(m.stall, 0.08 + DOOR_W / 2, (DOOR_TOP + DOOR_BOT) / 2, 0.05));
+    door.rotation.y = L.rot;
     fxRoot.add(door);
-    debris.push({ o: door, v: new THREE.Vector3((Math.random() - 0.5) * 1.5, 3, 3.4), w: new THREE.Vector3(-5, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 4), life: 3.2, door: true });
+    debris.push({ o: door, v: out(3.4, (Math.random() - 0.5) * 1.5).setY(3), w: new THREE.Vector3(-5, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 4), life: 3.2, door: true });
     for (let k = 0; k < 12; k++) {
       const chip = mesh(G.chip, M.doorEdge);
-      chip.position.set(x0 + 0.1 + Math.random() * 0.9, DOOR_BOT + Math.random() * 1.1, 0.05);
+      chip.position.copy(stallWorld(m.stall, 0.1 + Math.random() * 0.9, DOOR_BOT + Math.random() * 1.1, 0.05));
       fxRoot.add(chip);
-      debris.push({ o: chip, v: new THREE.Vector3((Math.random() - 0.5) * 3, 1 + Math.random() * 3, 1 + Math.random() * 2.5), w: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10), life: 1.3 });
+      debris.push({ o: chip, v: out(1 + Math.random() * 2.5, (Math.random() - 0.5) * 3).setY(1 + Math.random() * 3), w: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10), life: 1.3 });
     }
   }
-  pop(new THREE.Vector3(x0 + STALL_M / 2, 1.9, 0.1), '와장창!');
+  pop(stallWorld(m.stall, STALL_M / 2, 1.9, 0.1), '와장창!');
   if (m.victim === meId) toast('문이 부서졌어요! 바지부터 올리는 중...');
   if (m.by === meId) toast('문을 열고(?) 들어왔어요. 미안해요~');
   playCrash(m.victim === meId || m.by === meId ? 0.6 : distVol(m.stall) * 0.45);
 }
 
 function onBell(m) {
-  const x0 = stallLeftM(m.stall);
-  if (!document.hidden) {
-    pop(new THREE.Vector3(x0 + STALL_M / 2, 2.3, -0.4), '♪ 에티켓벨');
+  if (!document.hidden && stallObjs[m.stall]) {
+    pop(stallWorld(m.stall, STALL_M / 2, 2.3, -0.4), '♪ 에티켓벨');
     for (let k = 0; k < 4; k++) {
       const n = pixelSprite(PROPS.note, 0.04);
-      n.position.set(x0 + 0.3 + Math.random() * 0.5, 1.9, -0.4);
+      n.position.copy(stallWorld(m.stall, 0.3 + Math.random() * 0.5, 1.9, -0.4));
       n.visible = false;
       fxRoot.add(n);
       notes.push({ n, t: -k * 0.6, sway: Math.random() * 0.3, x: n.position.x });
@@ -1445,7 +1516,7 @@ function headOf(id) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
-  if (seat !== -1) return new THREE.Vector3(stallLeftM(seat) + STALL_M / 2, 2.2, SEAT_Z);
+  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 2.2, SEAT_Z);
   return new THREE.Vector3(toX(e.rx), 1.2, toZ(e.ry));
 }
 
@@ -1583,7 +1654,7 @@ function renderActions() {
     bar.append(mainBtn('knock', '만칸이에요 · 노크하러 가기', () => {
       const i = closestAnywhere((k) => stalls[k] && stalls[k] !== meId);
       if (i >= 0) {
-        target = { x: stallCenter(i), y: 6 };
+        target = { x: LAYOUT[i].x, y: LAYOUT[i].y };
         pendingEnter = -1;
         showTapMark(toX(target.x), toZ(target.y));
       }
@@ -1833,19 +1904,21 @@ function handleTap(x, y) {
   if (i !== undefined) {
     if (freeFor(i)) walkToStall(i);
     else {
-      target = { x: stallCenter(i), y: 6 };
+      target = { x: LAYOUT[i].x, y: LAYOUT[i].y };
       pendingEnter = -1;
       showTapMark(toX(target.x), toZ(target.y));
     }
     return;
   }
-  target = { x: clamp(hit.point.x / U, WALL_GAP, worldW() - 40), y: clamp((hit.point.z - Z0) / U, 0, FLOOR_H) };
+  target = { x: clamp(hit.point.x / U, 45, ROOM_W - 45), y: clamp(hit.point.z / U, 45, ROOM_D - 40) };
   pendingEnter = -1;
   showTapMark(toX(target.x), toZ(target.y));
 }
 
 canvasEl.addEventListener('pointerdown', (e) => {
-  canvasEl.setPointerCapture(e.pointerId);
+  try {
+    canvasEl.setPointerCapture(e.pointerId);
+  } catch {}
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
   if (pointers.size === 1) dragged = false;
   if (pointers.size === 2) {

@@ -8,12 +8,17 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const VENDOR = { '/vendor/three.module.js': path.join(__dirname, 'node_modules/three/build/three.module.js') };
 
 // world layout (shared with public/app.js)
+// The room is a plaza: stalls line three walls in a U (20 at the back, 15 down each side),
+// the open middle has a round wash basin, and the entrance is in the front wall.
+// Coordinates are centimeters: x across the room, y from the back wall toward the entrance.
 const STALL_W = 110;
-const ENTRANCE_W = 220;
-const END_PAD = 180;
-const FLOOR_H = 700; // a roomy floor in front of the stalls
-const ENTER_RANGE_X = 70;
-const ENTER_RANGE_Y = 100;
+const ROOM_W = 2200;
+const ROOM_D = 2300;
+const SIDE_START = 170; // side banks start a little away from the back corners
+const BACK_COUNT = 20;
+const SIDE_COUNT = 15;
+const ENTER_RANGE = 75; // how close to a stall's door you must be
+const BASIN = { x: ROOM_W / 2, y: 1050, r: 130 };
 
 const MAX_STALLS = 50;
 const ROOM_CAP = 70; // 50 stalls + a line of 20
@@ -95,8 +100,26 @@ for (const theme of OPEN_THEMES) {
   }
 }
 const isFull = (room) => room.users.size >= ROOM_CAP;
-const stallX = (i) => ENTRANCE_W + i * STALL_W + STALL_W / 2;
-const worldW = (room) => ENTRANCE_W + room.stalls.length * STALL_W + END_PAD;
+// each stall: the left corner of its door line, its rotation (three.js y rotation), and
+// the spot in front of the door where people stand to enter or knock
+const LAYOUT = (() => {
+  const list = [];
+  const add = (cx, cy, rot) => {
+    const ax = Math.cos(rot);
+    const ay = -Math.sin(rot); // along the door
+    const fx = Math.sin(rot);
+    const fy = Math.cos(rot); // facing out of the stall
+    const doorX = cx + ax * STALL_W / 2;
+    const doorY = cy + ay * STALL_W / 2;
+    list.push({ cx, cy, rot, fx, fy, x: Math.round(doorX + fx * 45), y: Math.round(doorY + fy * 45) });
+  };
+  for (let i = 0; i < BACK_COUNT; i++) add(i * STALL_W, 0, 0);
+  for (let j = 0; j < SIDE_COUNT; j++) add(0, SIDE_START + (j + 1) * STALL_W, Math.PI / 2);
+  for (let j = 0; j < SIDE_COUNT; j++) add(ROOM_W, SIDE_START + j * STALL_W, -Math.PI / 2);
+  return list;
+})();
+const clampX = (x) => clamp(x, 45, ROOM_W - 45);
+const clampY = (y) => clamp(y, 45, ROOM_D - 40);
 const isReserved = (room, i, now = Date.now()) => room.meta[i].reservedFor && room.meta[i].reservedUntil > now;
 
 // The line only exists once all 50 stalls are taken.
@@ -150,8 +173,8 @@ function leaveStall(room, user) {
   room.stalls[i] = null;
   room.meta[i].hp = DOOR_HP;
   room.meta[i].pile = 0; // your tower leaves with you
-  user.x = stallX(i);
-  user.y = 20;
+  user.x = LAYOUT[i].x;
+  user.y = LAYOUT[i].y;
   user.stall = -1;
   user.holding = false;
   user.outsideSince = Date.now();
@@ -168,14 +191,16 @@ function breakDoor(room, i, breaker) {
   victim.holding = false;
   victim.progress = 0;
   victim.outsideSince = now; // back of the line
-  const dir = Math.random() < 0.5 ? -1 : 1;
-  const fx = stallX(i);
-  victim.x = fx;
-  victim.y = 10;
+  // tumble out of the door into the plaza
+  const L = LAYOUT[i];
+  const side = (Math.random() - 0.5) * 240;
+  const out = 200 + Math.random() * 120;
+  victim.x = L.x;
+  victim.y = L.y;
   victim.roll = {
-    fx, fy: 10,
-    tx: clamp(fx + dir * (120 + Math.random() * 140), 40, worldW(room) - 60),
-    ty: 160 + Math.random() * 120,
+    fx: L.x, fy: L.y,
+    tx: clampX(L.x + L.fx * out + L.fy * side),
+    ty: clampY(L.y + L.fy * out + L.fx * side),
     t0: now,
   };
   victim.pantsUntil = now + ROLL_MS + PANTS_MS;
@@ -307,8 +332,8 @@ wss.on('connection', (ws, req) => {
     name: isValidName(q.get('name')) ? q.get('name') : `${pick(ADJ)} ${pick(NOUN)}`,
     color: pick(COLORS),
     ws,
-    x: 110 + Math.random() * 60,
-    y: 250 + Math.random() * 250,
+    x: ROOM_W / 2 + (Math.random() - 0.5) * 300,
+    y: ROOM_D - 120 - Math.random() * 120,
     dir: 1,
     stall: -1,
     progress: 0,
@@ -327,13 +352,16 @@ wss.on('connection', (ws, req) => {
   room.users.add(user);
   room.dirty = true;
 
-  send(ws, { t: 'welcome', you: user.id, name: user.name, room: room.id, theme: room.theme, label: room.label, no: room.no, notice });
+  send(ws, {
+    t: 'welcome', you: user.id, name: user.name, room: room.id, theme: room.theme, label: room.label, no: room.no, notice,
+    layout: { stalls: LAYOUT, w: ROOM_W, d: ROOM_D, basin: BASIN },
+  });
   broadcast(room, { t: 'toast', text: `${user.name}님이 화장실에 들어왔어요` });
 
   ws.isAlive = true;
   ws.on('pong', () => (ws.isAlive = true));
 
-  const nearStall = (i) => Math.abs(user.x - stallX(i)) <= ENTER_RANGE_X && user.y <= ENTER_RANGE_Y;
+  const nearStall = (i) => Math.hypot(user.x - LAYOUT[i].x, user.y - LAYOUT[i].y) <= ENTER_RANGE;
 
   ws.on('message', (raw) => {
     let m;
@@ -346,8 +374,8 @@ wss.on('connection', (ws, req) => {
     const validStall = Number.isInteger(i) && i >= 0 && i < room.stalls.length;
 
     if (m.t === 'move' && user.stall === -1 && !user.roll) {
-      user.x = clamp(Number(m.x) || 0, 95, worldW(room) - 40); // keep clear of the sinks
-      user.y = clamp(Number(m.y) || 0, 0, FLOOR_H);
+      user.x = clampX(Number(m.x) || 0);
+      user.y = clampY(Number(m.y) || 0);
       user.dir = m.d === -1 ? -1 : 1;
       user.bench = false; // moving gets you up off the bench
       room.dirty = true;

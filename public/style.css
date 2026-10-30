@@ -5,20 +5,20 @@
 
 /* soft, airy UI over a pixel world: frosted white chips, gentle shadows, pastel accents */
 :root {
-  --bg: #c9d3da;
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-strong: rgba(255, 255, 255, 0.92);
-  --line: rgba(47, 70, 92, 0.12);
-  --text: #3a4651;
-  --muted: #8693a0;
+  --bg: #12161f;
+  --glass: rgba(24, 29, 39, 0.62);
+  --glass-strong: rgba(30, 36, 48, 0.88);
+  --line: rgba(255, 255, 255, 0.1);
+  --text: #e9edf3;
+  --muted: #9aa6b5;
   --accent: #ffd978;
   --accent-ink: #5b4614;
   --coral: #ffa494;
   --coral-ink: #6a2a22;
   --poop: #c69466;
   --poop-light: #f4e9dc;
-  --shadow: 0 6px 18px rgba(36, 56, 76, 0.14);
-  --shadow-sm: 0 2px 6px rgba(36, 56, 76, 0.12);
+  --shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 * { box-sizing: border-box; }
@@ -90,7 +90,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .status .item { display: flex; align-items: center; gap: 6px; }
 .status .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
 .status .sep { width: 1px; height: 12px; background: var(--line); }
-.status b { color: #a8743f; font-weight: 400; display: inline-block; }
+.status b { color: #ffd978; font-weight: 400; display: inline-block; }
 .status b.bump { animation: bump 0.4s ease-out; }
 
 @keyframes bump {
@@ -159,14 +159,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transform: rotate(45deg);
 }
 
-.bubble.mine { background: #fff6d2; }
+.bubble.mine { background: rgba(255, 217, 120, 0.95); color: #3a2c08; }
 
 .pop {
   white-space: nowrap;
   font-family: Galmuri9;
   font-size: 10px;
   color: #fff;
-  text-shadow: 1px 0 0 #5a6672, -1px 0 0 #5a6672, 0 1px 0 #5a6672, 0 -1px 0 #5a6672;
+  text-shadow: 1px 0 0 #10141c, -1px 0 0 #10141c, 0 1px 0 #10141c, 0 -1px 0 #10141c;
 }
 
 /* ---------- bottom dock: actions, chat, key hints ---------- */
@@ -203,7 +203,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transition: transform 0.08s, box-shadow 0.08s, background 0.2s;
 }
 
-.act:hover { background: #fff; }
+.act:hover { background: rgba(44, 52, 68, 0.95); }
 .act:active, .act.on { transform: translateY(1px) scale(0.97); box-shadow: none; }
 .act .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
 
@@ -279,7 +279,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   gap: 3px 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 11px;
-  color: rgba(40, 52, 63, 0.75);
+  color: rgba(233, 237, 243, 0.6);
   -webkit-font-smoothing: antialiased;
   white-space: nowrap;
   pointer-events: none;
@@ -289,8 +289,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font: inherit;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 1px 0 rgba(36, 56, 76, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
   color: var(--text);
   font-weight: 600;
 }

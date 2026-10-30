@@ -1,0 +1,32 @@
+# Every push to main is a release: tag it and publish a GitHub Release with notes
+# generated from the commits since the last one. Render deploys main on its own.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v1.0.${{ github.run_number }}"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "$tag · $(date -u +%Y-%m-%d)" \
+            --generate-notes

@@ -1,8 +1,11 @@
 # One-click deploy on Render (render.com): New > Blueprint > pick this repo.
+# Day-to-day work goes to develop; only main is deployed (each push to main is also a GitHub Release).
 services:
   - type: web
     name: ddongta
     runtime: node
     plan: free
+    branch: main
+    autoDeploy: true
     buildCommand: npm ci
     startCommand: npm start

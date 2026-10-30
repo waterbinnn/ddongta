@@ -1119,13 +1119,24 @@ function exprOf(u, seat) {
 
 // ---------- connection ----------
 
+// When the server can't be reached for a few seconds, say so plainly and keep retrying (a little
+// slower each time); the notice goes away by itself as soon as we're back in.
+let retries = 0;
+let downTimer = 0;
+const serverDown = (on) => {
+  clearTimeout(downTimer);
+  $('#down').hidden = !on;
+};
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onmessage = (e) => handle(JSON.parse(e.data));
+  clearTimeout(downTimer);
+  downTimer = setTimeout(() => serverDown(true), retries ? 3000 : 8000); // the first visit may be waking the server
   ws.onclose = () => {
     setHold(false);
     $('#online').textContent = '물 내리는 중...';
-    setTimeout(connect, 1500);
+    retries++;
+    setTimeout(connect, Math.min(1500 * retries, 6000));
   };
 }
 
@@ -1137,6 +1148,8 @@ let greeted = false;
 function handle(m) {
   if (m.t === 'welcome') {
     meId = m.you;
+    retries = 0;
+    serverDown(false);
     if (m.layout) {
       LAYOUT = m.layout.stalls;
       ROOM_W = m.layout.w;
@@ -2823,6 +2836,7 @@ if (OG) {
 $('#soundBtn').innerHTML = `${icoImg('soundOff')}<span>소리 켜기</span>`;
 $('#peopleIcon').innerHTML = icoImg('people');
 $('#todayIcon').innerHTML = icoImg('poop');
+$('#downIcon').innerHTML = icoImg('poop');
 
 Promise.all([document.fonts.load('9px Galmuri9'), document.fonts.load('11px Galmuri11')]).finally(() => {
   connect();

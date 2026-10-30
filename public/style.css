@@ -338,23 +338,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 3px 12px;
+  gap: 2px 0;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 11px;
-  color: #6b5233;
+  color: #8a6d48;
+  text-shadow: 0 1px 0 rgba(255, 250, 240, 0.7);
   -webkit-font-smoothing: antialiased;
   white-space: nowrap;
   pointer-events: none;
 }
 
+/* plain text: the key in bold warm red, a dot between hints */
+.keys span + span::before { content: '·'; margin: 0 7px; opacity: 0.5; }
 .keys kbd {
   font: inherit;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 0 rgba(120, 72, 20, 0.25);
-  color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
+  color: #b4472f;
+  margin-right: 3px;
 }
 
 @media (hover: none) {
@@ -487,3 +487,37 @@ body.typing .keys { display: none; }
   text-shadow: 6px 0 0 #fffaf0, -6px 0 0 #fffaf0, 0 6px 0 #fffaf0, 0 -6px 0 #fffaf0,
     6px 6px 0 #fffaf0, -6px 6px 0 #fffaf0, 6px -6px 0 #fffaf0, -6px -6px 0 #fffaf0, 0 12px 0 #8f2a22;
 }
+
+/* ---------- the server is down ---------- */
+.down {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(242, 217, 138, 0.82);
+  backdrop-filter: blur(3px);
+  z-index: 60;
+}
+.down[hidden] { display: none; }
+.down-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 320px;
+  padding: 26px 28px 22px;
+  text-align: center;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}
+.down-ico .ico { width: 64px; height: 64px; animation: rattle 0.4s ease-in-out infinite; }
+.down-card b { font-size: 20px; color: #d8382e; }
+.down-card p { margin: 0; line-height: 1.6; color: var(--text); }
+.down-retry { font-size: 12px; color: var(--muted); }
+.down-retry i { font-style: normal; animation: blink 1.2s infinite; }
+.down-retry i:nth-child(2) { animation-delay: 0.2s; }
+.down-retry i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }

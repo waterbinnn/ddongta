@@ -23,6 +23,7 @@ const DOOR_BOT = 0.38; // the famous American gap
 const DOOR_TOP = 1.55;
 const PART_BOT = 0.3;
 const PART_TOP = 1.75;
+const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at -1.1)
 const PX_M = 0.05; // meters per sprite pixel
 const PILE_MAX = 10;
 const stallLeftM = (i) => toX(ENTRANCE_W + i * STALL_W);
@@ -739,16 +740,16 @@ function makeStall(i) {
 
   // whoever sits here: upper body peeks over the door, feet show under it
   const sitter = new THREE.Mesh(G.card, new THREE.MeshBasicMaterial({ map: texOf(PROPS.poop), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-  sitter.position.set(STALL_M / 2, 0, -0.5);
+  sitter.position.set(STALL_M / 2, 0, SEAT_Z); // right on the front of the toilet bowl
   sitter.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
   const marker = pixelSprite(PROPS.marker);
-  marker.position.set(STALL_M / 2, 2.15, -0.5);
+  marker.position.set(STALL_M / 2, 2.15, SEAT_Z);
   marker.visible = false;
   const halo = pixelSprite(PROPS.halo);
-  halo.position.set(STALL_M / 2, 2.07, -0.5);
+  halo.position.set(STALL_M / 2, 2.07, SEAT_Z);
   halo.visible = false;
 
   const pile = new THREE.Group();
@@ -1101,6 +1102,7 @@ function sendMove(force) {
 
 const cam = { yaw: -0.45, pitch: 0.55, dist: 11, tYaw: -0.45, tPitch: 0.55, tDist: 11, fx: 3, fz: 4 };
 const DIST_MIN = 3.5;
+const YAW_MAX = 1.35; // keep the camera on the open side, never behind the stall wall
 const DIST_MAX = 26;
 
 function updateCamera(dt) {
@@ -1443,7 +1445,7 @@ function headOf(id) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
-  if (seat !== -1) return new THREE.Vector3(stallLeftM(seat) + STALL_M / 2, 2.2, -0.5);
+  if (seat !== -1) return new THREE.Vector3(stallLeftM(seat) + STALL_M / 2, 2.2, SEAT_Z);
   return new THREE.Vector3(toX(e.rx), 1.2, toZ(e.ry));
 }
 
@@ -1778,9 +1780,9 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'KeyJ') {
     jump();
   } else if (e.code === 'KeyQ') {
-    cam.tYaw += 0.35;
+    cam.tYaw = clamp(cam.tYaw + 0.35, -YAW_MAX, YAW_MAX);
   } else if (e.code === 'KeyE') {
-    cam.tYaw -= 0.35;
+    cam.tYaw = clamp(cam.tYaw - 0.35, -YAW_MAX, YAW_MAX);
   } else if (e.key === '=' || e.key === '+') {
     cam.tDist = clamp(cam.tDist * 0.8, DIST_MIN, DIST_MAX);
   } else if (e.key === '-' || e.key === '_') {
@@ -1872,7 +1874,7 @@ canvasEl.addEventListener('pointermove', (e) => {
   if (pointers.size === 1) {
     if (Math.hypot(p.x - p.sx, p.y - p.sy) > 6) dragged = true;
     if (dragged) {
-      cam.tYaw -= dx * 0.006;
+      cam.tYaw = clamp(cam.tYaw - dx * 0.006, -YAW_MAX, YAW_MAX);
       cam.tPitch = clamp(cam.tPitch + dy * 0.004, 0.2, 1.3);
     }
   } else if (pointers.size === 2) {

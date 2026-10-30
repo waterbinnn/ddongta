@@ -8,6 +8,7 @@
   --bg: #f2d98a;
   --glass: rgba(255, 252, 242, 0.84);
   --glass-strong: rgba(255, 252, 242, 0.95);
+  --glass-soft: rgba(255, 252, 242, 0.55); /* see-through: chat and notices let the room show */
   --line: rgba(120, 72, 20, 0.14);
   --text: #4a3520;
   --muted: #9a7d58;
@@ -17,8 +18,11 @@
   --coral-ink: #6a2a22;
   --poop: #c69466;
   --poop-light: #f4e9dc;
+  --emph: #8a4a12; /* deep poop brown for emphasised text */
   --shadow: 0 6px 18px rgba(120, 72, 20, 0.16);
   --shadow-sm: 0 2px 6px rgba(120, 72, 20, 0.14);
+  /* where the top of the screen really starts: below a phone's notch, and below the keyboard's scroll */
+  --top-edge: calc(env(safe-area-inset-top, 0px) + var(--vv-top, 0px));
 }
 
 * { box-sizing: border-box; }
@@ -66,7 +70,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .top {
   position: fixed;
-  top: calc(12px + var(--vv-top, 0px));
+  top: calc(12px + var(--top-edge));
   left: 12px;
   right: 12px;
   display: flex;
@@ -90,7 +94,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .status .item { display: flex; align-items: center; gap: 6px; }
 .status .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
 .status .sep { width: 1px; height: 12px; background: var(--line); }
-.status b { color: #d8382e; font-weight: 400; display: inline-block; }
+.status b { color: var(--emph); font-weight: 700; display: inline-block; }
 .status b.bump { animation: bump 0.4s ease-out; }
 
 @keyframes bump {
@@ -120,9 +124,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-.badge { top: calc(52px + var(--vv-top, 0px)); z-index: 19; background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.toast { top: calc(52px + var(--vv-top, 0px)); z-index: 18; background: var(--glass-strong); box-shadow: var(--shadow); transition: opacity 0.5s; }
-.badge:not([hidden]) ~ .toast { top: calc(88px + var(--vv-top, 0px)); }
+.badge { top: calc(62px + var(--top-edge)); z-index: 19; background: rgba(255, 211, 78, 0.72); color: var(--accent-ink); border-color: transparent; }
+.toast { top: calc(62px + var(--top-edge)); z-index: 18; background: var(--glass-soft); box-shadow: var(--shadow); transition: opacity 0.5s; }
+.badge:not([hidden]) ~ .toast { top: calc(102px + var(--top-edge)); }
 .toast.out { opacity: 0; }
 .badge[hidden], .toast[hidden] { display: none; }
 
@@ -159,8 +163,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transform: rotate(45deg);
 }
 
-/* my own bubble: red so it stands out on the yellow floor */
-.bubble.mine { background: rgba(216, 56, 46, 0.72); color: #ffffff; }
+/* my own bubble: solid yellow, so it stands out from the see-through ones */
+.bubble.mine { background: var(--accent); color: var(--accent-ink); }
 
 .pop {
   white-space: nowrap;
@@ -195,7 +199,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 0 16px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--glass-strong);
+  background: var(--glass); /* the same frosted glass as the top bar's buttons */
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
   color: var(--text);
   box-shadow: var(--shadow-sm);
   white-space: nowrap;
@@ -226,6 +232,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- the poop button: a big pixel poop that fills up from the bottom ---------- */
 
+/* a little air between the poop and the buttons below, so it sits higher up */
+.push-pad:not(:empty) { margin-bottom: 36px; }
+
 .push-pad .act.main.push {
   position: relative;
   width: auto;
@@ -235,6 +244,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: 0;
   background: none;
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .push-pad .act.main.push .gauge {
@@ -268,8 +279,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transform: translateY(-50%);
   padding: 6px 12px;
   border-radius: 999px;
-  background: var(--glass-strong);
-  color: var(--text);
+  background: var(--emph); /* poop brown, like the poop it belongs to */
+  color: #fff4e2;
   box-shadow: var(--shadow-sm);
   font-size: 13px;
   white-space: nowrap;
@@ -307,7 +318,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   width: 100%;
   height: 46px;
   padding: 0 5px 0 18px;
-  background: var(--glass);
+  background: var(--glass); /* frosted glass, like the top bar */
   border: 1px solid var(--line);
   border-radius: 999px;
   box-shadow: var(--shadow-sm);
@@ -315,7 +326,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
 }
 
-.chat:focus-within { background: var(--glass-strong); box-shadow: var(--shadow); }
+/* while typing: a yellow ring, matching the send button */
+.chat:focus-within { background: var(--glass-strong); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
 
 .chat input {
   flex: 1;
@@ -351,16 +363,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
   gap: 4px 0;
   width: max-content; /* may run wider than the chat box, still centred */
   max-width: calc(100vw - 24px);
-  padding: 3px 10px;
-  border-radius: 12px;
-  background: rgba(255, 252, 242, 0.38); /* quiet: just enough to read over the floor */
+  text-shadow: 0 0 2px rgba(255, 252, 242, 0.85), 0 0 1px rgba(255, 252, 242, 0.85); /* no box: a soft halo keeps it readable over the floor */
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 11px;
-  color: rgba(74, 53, 32, 0.78);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* two rows: what you do, then how you look around */
+.keys { flex-direction: column; }
+.keys .row { display: flex; align-items: center; }
 
 /* each key as a small keycap, a thin divider between hints */
 .keys span { display: inline-flex; align-items: center; }
@@ -398,7 +412,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chat-hidden .feed { display: none; }
 .feed {
   position: fixed;
-  top: calc(58px + var(--vv-top, 0px));
+  top: calc(62px + var(--top-edge));
   left: 12px;
   width: min(340px, calc(100vw - 24px));
   display: flex;
@@ -416,10 +430,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   max-width: 100%;
   padding: 5px 10px 5px 8px;
   border-radius: 999px;
-  background: var(--glass);
+  background: var(--glass-soft);
   border: 1px solid var(--line);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   font-size: 12px;
   animation: fly-in 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
   transition: opacity 0.8s, transform 0.8s;
@@ -428,9 +442,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
 .feed .line b { flex-shrink: 0; font-weight: 400; color: var(--muted); font-size: 11px; }
 .feed .line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* my own lines: solid, with "나" in bold red, so they read on the yellow room */
-.feed .line.mine { background: var(--glass-strong); border-color: rgba(216, 56, 46, 0.45); }
-.feed .line.mine b { color: #d8382e; font-weight: 700; }
+/* my own lines: more solid, with "나" in brown, so they read on the yellow room */
+.feed .line.mine { background: rgba(255, 252, 242, 0.72); border-color: rgba(138, 74, 18, 0.4); }
+.feed .line.mine b { color: var(--emph); }
 .feed .line.out { opacity: 0; transform: translateY(-8px); }
 
 @keyframes fly-in {
@@ -438,8 +452,52 @@ button { font: inherit; color: inherit; cursor: pointer; }
   to { opacity: 1; transform: none; }
 }
 
-.top .right { display: flex; gap: 6px; }
+.top .right { position: relative; display: flex; gap: 6px; flex-shrink: 0; }
 .sound:hover { color: var(--text); }
+
+/* sound menu: effects only / with music / off */
+.sound-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--glass-strong);
+  box-shadow: var(--shadow);
+}
+.sound-menu[hidden] { display: none; }
+.sound-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  white-space: nowrap;
+  text-align: left;
+}
+.sound-menu button:hover { background: rgba(120, 72, 20, 0.07); }
+.sound-menu button.on { background: var(--accent); color: var(--accent-ink); }
+
+/* phones: the top bar must fit in one row, so squeeze it */
+@media (max-width: 520px) {
+  .top { left: 8px; right: 8px; gap: 6px; }
+  .status { gap: 7px; padding: 0 10px; min-width: 0; overflow: hidden; }
+  .status .item { gap: 4px; }
+  .status .unit { display: none; } /* the people and door icons already say it */
+  .top .right { gap: 4px; }
+  .sound { width: 36px; padding: 0; justify-content: center; }
+}
+@media (max-width: 400px) {
+  .status { gap: 9px; }
+  .status .sep, .status .today-word, .status .cap { display: none; } /* "3" instead of "3/50" */
+  .sound { width: 34px; }
+}
 
 
 /* golden poop announcements stand out in the feed */
@@ -556,8 +614,7 @@ body.typing .keys { display: none; }
   100% { transform: translate(-60px, 0) rotate(4deg); opacity: 0; }
 }
 
-/* phones: the chat feed is shorter and see-through so it doesn't cover the room */
+/* phones: no blur behind the chat feed, so it doesn't cover the room */
 @media (max-width: 600px) {
-  .feed .line { background: rgba(255, 252, 242, 0.5); backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .feed .line.mine { background: rgba(255, 252, 242, 0.7); }
+  .feed .line { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

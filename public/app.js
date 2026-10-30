@@ -75,7 +75,12 @@ let target = null;
 let pendingEnter = -1;
 let holding = false;
 let lastSent = { x: 0, y: 0, t: 0 };
-let soundOn = true; // on from the start (quietly); browsers still need one tap or key before it can play
+// 'fx' (effects only, the default), 'all' (effects + background music) or 'off'; remembered for next time
+let soundMode = 'fx';
+try {
+  soundMode = ['fx', 'all', 'off'].find((m) => m === localStorage.getItem('ddongta.sound')) || 'fx';
+} catch {}
+let soundOn = soundMode !== 'off'; // browsers still need one tap or key before anything can play
 const happyUntil = new Map();
 
 // ---------- pixel sprite helpers ----------
@@ -424,6 +429,7 @@ const ICONS = {
   recenter: icon(['...S...', '.SSSSS.', '.S...S.', 'SS.S.SS', '.S...S.', '.SSSSS.', '...S...']),
   soundOn: icon(['...S.....', '..SS..W..', 'SSSS.W.W.', 'SSSS.W.W.', '..SS..W..', '...S.....']),
   soundOff: icon(['...S.....', '..SS.....', 'SSSS.x.x.', 'SSSS..x..', '..SS.x.x.', '...S.....']),
+  music: icon(['...SSSS', '...SSSS', '...S..S', '...S..S', '.SSS.SS', 'SSSSSSS', '.SS..S.']),
   wash: icon(['...B...', '..BBB..', '.BBBBB.', '.BBWBB.', '.BBBBB.', '..BBB..']),
   bench: icon(['DDDDDDDDD', 'DdddddddD', 'DDDDDDDDD', '.D.....D.', '.D.....D.']),
   jump: icon(['...A...', '..AAA..', '.AAAAA.', '...A...', '...A...', '...A...']),
@@ -1791,8 +1797,8 @@ function handle(m) {
 let lastFlushed = -1;
 function applyState(st) {
   // everyone in this restroom, and how many stalls are in use right now
-  $('#online').textContent = `${roomNo > 1 ? `${roomNo}호점 · ` : ''}${st.users.length}명`;
-  $('#busy').textContent = `${st.stalls.filter(Boolean).length}/${st.stalls.length}칸`;
+  $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
+  $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
   if (st.flushed !== lastFlushed) {
     const el = $('#todayCount');
     el.textContent = st.flushed.toLocaleString('ko-KR');
@@ -3275,11 +3281,13 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) wakeAudio();
 });
 
-// the first tap or key anywhere starts the music (browsers don't allow sound before that)
+// the first tap or key anywhere wakes the sound (browsers don't allow it before that); music only if chosen
+let soundStarted = false;
 const startSoundOnce = () => {
-  if (!soundOn || music) return;
+  if (!soundOn || soundStarted) return;
+  soundStarted = true;
   unlockAudio();
-  startMusic();
+  if (soundMode === 'all') startMusic();
   loadSounds();
 };
 document.addEventListener('pointerdown', startSoundOnce, true);
@@ -3308,19 +3316,54 @@ $('#chatToggle').addEventListener('click', () => {
 });
 $('#recenterBtn').innerHTML = icoImg('recenter');
 $('#recenterBtn').addEventListener('click', recenterCam);
-$('#soundBtn').addEventListener('click', async () => {
-  soundOn = !soundOn;
-  if (soundOn) unlockAudio();
-  else silentLoop?.pause();
-  $('#soundBtn').innerHTML = icoImg(soundOn ? 'soundOn' : 'soundOff'); // icon only
-  $('#soundBtn').setAttribute('aria-label', soundOn ? '소리 끄기' : '소리 켜기');
-  if (soundOn) {
-    startMusic(); // queued now, heard as soon as the phone lets the sound through
-    await loadSounds();
-  } else {
-    stopMusic();
+// the sound button opens a small menu: effects only / with music / off
+const SOUND_MODES = {
+  fx: { icon: 'soundOn', label: '효과음만', toast: '효과음만 들려요' },
+  all: { icon: 'music', label: '배경음악도', toast: '배경음악도 같이 들려요' },
+  off: { icon: 'soundOff', label: '소리 끄기', toast: '소리를 껐어요' },
+};
+const soundMenu = $('#soundMenu');
+function showSoundMode() {
+  $('#soundBtn').innerHTML = icoImg(SOUND_MODES[soundMode].icon); // icon only
+  $('#soundBtn').title = `소리: ${SOUND_MODES[soundMode].label}`;
+  for (const b of soundMenu.querySelectorAll('button')) {
+    const m = SOUND_MODES[b.dataset.mode];
+    b.innerHTML = `${icoImg(m.icon)}${m.label}`;
+    b.classList.toggle('on', b.dataset.mode === soundMode);
+    b.setAttribute('aria-checked', b.dataset.mode === soundMode);
   }
+}
+function setSoundMenu(open) {
+  soundMenu.hidden = !open;
+  $('#soundBtn').setAttribute('aria-expanded', open);
+}
+async function setSoundMode(mode) {
+  soundMode = mode;
+  soundOn = mode !== 'off';
+  try {
+    localStorage.setItem('ddongta.sound', mode);
+  } catch {}
+  showSoundMode();
+  if (soundOn) {
+    soundStarted = true;
+    unlockAudio();
+  } else silentLoop?.pause();
+  if (mode === 'all') startMusic(); // queued now, heard as soon as the phone lets the sound through
+  else stopMusic();
+  if (soundOn) await loadSounds();
+}
+$('#soundBtn').addEventListener('click', () => setSoundMenu(soundMenu.hidden));
+soundMenu.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  setSoundMenu(false);
+  if (b.dataset.mode === soundMode) return;
+  setSoundMode(b.dataset.mode);
+  toast(SOUND_MODES[b.dataset.mode].toast);
 });
+document.addEventListener('pointerdown', (e) => {
+  if (!soundMenu.hidden && !e.target.closest('#soundMenu, #soundBtn')) setSoundMenu(false);
+}, true);
 
 // ---------- keyboard ----------
 
@@ -3574,8 +3617,7 @@ const joy = { x: 0, y: 0, id: null };
 // ?og: a clean frame for the link-preview image: no controls, just the place
 if (OG) document.body.classList.add('og');
 
-$('#soundBtn').innerHTML = icoImg('soundOn');
-$('#soundBtn').setAttribute('aria-label', '소리 끄기');
+showSoundMode();
 $('#peopleIcon').innerHTML = icoImg('people');
 $('#busyIcon').innerHTML = icoImg('door');
 $('#todayIcon').innerHTML = icoImg('poop');

@@ -158,11 +158,11 @@ const LEGS_DOWN = {
 
 const FACE_COL = { K: INK, W: '#ffffff', B: '#7cc6ff', R: '#ff8fa3', T: '#ff6b81' };
 const FACES = {
-  idle: { K: [[4, 6], [9, 6], [6, 8], [7, 8]] },
-  neutral: { K: [[4, 6], [9, 6], [5, 8], [6, 8], [7, 8], [8, 8]] },
+  idle: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [6, 8], [7, 8]] },
+  neutral: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [5, 8], [6, 8], [7, 8], [8, 8]] },
   urgent: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [5, 8], [8, 8]], W: [[6, 8], [7, 8]], B: [[12, 4], [12, 5]] },
   strain: { K: [[3, 5], [4, 6], [3, 7], [10, 5], [9, 6], [10, 7], [5, 8], [6, 9], [7, 8], [8, 9]], R: [[2, 8], [11, 8]], B: [[12, 3], [12, 4]] },
-  ok: { K: [[4, 6], [9, 6], [5, 8], [6, 9], [7, 9], [8, 8]], R: [[2, 8], [11, 8]] },
+  ok: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [5, 8], [6, 9], [7, 9], [8, 8]], R: [[2, 8], [11, 8]] },
   bliss: { K: [[3, 6], [4, 5], [5, 6], [8, 6], [9, 5], [10, 6], [5, 8], [6, 8], [7, 8], [8, 8]], R: [[2, 7], [11, 7]], T: [[6, 9], [7, 9]] },
   relaxed: { K: [[3, 6], [4, 6], [9, 6], [10, 6], [6, 8], [7, 8]], R: [[2, 8], [11, 8]] },
   dizzy: { K: [[3, 5], [5, 5], [4, 6], [3, 7], [5, 7], [8, 5], [10, 5], [9, 6], [8, 7], [10, 7], [6, 9], [7, 9]] },
@@ -170,12 +170,11 @@ const FACES = {
 };
 const SIDE_FACE = [[10, 6], [12, 8]];
 
-// every visitor gets a look picked from their id: hair style, skin, cap, glasses, stripes, pants
+// every visitor gets a look picked from their id: hair style, skin, cap, stripes, pants
 const SKINS = ['#ffd9b8', '#f6c8a2', '#e8b08a', '#c98e64', '#9a6644'];
 const STYLES = ['short', 'long', 'bun', 'cap', 'curly', 'buzz'];
 const PANTS = ['#3b4a6b', '#5a4636', '#2f2f3a', '#56683a', '#7a4a5a'];
 const CAPS = ['#e5484d', '#3a7bd5', '#46a758', '#f5a524', '#8a5cd0'];
-const GLASSES = [[3, 5], [4, 5], [5, 5], [3, 7], [4, 7], [5, 7], [3, 6], [5, 6], [8, 5], [9, 5], [10, 5], [8, 7], [9, 7], [10, 7], [8, 6], [10, 6], [6, 6], [7, 6]];
 
 function hashId(n) {
   let x = Math.imul(n + 1, 2654435761) >>> 0;
@@ -190,9 +189,9 @@ function lookFor(u) {
   const pick = (arr, shift) => arr[(h >>> shift) % arr.length];
   const look = {
     c: u.c, skin: pick(SKINS, 0), h: pick(HAIRS, 3), style: pick(STYLES, 7), pants: pick(PANTS, 11), cap: pick(CAPS, 15),
-    glasses: (h >>> 19) % 5 === 0, stripe: (h >>> 23) % 3 === 0,
+    stripe: (h >>> 23) % 3 === 0,
   };
-  look.key = [look.c, look.skin, look.h, look.style, look.pants, look.cap, look.glasses, look.stripe].join('|');
+  look.key = [look.c, look.skin, look.h, look.style, look.pants, look.cap, look.stripe].join('|');
   return look;
 }
 
@@ -292,7 +291,6 @@ function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 
   const extra = [];
   if (v === 'front') {
     for (const [k, pts] of Object.entries(FACES[face] || FACES.idle)) extra.push([FACE_COL[k], shift(pts)]);
-    if (look.glasses) extra.push(['#2a2a35', shift(GLASSES)]);
   } else if (v === 'side') {
     extra.push([INK, shift(SIDE_FACE)]);
   }
@@ -819,6 +817,19 @@ function makeStall(i) {
   mosaic.visible = false;
 
   g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
+
+  // the last stall in a bank has no neighbour closing its right side, so give it its own wall
+  const endX = L.cx + Math.cos(L.rot) * STALL_W;
+  const endY = L.cy - Math.sin(L.rot) * STALL_W;
+  if (!LAYOUT.some((o) => Math.hypot(o.cx - endX, o.cy - endY) < 5)) {
+    const endPart = mesh(G.partition, M.part, { cast: true, receive: true });
+    endPart.position.set(STALL_M - 0.02, (PART_TOP + PART_BOT) / 2, -STALL_D / 2);
+    const endCap = mesh(G.cap, M.partTop);
+    endCap.position.set(STALL_M - 0.02, PART_TOP, -STALL_D / 2);
+    const endPost = mesh(G.post, M.part, { cast: true });
+    endPost.position.set(STALL_M - 0.035, PART_TOP / 2, 0);
+    g.add(endPart, endCap, endPost);
+  }
   stallRoot.add(g);
   g.updateMatrixWorld(true);
   stallHits[i] = hit;

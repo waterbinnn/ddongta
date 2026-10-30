@@ -347,23 +347,34 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 2px 0;
+  align-items: center;
+  gap: 4px 0;
+  width: max-content; /* may run wider than the chat box, still centred */
+  max-width: calc(100vw - 24px);
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(255, 252, 242, 0.38); /* quiet: just enough to read over the floor */
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 11px;
-  color: #8a6d48;
-  text-shadow: 0 1px 0 rgba(255, 250, 240, 0.7);
+  color: rgba(74, 53, 32, 0.78);
   -webkit-font-smoothing: antialiased;
   white-space: nowrap;
   pointer-events: none;
 }
 
-/* plain text: the key in bold warm red, a dot between hints */
-.keys span + span::before { content: '·'; margin: 0 7px; opacity: 0.5; }
+/* each key as a small keycap, a thin divider between hints */
+.keys span { display: inline-flex; align-items: center; }
+.keys span + span::before { content: ''; width: 1px; height: 9px; margin: 0 8px; background: var(--line); }
 .keys kbd {
   font: inherit;
+  font-size: 10px;
   font-weight: 700;
-  color: #b4472f;
-  margin-right: 3px;
+  color: var(--text);
+  border: 1px solid rgba(120, 72, 20, 0.22);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 4px;
+  line-height: 14px;
 }
 
 @media (hover: none) {

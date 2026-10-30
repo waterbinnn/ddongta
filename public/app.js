@@ -420,6 +420,7 @@ const ICONS = {
   people: icon(['.HHHH.', 'HFFFFH', '.FFFF.', '..FF..', '.AAAA.', 'AAAAAA', 'AAAAAA']),
   chat: icon(['.SSSSSSS.', 'SWWWWWWWS', 'SWSSSSSWS', 'SWWWWWWWS', '.SSSSSSS.', '..SS.....', '..S......']),
   chatOff: icon(['xSSSSSSS.', 'SxWWWWWWS', 'SWxSSSSWS', 'SWWxWWWWS', '.SSSxSSS.', '..SS.x...', '..S...x..']),
+  flush: icon(['...b...', '..bBb..', '.bBBBb.', 'bBBWBBb', 'bBBWBBb', '.bBBBb.', '..bbb..']),
   recenter: icon(['...S...', '.SSSSS.', '.S...S.', 'SS.S.SS', '.S...S.', '.SSSSS.', '...S...']),
   soundOn: icon(['...S.....', '..SS..W..', 'SSSS.W.W.', 'SSSS.W.W.', '..SS..W..', '...S.....']),
   soundOff: icon(['...S.....', '..SS.....', 'SSSS.x.x.', 'SSSS..x..', '..SS.x.x.', '...S.....']),
@@ -1773,6 +1774,10 @@ function handle(m) {
     playDing();
   } else if (m.t === 'bell') {
     onBell(m);
+  } else if (m.t === 'flush') {
+    const h = headOf(m.id);
+    if (h) pop(h, '쏴아~');
+    if (m.id === meId) playFlush(); // only your own flush makes a sound
   } else if (m.t === 'jump') {
     const e = users.get(m.id);
     if (e) e.jumpT = 0.001;
@@ -1785,7 +1790,9 @@ function handle(m) {
 
 let lastFlushed = -1;
 function applyState(st) {
-  $('#online').textContent = `${roomNo > 1 ? `${roomNo}호점 · ` : ''}${st.users.length}명 볼일 중`;
+  // everyone in this restroom, and how many stalls are in use right now
+  $('#online').textContent = `${roomNo > 1 ? `${roomNo}호점 · ` : ''}${st.users.length}명`;
+  $('#busy').textContent = `${st.stalls.filter(Boolean).length}/${st.stalls.length}칸`;
   if (st.flushed !== lastFlushed) {
     const el = $('#todayCount');
     el.textContent = st.flushed.toLocaleString('ko-KR');
@@ -1945,6 +1952,12 @@ function goSitOnBench(k) {
   target = { x: seat.x, y: seat.y };
   pendingEnter = -1;
   pendingBench = true;
+}
+
+// flush: your poop tower is cleared and you stay seated
+function flush() {
+  if (me.s === -1) return;
+  send({ t: 'flush' });
 }
 
 function exitStall() {
@@ -2815,7 +2828,7 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
-    bar.append(miniBtn('bird', '에티켓벨', ringBell), miniBtn('exit', '나가기', exitStall));
+    bar.append(miniBtn('flush', '물 내리기', flush), miniBtn('bird', '에티켓벨', ringBell), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -3024,6 +3037,14 @@ function playCrack(volume) {
 function playWash(volume) {
   if (!soundOn) return;
   for (let k = 0; k < 5; k++) tone('sine', 900 + Math.random() * 500, 500, 0.12, volume * 0.3, k * 0.16);
+}
+
+// a flush: a rushing whoosh that drains away with a gurgle
+function playFlush() {
+  if (!soundOn) return;
+  noiseBurst(1.3, 0.35, 250);
+  noiseBurst(0.8, 0.2, 900, 0.15);
+  tone('sine', 320, 90, 0.9, 0.08, 0.3);
 }
 
 function playDing() {
@@ -3347,6 +3368,8 @@ window.addEventListener('keydown', (e) => {
     if (me.s !== -1) ringBell();
   } else if (e.code === 'KeyJ') {
     jump();
+  } else if (e.code === 'KeyF') {
+    flush();
   } else if (e.code === 'KeyR') {
     recenterCam();
   } else if (e.code === 'KeyH') {
@@ -3554,6 +3577,7 @@ if (OG) document.body.classList.add('og');
 $('#soundBtn').innerHTML = icoImg('soundOn');
 $('#soundBtn').setAttribute('aria-label', '소리 끄기');
 $('#peopleIcon').innerHTML = icoImg('people');
+$('#busyIcon').innerHTML = icoImg('door');
 $('#todayIcon').innerHTML = icoImg('poop');
 $('#downIcon').innerHTML = icoImg('poop');
 

@@ -482,6 +482,11 @@ wss.on('connection', (ws, req) => {
     } else if (m.t === 'exit') {
       const freed = leaveStall(room, user);
       if (freed !== -1) offerStall(room, freed);
+    } else if (m.t === 'flush' && user.stall !== -1) {
+      // flushing clears your poop tower but keeps your seat
+      room.meta[user.stall].pile = 0;
+      room.dirty = true;
+      broadcast(room, { t: 'flush', id: user.id, stall: user.stall });
     } else if (m.t === 'hold') {
       user.holding = Boolean(m.on) && user.stall !== -1;
       room.dirty = true;

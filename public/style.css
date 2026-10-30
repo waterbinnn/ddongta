@@ -66,7 +66,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .top {
   position: fixed;
-  top: 12px;
+  top: calc(12px + var(--vv-top, 0px));
   left: 12px;
   right: 12px;
   display: flex;
@@ -120,9 +120,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-.badge { top: 52px; z-index: 19; background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.toast { top: 52px; z-index: 18; background: var(--glass-strong); box-shadow: var(--shadow); transition: opacity 0.5s; }
-.badge:not([hidden]) ~ .toast { top: 88px; }
+.badge { top: calc(52px + var(--vv-top, 0px)); z-index: 19; background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.toast { top: calc(52px + var(--vv-top, 0px)); z-index: 18; background: var(--glass-strong); box-shadow: var(--shadow); transition: opacity 0.5s; }
+.badge:not([hidden]) ~ .toast { top: calc(88px + var(--vv-top, 0px)); }
 .toast.out { opacity: 0; }
 .badge[hidden], .toast[hidden] { display: none; }
 
@@ -174,7 +174,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dock {
   position: fixed;
   left: 50%;
-  bottom: calc(10px + env(safe-area-inset-bottom));
+  bottom: calc(10px + env(safe-area-inset-bottom) + var(--kb, 0px));
   transform: translateX(-50%);
   width: min(460px, calc(100vw - 24px));
   display: flex;
@@ -368,7 +368,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------- room-wide chat feed, top-left ---------- */
 .feed {
   position: fixed;
-  top: 58px;
+  top: calc(58px + var(--vv-top, 0px));
   left: 12px;
   width: min(340px, calc(100vw - 24px));
   display: flex;
@@ -413,3 +413,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* golden poop announcements stand out in the feed */
 .feed .line.gold { background: rgba(255, 214, 80, 0.55); border-color: #e0a91c; }
 .feed .line.gold span { color: #7a4d00; font-weight: 700; }
+
+/* no "save image" callout or dragging when you hold a button on a phone */
+img { -webkit-touch-callout: none; -webkit-user-drag: none; pointer-events: none; }
+button, .act { -webkit-touch-callout: none; }
+
+/* while typing, only the chat box stays down by the keyboard */
+body.typing .push-pad,
+body.typing .actions,
+body.typing .keys { display: none; }

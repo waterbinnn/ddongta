@@ -2049,6 +2049,29 @@ const chatInput = $('#chatInput');
 
 const openChat = () => chatInput.focus();
 const closeChat = () => chatInput.blur();
+chatInput.addEventListener('focus', () => document.body.classList.add('typing'));
+chatInput.addEventListener('blur', () => {
+  document.body.classList.remove('typing');
+  setTimeout(() => window.scrollTo(0, 0), 60); // phones sometimes leave the page scrolled after the keyboard
+});
+
+// phone keyboards: keep the header at the top of what is still visible and the chat just above the keys
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const fitKeyboard = () => {
+    const root = document.documentElement.style;
+    root.setProperty('--vv-top', `${vv.offsetTop}px`);
+    root.setProperty('--kb', `${Math.max(0, window.innerHeight - vv.height - vv.offsetTop)}px`);
+  };
+  vv.addEventListener('resize', fitKeyboard);
+  vv.addEventListener('scroll', fitKeyboard);
+  fitKeyboard();
+}
+
+// a long press should never open the browser's image or link menu
+document.addEventListener('contextmenu', (e) => {
+  if (e.target !== chatInput) e.preventDefault();
+});
 
 chatBox.addEventListener('submit', (e) => {
   e.preventDefault();

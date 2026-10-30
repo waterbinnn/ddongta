@@ -1374,6 +1374,12 @@ function focusCamera() {
 
 function updateCamera(dt) {
   if (me.ready && BASIN) focusCamera();
+  if (me.s !== -1 && LAYOUT[me.s]) {
+    // in a stall the camera only swings around the front, never behind it
+    const off = cam.tYaw - LAYOUT[me.s].rot;
+    const rel = Math.atan2(Math.sin(off), Math.cos(off));
+    cam.tYaw -= rel - clamp(rel, -1.1, 1.1);
+  }
   const k = 1 - Math.exp(-dt * 7);
   cam.yaw = lerpAngle(cam.yaw, cam.tYaw, k);
   cam.pitch = lerp(cam.pitch, cam.tPitch, k);
@@ -1389,15 +1395,17 @@ function updateCamera(dt) {
   cam.fx = lerp(cam.fx, fx, kf);
   cam.fz = lerp(cam.fz, fz, kf);
   const cp = Math.cos(cam.pitch);
-  // stay inside the room (or above the walls) so a wall never blocks the view
+  // always stay in front of the stall banks, so you never see the stalls (or anyone in them) from behind
   const rw = toX(ROOM_W);
   let d = cam.dist;
   const at = (dd) => [cam.fx + Math.sin(cam.yaw) * cp * dd, 0.9 + Math.sin(cam.pitch) * dd, cam.fz + Math.cos(cam.yaw) * cp * dd];
   let [px, py, pz] = at(d);
-  while (d > 2 && py < 5.4 && (px < 0.4 || px > rw - 0.4 || pz < 0.4)) {
+  while (d > 2 && (px < 0.4 || px > rw - 0.4 || pz < 0.4)) {
     d -= 0.25;
     [px, py, pz] = at(d);
   }
+  px = clamp(px, 0.4, rw - 0.4);
+  pz = Math.max(pz, 0.4);
   camera.position.set(px, py, pz);
   camera.lookAt(cam.fx, 0.9, cam.fz);
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
@@ -1529,7 +1537,9 @@ function animateStalls(dt, t) {
       setSpriteCanvas(s.sitter, body('front', { face, look: occ.look, mode: 'toilet' }));
       const jig = u.h && Math.floor(t / 70) % 2 ? 0.02 : 0;
       s.sitter.position.x = STALL_M / 2 + jig;
-      s.sitter.rotation.y = cam.yaw - LAYOUT[i].rot; // turn toward the camera, but stay upright
+      // turn toward the camera, but stay upright and never swing round to face the wall behind
+      const rel = Math.atan2(Math.sin(cam.yaw - LAYOUT[i].rot), Math.cos(cam.yaw - LAYOUT[i].rot));
+      s.sitter.rotation.y = clamp(rel, -1.1, 1.1);
       s.halo.visible = face === 'bliss';
       s.marker.position.y = 2.17 + SIT_LIFT + (Math.floor(t / 300) % 2) * 0.04;
     } else {

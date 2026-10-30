@@ -340,6 +340,8 @@ const ICONS = {
   bench: icon(['DDDDDDDDD', 'DdddddddD', 'DDDDDDDDD', '.D.....D.', '.D.....D.']),
   jump: icon(['...A...', '..AAA..', '.AAAAA.', '...A...', '...A...', '...A...']),
   poop: asIcon(PROPS.poop),
+  // the push button: an empty (pale) poop that fills up with the real one
+  poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
 };
 
 const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
@@ -1720,7 +1722,7 @@ function updatePush(t) {
   if (t < flashUntil) text = '퐁당~ 아 시원하다';
   else if (!holding) text = p ? `숨 고르고 다시 꾹 · ${p}%` : '꾹 눌러서 힘주기';
   else text = p < 34 ? '끄응...' : p < 67 ? '으으읏...!' : '거의 다 왔어!!';
-  const span = b.querySelector('span');
+  const span = b.querySelector('.label');
   if (span.textContent !== text) span.textContent = text;
   b.classList.toggle('done', t < flashUntil);
   if (holding && t - lastBuzz > 600) {
@@ -1766,7 +1768,11 @@ function renderActions() {
   const pad = $('#pushPad');
   pad.innerHTML = '';
   if (mode === 'inside') {
-    const push = mainBtn('poop', '꾹 눌러서 힘주기', null, 'push');
+    const push = document.createElement('button');
+    push.type = 'button';
+    push.className = 'act main push';
+    push.innerHTML = `<span class="gauge"><img class="empty" src="${ICONS.poopEmpty.src}" alt=""><img class="full" src="${ICONS.poop.src}" alt=""></span><span class="label">꾹 눌러서 힘주기</span>`;
+    push.addEventListener('contextmenu', (e) => e.preventDefault());
     push.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       push.setPointerCapture(e.pointerId);

@@ -214,37 +214,44 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .act.mini { padding: 0 14px; font-size: 12px; color: var(--text); }
 
-/* ---------- the poop button: a big round game button in the bottom-right ---------- */
-
-.push-pad { display: flex; justify-content: center; }
-.push-pad:empty { display: none; }
+/* ---------- the poop button: a big pixel poop that fills up from the bottom ---------- */
 
 .push-pad .act.main.push {
   position: relative;
-  flex-direction: column;
-  justify-content: center;
-  width: 112px;
-  height: 112px;
+  width: auto;
+  height: auto;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: conic-gradient(var(--poop) var(--p, 0%), rgba(255, 255, 255, 0.14) 0);
-  box-shadow: var(--shadow);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 
-.push-pad .act.main.push::before {
-  content: "";
+.push-pad .act.main.push .gauge {
+  position: relative;
+  display: block;
+  width: 90px;
+  height: 90px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  transition: transform 0.1s;
+}
+
+.push-pad .act.main.push .gauge img {
   position: absolute;
-  inset: 9px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff7ea, var(--poop-light) 65%, #e6d2b8);
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
 }
 
-.push-pad .act.main.push .ico { position: relative; z-index: 1; width: calc(var(--w) * 3px); height: calc(var(--h) * 3px); }
+/* the real poop shows only up to the current progress */
+.push-pad .act.main.push .gauge .full {
+  clip-path: inset(calc(100% - var(--p, 0%)) 0 0 0);
+  transition: clip-path 0.15s linear;
+}
 
-/* the status ("끄응...") floats above the button */
-.push-pad .act.main.push span {
+/* the status ("끄응...") sits beside it */
+.push-pad .act.main.push .label {
   position: absolute;
   left: calc(100% + 10px);
   top: 50%;
@@ -259,9 +266,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   pointer-events: none;
 }
 
-.push-pad .act.main.push:active, .push-pad .act.main.push.on { transform: scale(0.94); }
-.push-pad .act.main.push.on .ico { animation: grunt 0.18s steps(2) infinite; }
-.push-pad .act.main.push.done { background: conic-gradient(var(--accent) 100%, transparent 0); box-shadow: 0 0 28px rgba(255, 217, 120, 0.7); }
+.push-pad .act.main.push:active .gauge, .push-pad .act.main.push.on .gauge { transform: scale(0.95); }
+.push-pad .act.main.push.on .gauge { animation: grunt 0.18s steps(2) infinite; }
+.push-pad .act.main.push.done .gauge { filter: drop-shadow(0 0 14px rgba(255, 217, 120, 0.9)); animation: plopped 0.5s ease-out; }
+
+@keyframes plopped {
+  30% { transform: translateY(-8px) scale(1.12); }
+}
 
 @keyframes grunt {
   from { transform: translate(-1px, 1px) scale(1); }
@@ -269,7 +280,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media (max-width: 520px) {
-  .push-pad .act.main.push { width: 96px; height: 96px; }
+  .push-pad .act.main.push .gauge { width: 76px; height: 76px; }
 }
 
 .chat {

@@ -137,10 +137,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   max-width: 200px;
   width: max-content;
   padding: 6px 10px;
-  background: var(--glass-strong);
+  background: rgba(255, 252, 242, 0.62); /* see-through, so bubbles never hide the room */
   color: var(--text);
   border-radius: 12px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 2px 8px rgba(120, 72, 20, 0.12);
   line-height: 1.45;
   font-size: 13px;
   word-break: break-all;
@@ -159,7 +159,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transform: rotate(45deg);
 }
 
-.bubble.mine { background: rgba(255, 217, 120, 0.95); color: #3a2c08; }
+/* my own bubble: red so it stands out on the yellow floor */
+.bubble.mine { background: rgba(216, 56, 46, 0.72); color: #ffffff; }
 
 .pop {
   white-space: nowrap;
@@ -290,6 +291,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 @media (max-width: 520px) {
   .push-pad .act.main.push .gauge { width: 76px; height: 76px; }
+  /* no room beside it on a phone: the status sits centred above the poop instead */
+  .push-pad .act.main.push .label {
+    left: 50%;
+    top: auto;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    font-size: 12px;
+  }
 }
 
 .chat {
@@ -407,7 +416,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
 .feed .line b { flex-shrink: 0; font-weight: 400; color: var(--muted); font-size: 11px; }
 .feed .line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.feed .line.mine { background: rgba(255, 217, 120, 0.2); border-color: rgba(255, 217, 120, 0.35); }
+/* my own lines: solid, with "나" in bold red, so they read on the yellow room */
+.feed .line.mine { background: var(--glass-strong); border-color: rgba(216, 56, 46, 0.45); }
+.feed .line.mine b { color: #d8382e; font-weight: 700; }
 .feed .line.out { opacity: 0; transform: translateY(-8px); }
 
 @keyframes fly-in {
@@ -467,26 +478,6 @@ body.typing .keys { display: none; }
 
 /* ?og: the link-preview frame */
 .og .top, .og .dock, .og .feed, .og .toast, .og .badge, .og .joy, .og .loading { display: none !important; }
-.og-title {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  pointer-events: none;
-  z-index: 30;
-}
-.og-title b {
-  font-family: Galmuri11, sans-serif;
-  font-weight: 700;
-  font-size: 132px;
-  line-height: 1;
-  color: #d8382e;
-  text-shadow: 6px 0 0 #fffaf0, -6px 0 0 #fffaf0, 0 6px 0 #fffaf0, 0 -6px 0 #fffaf0,
-    6px 6px 0 #fffaf0, -6px 6px 0 #fffaf0, 6px -6px 0 #fffaf0, -6px -6px 0 #fffaf0, 0 12px 0 #8f2a22;
-}
 
 /* ---------- the server is down ---------- */
 .down {
@@ -551,4 +542,10 @@ body.typing .keys { display: none; }
   75% { transform: translate(25vw, -10px) rotate(-6deg); }
   92% { opacity: 1; }
   100% { transform: translate(-60px, 0) rotate(4deg); opacity: 0; }
+}
+
+/* phones: the chat feed is shorter and see-through so it doesn't cover the room */
+@media (max-width: 600px) {
+  .feed .line { background: rgba(255, 252, 242, 0.5); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .feed .line.mine { background: rgba(255, 252, 242, 0.7); }
 }

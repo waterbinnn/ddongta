@@ -409,3 +409,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .top .right { display: flex; gap: 6px; }
 .sound:hover { color: var(--text); }
 
+
+/* golden poop announcements stand out in the feed */
+.feed .line.gold { background: rgba(255, 214, 80, 0.55); border-color: #e0a91c; }
+.feed .line.gold span { color: #7a4d00; font-weight: 700; }

@@ -33,8 +33,8 @@ const SKIN = '#ffd9b8';
 const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a', '#d8b26a', '#7a7a86'];
 // a casual fast-food restroom: butter-yellow tile, ketchup-red doors, cream stalls, warm daylight
 const PAL = {
-  sky: '#f2d98a', wall: '#f7d55e', wallLine: '#e8bd3c', wallHi: '#fff1a8', band: '#d8382e', bandGlow: '#000000',
-  floorA: '#f4f1ea', floorB: '#ece7dc', floorLine: '#d8d0c0', checkA: '#f8d978', checkB: '#fff6e0',
+  sky: '#f2d98a', wall: '#f8d978', wallB: '#fff6e0', wallLine: '#ecd49a', band: '#d8382e', bandGlow: '#000000',
+  floorA: '#f8d978', floorB: '#fff6e0', floorLine: '#ecd49a',
   door: '#dd4636', doorDark: '#b0342a', doorLight: '#f2705c', number: '#ffffff',
   part: '#fbf1d9', partTop: '#ffffff', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000',
   hemi: ['#fff8e6', '#c8a868', 1.7], moon: ['#fff1d2', 1.75],
@@ -310,6 +310,8 @@ function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 
 
 const PROPS = {
   poop: sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#8a5228', P: '#5e3517', h: '#c88a50' }),
+  goldPoop: sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' }),
+  sparkle: sprite(['..Y..', '..Y..', 'YYWYY', '..Y..', '..Y..'], { Y: '#ffd84a', W: '#ffffff' }, null, null),
   note: sprite(['..NNN', '..N.N', '..N.N', '..N..', 'NNN..', 'NNN..'], { N: '#ffd84a' }),
   marker: sprite(['MMMMM', '.MMM.', '..M..'], { M: '#ffd84a' }),
   halo: sprite(['.AAAAAAAA.', 'A........A', '.AAAAAAAA.'], { A: '#ffe066' }, null, null),
@@ -431,13 +433,10 @@ function canvas(w, h, draw) {
 }
 
 const floorCanvas = canvas(32, 32, (g) => {
-  const tones = [PAL.floorA, PAL.floorB, PAL.floorB, PAL.floorA];
   for (let y = 0; y < 2; y++) {
     for (let x = 0; x < 2; x++) {
-      g.fillStyle = tones[y * 2 + x];
+      g.fillStyle = (x + y) % 2 ? PAL.floorB : PAL.floorA;
       g.fillRect(x * 16, y * 16, 16, 16);
-      g.fillStyle = '#ffffff'; // a soft shine on each tile
-      g.fillRect(x * 16 + 2, y * 16 + 2, 3, 1);
     }
   }
   g.fillStyle = PAL.floorLine;
@@ -446,25 +445,18 @@ const floorCanvas = canvas(32, 32, (g) => {
   g.fillRect(15, 0, 1, 32);
   g.fillRect(31, 0, 1, 32);
 });
-// the plaza inlay: mustard and cream checks
-const checkCanvas = canvas(2, 2, (g) => {
-  g.fillStyle = PAL.checkA;
-  g.fillRect(0, 0, 2, 2);
-  g.fillStyle = PAL.checkB;
-  g.fillRect(1, 0, 1, 1);
-  g.fillRect(0, 1, 1, 1);
-});
 const wallCanvas = canvas(16, 16, (g) => {
-  g.fillStyle = PAL.wall;
-  g.fillRect(0, 0, 16, 16);
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      g.fillStyle = (x + y) % 2 ? PAL.wallB : PAL.wall;
+      g.fillRect(x * 8, y * 8, 8, 8);
+    }
+  }
   g.fillStyle = PAL.wallLine;
   g.fillRect(0, 7, 16, 1);
   g.fillRect(0, 15, 16, 1);
-  g.fillRect(7, 0, 1, 8);
-  g.fillRect(15, 8, 1, 8);
-  g.fillStyle = PAL.wallHi || '#ffffff'; // tiny tile glints
-  g.fillRect(1, 1, 2, 1);
-  g.fillRect(9, 9, 2, 1);
+  g.fillRect(7, 0, 1, 16);
+  g.fillRect(15, 0, 1, 16);
 });
 const windowCanvas = canvas(16, 20, (g) => {
   g.fillStyle = '#ffffff';
@@ -599,7 +591,6 @@ const G = {
   partition: new THREE.BoxGeometry(0.04, PART_TOP - PART_BOT, STALL_D),
   cap: new THREE.BoxGeometry(0.06, 0.03, STALL_D),
   post: new THREE.BoxGeometry(0.07, PART_TOP, 0.07),
-  rail: new THREE.BoxGeometry(STALL_M, 0.05, 0.07),
   door: new THREE.BoxGeometry(DOOR_W, DOOR_TOP - DOOR_BOT, 0.04),
   lock: new THREE.BoxGeometry(0.06, 0.04, 0.02),
   bowl: new THREE.CylinderGeometry(0.2, 0.15, 0.4, 12),
@@ -667,7 +658,7 @@ function buildRoom() {
 
   // floor
   const ft = pixelTex(floorCanvas, true);
-  ft.repeat.set((rw + 6) / 1.2, (rd + 20) / 1.2);
+  ft.repeat.set((rw + 6) / 0.9, (rd + 20) / 0.9);
   floorMesh = mesh(new THREE.PlaneGeometry(rw + 6, rd + 20), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
   floorMesh.rotation.x = -Math.PI / 2;
   floorMesh.position.set(rw / 2, 0, rd / 2 + 6); // runs out past the entrance
@@ -702,20 +693,15 @@ function buildRoom() {
   worldRoot.add(title);
   buildEntrance(rw / 2, rd + 0.2);
 
-  // the plaza: checked inlay, tiled basin with a golden poop on top, arc benches, planters, lights
+  // the plaza: a red ring on the floor, a basin with a golden poop on top, arc benches, planters, lights
   const bx = toX(BASIN.x);
   const bz = toZ(BASIN.y);
   const br = toX(BASIN.r);
   const inlayR = 4.5;
-  const ct = pixelTex(checkCanvas, true);
-  ct.repeat.set((inlayR * 2) / 0.9, (inlayR * 2) / 0.9);
-  const inlay = mesh(new THREE.CircleGeometry(inlayR, 48), new THREE.MeshLambertMaterial({ map: ct, polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
-  inlay.rotation.x = -Math.PI / 2;
-  inlay.position.set(bx, 0.004, bz);
   const border = mesh(new THREE.RingGeometry(inlayR, inlayR + 0.18, 48), new THREE.MeshLambertMaterial({ color: PAL.band, polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
   border.rotation.x = -Math.PI / 2;
   border.position.set(bx, 0.005, bz);
-  worldRoot.add(inlay, border);
+  worldRoot.add(border);
 
   const white = mat('#fffaf0');
   const red = mat(PAL.band);
@@ -742,7 +728,7 @@ function buildRoom() {
     spout.position.set(bx + Math.sin(a) * 0.36, 1.57, bz + Math.cos(a) * 0.36);
     worldRoot.add(tap, spout);
   }
-  const statue = pixelSprite(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' }), 0.075);
+  const statue = pixelSprite(PROPS.goldPoop, 0.075);
   statue.position.set(bx, 1.89, bz);
   worldRoot.add(statue);
 
@@ -905,8 +891,6 @@ function makeStall(i) {
   cap.position.set(0.02, PART_TOP, -STALL_D / 2);
   const post = mesh(G.post, M.part, { cast: true });
   post.position.set(0.035, PART_TOP / 2, 0);
-  const rail = mesh(G.rail, M.rail);
-  rail.position.set(STALL_M / 2, PART_TOP + 0.025, 0);
 
   // door with its own pixel texture
   const doorCanvas = document.createElement('canvas');
@@ -964,7 +948,7 @@ function makeStall(i) {
   mosaic.position.set(STALL_M / 2 + 0.02, 1.33, -STALL_D / 2 + 0.05); // waist height: hides only the lower body
   mosaic.visible = false;
 
-  g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
+  g.add(part, cap, post, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
 
   // the last stall in a bank has no neighbour closing its right side, so give it its own wall
   const endX = L.cx + Math.cos(L.rot) * STALL_W;
@@ -1013,10 +997,11 @@ function syncStalls() {
 
 function setPile(s, count) {
   const want = Math.min(count, PILE_MAX);
+  if (!count) s.golds = new Set(); // a fresh tower forgets its golden ones
   while (s.pile.children.length > want) s.pile.remove(s.pile.children.at(-1));
   while (s.pile.children.length < want) {
     const k = s.pile.children.length;
-    const p = pixelSprite(PROPS.poop, 0.035);
+    const p = pixelSprite(s.golds?.has(k) ? PROPS.goldPoop : PROPS.poop, 0.035);
     p.position.set((((s.i * 7 + k * 13) % 3) - 1) * 0.02, k * 0.2, 0);
     s.pile.add(p);
   }
@@ -1349,7 +1334,50 @@ const DIST_MIN = 3.5;
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 26;
 
+// pooping, washing or sitting turns the camera around to face me, and puts it back afterwards
+let focusKey = '';
+let camBefore = null;
+let washFocusUntil = 0;
+function focusCamera() {
+  const mx = toX(me.x);
+  const mz = toZ(me.y);
+  const bx = toX(BASIN.x);
+  const bz = toZ(BASIN.y);
+  let key = '';
+  let yaw = 0;
+  let pitch = 0.45;
+  if (me.s !== -1 && LAYOUT[me.s]) {
+    key = `stall${me.s}`;
+    yaw = LAYOUT[me.s].rot; // straight in front of the door
+    pitch = 0.4;
+  } else if (performance.now() < washFocusUntil) {
+    key = 'wash';
+    // from the side, so you see the hands under the tap; pick whichever side is closer to the current view
+    const toBasin = Math.atan2(bx - mx, bz - mz);
+    const side = (y) => Math.abs(Math.atan2(Math.sin(y - cam.tYaw), Math.cos(y - cam.tYaw)));
+    yaw = side(toBasin + Math.PI / 2) < side(toBasin - Math.PI / 2) ? toBasin + Math.PI / 2 : toBasin - Math.PI / 2;
+    pitch = 0.4;
+  } else if (me.b) {
+    key = 'bench';
+    yaw = Math.atan2(mx - bx, mz - bz); // from the plaza, looking back at the basin
+  }
+  if (key === focusKey) return;
+  if (!focusKey && key) camBefore = { yaw: cam.tYaw, pitch: cam.tPitch, dist: cam.tDist };
+  focusKey = key;
+  if (key) {
+    cam.tYaw = yaw + Math.PI * 2 * Math.round((cam.tYaw - yaw) / (Math.PI * 2)); // the short way round
+    cam.tPitch = pitch;
+    cam.tDist = clamp(5.5, DIST_MIN, DIST_MAX);
+  } else if (camBefore) {
+    cam.tYaw = camBefore.yaw;
+    cam.tPitch = camBefore.pitch;
+    cam.tDist = camBefore.dist;
+    camBefore = null;
+  }
+}
+
 function updateCamera(dt) {
+  if (me.ready && BASIN) focusCamera();
   const k = 1 - Math.exp(-dt * 7);
   cam.yaw = lerpAngle(cam.yaw, cam.tYaw, k);
   cam.pitch = lerp(cam.pitch, cam.tPitch, k);
@@ -1538,13 +1566,22 @@ function onPoop(m) {
   if (s) {
     s.pending++;
     const k = Math.min(m.pile, PILE_MAX) - 1;
+    if (m.gold) (s.golds ||= new Set()).add(k);
     const from = stallWorld(m.stall, STALL_M / 2, 0.6, -1.0);
     const to = stallWorld(m.stall, 0.84, PART_TOP + 0.05 + k * 0.2, 0.02);
-    const p = pixelSprite(PROPS.poop, 0.035);
+    const p = pixelSprite(m.gold ? PROPS.goldPoop : PROPS.poop, m.gold ? 0.05 : 0.035);
     p.position.copy(from);
     fxRoot.add(p);
-    flights.push({ p, from, to, t: 0, s });
-    pop(to.clone().add(new THREE.Vector3(0, 0.45, 0)), m.id === meId ? `퐁당! 오늘 ${m.n}번째` : '퐁당');
+    flights.push({ p, from, to, t: 0, s, gold: m.gold });
+    const mine = m.id === meId;
+    const text = m.gold ? (mine ? '황금똥!! 대박' : '황금똥!') : mine ? `퐁당! 오늘 ${m.n}번째` : '퐁당';
+    pop(to.clone().add(new THREE.Vector3(0, 0.45, 0)), text);
+    if (m.gold) sparkle(from);
+  }
+  if (m.gold) {
+    feedChat(m.id, '황금똥이 나왔다!', 'gold');
+    playDing();
+    if (m.id === meId) toast('황금똥이 나왔어요! 오늘은 운수 좋은 날');
   }
   if (m.id === meId) {
     flashUntil = performance.now() + 1300;
@@ -1616,6 +1653,7 @@ function onWash(m) {
   const e = users.get(m.id);
   if (!e) return;
   e.washUntil = performance.now() + 2200;
+  if (m.id === meId) washFocusUntil = performance.now() + 2600;
   const ux = toX(e.rx);
   const uz = toZ(e.ry);
   const bx = toX(BASIN.x);
@@ -1655,6 +1693,19 @@ function onWash(m) {
   if (m.id === meId) setTimeout(() => toast('손 씻기 끝! 뽀송뽀송해졌어요'), 1800);
 }
 
+// twinkling stars that float up, for golden moments
+function sparkle(at) {
+  if (document.hidden) return;
+  for (let k = 0; k < 14; k++) {
+    const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(PROPS.sparkle), transparent: true }));
+    const size = 0.1 + Math.random() * 0.12;
+    b.scale.set(size, size, 1);
+    b.position.set(at.x + (Math.random() - 0.5) * 0.6, at.y + Math.random() * 0.3, at.z + (Math.random() - 0.5) * 0.6);
+    fxRoot.add(b);
+    washFx.push({ o: b, t: -k * 0.05, life: 1.2 + Math.random() * 0.6, kind: 'bubble', vx: (Math.random() - 0.5) * 0.5, vz: (Math.random() - 0.5) * 0.5, vy: 0.5 + Math.random() * 0.5, seed: Math.random() * 6 });
+  }
+}
+
 let tapMark = null;
 const ringGeo = new THREE.RingGeometry(0.22, 0.3, 16);
 function showTapMark(x, z) {
@@ -1678,6 +1729,7 @@ function updateEffects(dt) {
       f.s.pending--;
       setPile(f.s, piles[f.s.i] ?? 0); // trust the latest count, the stall may have been reset meanwhile
       f.s.squash = 0.3;
+      if (f.gold) sparkle(f.to);
       flights.splice(k, 1);
     }
   }
@@ -1828,11 +1880,11 @@ function placeOf(id) {
   return '광장';
 }
 
-function feedChat(id, text) {
+function feedChat(id, text, kind = '') {
   const e = users.get(id);
   const box = $('#feed');
   const row = document.createElement('div');
-  row.className = id === meId ? 'line mine' : 'line';
+  row.className = `line${id === meId ? ' mine' : ''}${kind ? ` ${kind}` : ''}`;
   const dot = document.createElement('i');
   dot.style.background = e ? e.look.c : '#ccc';
   const where = document.createElement('b');

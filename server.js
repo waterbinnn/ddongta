@@ -34,6 +34,7 @@ const OPEN_THEMES = ['usa'];
 
 const TICK_MS = 150;
 const PUSH_PER_TICK = 3; // about 5s of holding = one poop
+const GOLD_CHANCE = Number(process.env.GOLD_CHANCE) || 0.05; // now and then a golden one
 const CHAT_MAX = 80;
 const CHAT_GAP_MS = 700;
 
@@ -268,7 +269,8 @@ setInterval(() => {
         flushedToday++;
         const m = room.meta[u.stall];
         m.pile++; // every stall keeps its own poop tower
-        broadcast(room, { t: 'poop', id: u.id, n: u.count, stall: u.stall, pile: m.pile });
+        const gold = Math.random() < GOLD_CHANCE;
+        broadcast(room, { t: 'poop', id: u.id, n: u.count, stall: u.stall, pile: m.pile, ...(gold && { gold: 1 }) });
       }
     }
     room.meta.forEach((m, i) => {

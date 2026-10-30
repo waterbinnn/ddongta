@@ -1323,6 +1323,7 @@ function moveMe(dt) {
   }
   if (vx || vy) {
     const len = Math.hypot(vx, vy);
+    walkDir = { x: vx / len, y: vy / len, at: performance.now() }; // the camera follows this
     me.x = clamp(me.x + (vx / len) * step, 45, ROOM_W - 45);
     me.y = clamp(me.y + (vy / len) * step, 45, ROOM_D - 40);
     // walk around the wash basin, not through it
@@ -1398,8 +1399,30 @@ function focusCamera() {
   }
 }
 
+// while you walk, the camera swings round behind you so you look where you are going.
+// Walking back toward the camera doesn't spin it round, and turning it by hand pauses this for a bit.
+let walkDir = { x: 0, y: 0, at: 0 };
+let manualCamAt = 0;
+let walkedYet = false;
+function followWalk(dt) {
+  const now = performance.now();
+  if (focusKey || me.s !== -1 || now - walkDir.at > 120 || now - manualCamAt < 2500) return;
+  if (!walkedYet) {
+    // the wide welcome view closes in behind you once you start walking
+    walkedYet = true;
+    if (cam.tDist > 10) cam.tDist = 9;
+    cam.tPitch = Math.max(cam.tPitch, 0.35);
+  }
+  const fx = -Math.sin(cam.tYaw);
+  const fy = -Math.cos(cam.tYaw);
+  if (walkDir.x * fx + walkDir.y * fy < -0.3) return;
+  const behind = Math.atan2(-walkDir.x, -walkDir.y);
+  cam.tYaw = lerpAngle(cam.tYaw, behind, 1 - Math.exp(-dt * 2.2));
+}
+
 function updateCamera(dt) {
   if (me.ready && BASIN) focusCamera();
+  if (me.ready) followWalk(dt);
   if (me.s !== -1 && LAYOUT[me.s]) {
     // in a stall the camera only swings around the front, never behind it
     const off = cam.tYaw - LAYOUT[me.s].rot;
@@ -2519,8 +2542,10 @@ window.addEventListener('keydown', (e) => {
     jump();
   } else if (e.code === 'KeyQ') {
     cam.tYaw = clamp(cam.tYaw + 0.35, -YAW_MAX, YAW_MAX);
+    manualCamAt = performance.now();
   } else if (e.code === 'KeyE') {
     cam.tYaw = clamp(cam.tYaw - 0.35, -YAW_MAX, YAW_MAX);
+    manualCamAt = performance.now();
   } else if (e.key === '=' || e.key === '+') {
     cam.tDist = clamp(cam.tDist * 0.8, DIST_MIN, DIST_MAX);
   } else if (e.key === '-' || e.key === '_') {
@@ -2623,6 +2648,7 @@ canvasEl.addEventListener('pointermove', (e) => {
     if (Math.hypot(p.x - p.sx, p.y - p.sy) > 6) dragged = true;
     if (dragged) {
       cam.tYaw = clamp(cam.tYaw - dx * 0.006, -YAW_MAX, YAW_MAX);
+      manualCamAt = performance.now();
       cam.tPitch = clamp(cam.tPitch + dy * 0.004, 0.2, 1.3);
     }
   } else if (pointers.size === 2) {

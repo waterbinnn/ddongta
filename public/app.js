@@ -2347,13 +2347,64 @@ function stopMusic() {
   }, 800);
 }
 
+// Phones only let a page make sound after a tap, and iPhones mute Web Audio when the silent switch is on.
+// So on the tap that turns sound on: ask for "playback" audio, loop a silent <audio> (which also switches
+// older iPhones to playback), resume the context and play one silent sample. All of it inside the tap.
+let silentLoop = null;
+function silentWavUrl() {
+  const rate = 8000;
+  const n = rate / 2; // half a second of silence
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + n * 2, true);
+  str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, 'data');
+  v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function unlockAudio() {
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+  } catch {}
+  if (!silentLoop) {
+    silentLoop = new Audio(silentWavUrl());
+    silentLoop.loop = true;
+    silentLoop.setAttribute('playsinline', '');
+  }
+  silentLoop.play().catch(() => {});
+  const ctx = actx();
+  ctx.resume().catch(() => {});
+  const src = ctx.createBufferSource();
+  src.buffer = ctx.createBuffer(1, 1, 22050);
+  src.connect(ctx.destination);
+  src.start(0);
+}
+// the phone may suspend sound when the tab goes to the background; wake it on the next touch
+const wakeAudio = () => {
+  if (soundOn && audio && audio.state !== 'running') unlockAudio();
+};
+document.addEventListener('pointerdown', wakeAudio, true);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) wakeAudio();
+});
+
 $('#soundBtn').addEventListener('click', async () => {
   soundOn = !soundOn;
+  if (soundOn) unlockAudio();
+  else silentLoop?.pause();
   $('#soundBtn').innerHTML = soundOn ? icoImg('soundOn') : `${icoImg('soundOff')}<span>소리 켜기</span>`;
   $('#soundBtn').setAttribute('aria-label', soundOn ? '소리 끄기' : '소리 켜기');
   if (soundOn) {
-    await actx().resume();
-    startMusic();
+    startMusic(); // queued now, heard as soon as the phone lets the sound through
     await loadSounds();
   } else {
     stopMusic();

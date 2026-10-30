@@ -1424,6 +1424,18 @@ function updateCamera(dt) {
   const pz = Math.max(cam.fz + cy * cp * cam.dist, m);
   camera.position.set(px, py, pz);
   camera.lookAt(cam.fx, 0.9, cam.fz);
+  // while typing, the keyboard covers the bottom of the screen: slide the picture up so you
+  // sit in the middle of what is still visible, between the top bar and the chat box
+  const vv = window.visualViewport;
+  let want = 0;
+  if (vv && document.body.classList.contains('typing')) {
+    const top = vv.offsetTop + 56;
+    const bottom = vv.offsetTop + vv.height - 76;
+    if (bottom > top) want = Math.max(0, H / 2 - (top + bottom) / 2);
+  }
+  cam.shift = lerp(cam.shift || 0, want, k);
+  if (cam.shift > 0.5) camera.setViewOffset(W, H, 0, cam.shift, W, H);
+  else if (camera.view?.enabled) camera.clearViewOffset();
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
   sun.target.position.set(cam.fx, 0, cam.fz - 1);
 }

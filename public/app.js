@@ -1646,13 +1646,50 @@ function updateLabels(dt) {
 function floatChat(id, text) {
   const h = headOf(id);
   if (!h) return;
-  for (const f of floats) if (f.id === id) f.stack += 0.4;
+  feedChat(id, text);
+  // one bubble per person: a new line replaces the old one
+  for (let k = floats.length - 1; k >= 0; k--) {
+    if (floats[k].id === id) {
+      floats[k].el.remove();
+      floats.splice(k, 1);
+    }
+  }
   const el = document.createElement('div');
   el.className = id === meId ? 'bubble mine' : 'bubble';
   el.textContent = text;
   $('#labels').append(el);
   floats.push({ id, el, anchor: h, stack: 0, age: 0, life: 6, rise: 0.25 });
   while (floats.length > 40) floats.shift().el.remove();
+}
+
+// the room-wide chat feed in the top-left: who (shirt color), where, and what
+function placeOf(id) {
+  const e = users.get(id);
+  if (!e) return '광장';
+  const u = e.data;
+  const seat = id === meId ? me.s : u.s;
+  if (seat !== -1) return `${seat + 1}번 칸`;
+  if (u.b) return '벤치';
+  if (Math.hypot(e.rx - BASIN.x, e.ry - BASIN.y) < BASIN.r + 140) return '세면대';
+  return '광장';
+}
+
+function feedChat(id, text) {
+  const e = users.get(id);
+  const box = $('#feed');
+  const row = document.createElement('div');
+  row.className = id === meId ? 'line mine' : 'line';
+  const dot = document.createElement('i');
+  dot.style.background = e ? e.look.c : '#ccc';
+  const where = document.createElement('b');
+  where.textContent = id === meId ? `나 · ${placeOf(id)}` : placeOf(id);
+  const msg = document.createElement('span');
+  msg.textContent = text;
+  row.append(dot, where, msg);
+  box.append(row);
+  while (box.children.length > 6) box.firstChild.remove();
+  setTimeout(() => row.classList.add('out'), 10000);
+  setTimeout(() => row.remove(), 10800);
 }
 
 function pop(anchor, text) {

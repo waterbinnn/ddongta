@@ -216,12 +216,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- the poop button: a big round game button in the bottom-right ---------- */
 
-.push-pad {
-  position: fixed;
-  right: calc(24px + env(safe-area-inset-right));
-  bottom: calc(28px + env(safe-area-inset-bottom));
-  z-index: 21;
-}
+.push-pad { display: flex; justify-content: center; }
+.push-pad:empty { display: none; }
 
 .push-pad .act.main.push {
   position: relative;
@@ -250,8 +246,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* the status ("끄응...") floats above the button */
 .push-pad .act.main.push span {
   position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
   padding: 6px 12px;
   border-radius: 999px;
   background: var(--glass-strong);
@@ -272,7 +269,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media (max-width: 520px) {
-  .push-pad { right: 14px; bottom: calc(118px + env(safe-area-inset-bottom)); }
   .push-pad .act.main.push { width: 96px; height: 96px; }
 }
 
@@ -357,3 +353,44 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .loading.done { opacity: 0; pointer-events: none; }
+
+/* ---------- room-wide chat feed, top-left ---------- */
+.feed {
+  position: fixed;
+  top: 58px;
+  left: 12px;
+  width: min(340px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 17;
+  pointer-events: none;
+}
+
+.feed .line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px 5px 8px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 12px;
+  animation: fly-in 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
+  transition: opacity 0.8s, transform 0.8s;
+}
+
+.feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+.feed .line b { flex-shrink: 0; font-weight: 400; color: var(--muted); font-size: 11px; }
+.feed .line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed .line.mine { background: rgba(255, 217, 120, 0.2); border-color: rgba(255, 217, 120, 0.35); }
+.feed .line.out { opacity: 0; transform: translateY(-8px); }
+
+@keyframes fly-in {
+  from { opacity: 0; transform: translateX(-40px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}

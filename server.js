@@ -61,6 +61,7 @@ const TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.m4a': 'audio/mp4',
   '.woff2': 'font/woff2',
+  '.png': 'image/png',
 };
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -310,7 +311,8 @@ const server = http.createServer((req, res) => {
       res.writeHead(404);
       return res.end('not found');
     }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
+    // no-cache: browsers (and in-app browsers) check for a newer copy instead of running stale code
+    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
     res.end(data);
   });
 });

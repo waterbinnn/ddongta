@@ -32,6 +32,8 @@ const INK = '#2a1f2b';
 const SKIN = '#ffd9b8';
 const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a', '#d8b26a', '#7a7a86'];
 // a casual fast-food restroom: butter-yellow tile, ketchup-red doors, cream stalls, warm daylight
+const OG = new URLSearchParams(location.search).has('og'); // ?og renders the link-preview frame
+
 const PAL = {
   sky: '#f2d98a', wall: '#f8d978', wallB: '#fff6e0', wallLine: '#ecd49a', band: '#d8382e', bandGlow: '#000000',
   floorA: '#f8d978', floorB: '#fff6e0', floorLine: '#ecd49a',
@@ -1431,8 +1433,9 @@ function updateCamera(dt) {
   }
   const k = 1 - Math.exp(-dt * 7);
   cam.yaw = lerpAngle(cam.yaw, cam.tYaw, k);
-  let fx = toX(me.x);
-  let fz = toZ(me.y);
+  // the preview frame always looks straight in through the middle of the entrance
+  let fx = OG ? toX(ROOM_W) / 2 : toX(me.x);
+  let fz = OG ? toZ(ROOM_D) - 2.2 : toZ(me.y);
   if (me.s !== -1) {
     const door = stallWorld(me.s, STALL_M / 2, 0, 0.3);
     fx = door.x;
@@ -2728,6 +2731,15 @@ const joy = { x: 0, y: 0, id: null };
 }
 
 // ---------- start ----------
+
+// ?og: a clean frame for the link-preview image: no controls, just the place and a big title
+if (OG) {
+  document.body.classList.add('og');
+  const title = document.createElement('div');
+  title.className = 'og-title';
+  title.innerHTML = '<b>똥타</b><span>다같이 들어와서, 각자 칸에 앉아 볼일 보며 떠드는 온라인 뒷간</span>';
+  document.body.append(title);
+}
 
 $('#soundBtn').innerHTML = `${icoImg('soundOff')}<span>소리 켜기</span>`;
 $('#peopleIcon').innerHTML = icoImg('people');

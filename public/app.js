@@ -60,6 +60,7 @@ let held = [];
 const users = new Map();
 const me = { x: 100, y: 300, s: -1, p: 0, ready: false, rolling: false, pd: false, q: 0, b: false };
 let pendingBench = false;
+let spaceHeld = false; // arrows + Space = run
 const keys = new Set();
 let target = null;
 let pendingEnter = -1;
@@ -550,8 +551,23 @@ const G = {
   hit: new THREE.BoxGeometry(STALL_M, 2, 0.6),
   blob: new THREE.CircleGeometry(0.28, 14),
   chip: new THREE.BoxGeometry(0.06, 0.04, 0.03),
+  mosaic: new THREE.PlaneGeometry(STALL_M - 0.1, STALL_D - 0.15),
   card: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), // bottom-anchored upright card
 };
+
+// censor sheet over an occupied stall: frosted white blocks, sitting just under the eyes
+const mosaicMat = new THREE.MeshBasicMaterial({
+  map: pixelTex(canvas(6, 8, (g) => {
+    const tones = ['#ffffff', '#f3f6f8', '#e7ecf0', '#fbfcfd', '#dde4ea', '#eef2f5'];
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 6; x++) {
+      g.fillStyle = tones[(x * 7 + y * 13 + x * y) % tones.length];
+      g.fillRect(x, y, 1, 1);
+    }
+  })),
+  transparent: true,
+  opacity: 0.8, // frosted, a little see-through
+  side: THREE.DoubleSide,
+});
 
 function mesh(geo, material, { cast = false, receive = false } = {}) {
   const m = new THREE.Mesh(geo, material);
@@ -742,11 +758,16 @@ function makeStall(i) {
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
 
-  g.add(part, cap, post, rail, hinge, toilet, sitter, feet, marker, halo, pile, hit);
+  const mosaic = new THREE.Mesh(G.mosaic, mosaicMat);
+  mosaic.rotation.x = -Math.PI / 2;
+  mosaic.position.set(STALL_M / 2 + 0.02, DOOR_TOP + 0.04, -STALL_D / 2 + 0.05);
+  mosaic.visible = false;
+
+  g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
   stallRoot.add(g);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, feet, marker, halo, pile,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, mosaic, feet, marker, halo, pile,
     open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0,
   };
 }
@@ -1029,7 +1050,9 @@ function moveMe(dt) {
     vx = Math.cos(cam.yaw) * ix - Math.sin(cam.yaw) * iz;
     vy = -Math.sin(cam.yaw) * ix - Math.cos(cam.yaw) * iz;
   }
-  let step = SPEED * (me.pd ? 0.45 : 1) * dt;
+  const running = spaceHeld && (ix || iz) && !me.pd;
+  me.running = running;
+  let step = SPEED * (me.pd ? 0.45 : running ? 2 : 1) * dt;
   if (vx || vy) {
     target = null;
     pendingEnter = -1;
@@ -1142,7 +1165,7 @@ function placeWalkers(dt, t) {
     e.walking = Math.hypot(dx, dz) > 0.3;
     if (e.walking) {
       e.idle = 0;
-      e.phase += dt * 8;
+      e.phase += dt * (Math.hypot(dx, dz) > 6 ? 14 : 8); // legs move faster when running
       e.facing = Math.atan2(dx, dz);
     } else {
       e.idle += dt;
@@ -1217,6 +1240,7 @@ function animateStalls(dt, t) {
 
     const occ = occId ? users.get(occId) : null;
     s.sitter.visible = Boolean(occ);
+    s.mosaic.visible = Boolean(occ);
     s.feet.visible = false;
     s.marker.visible = occId === meId;
     if (occ) {
@@ -1736,10 +1760,13 @@ window.addEventListener('keydown', (e) => {
     keys.add(e.code);
   } else if (e.code === 'Space') {
     e.preventDefault();
+    spaceHeld = true;
     if (me.s !== -1) {
       if (!e.repeat) setHold(true);
       return;
     }
+    // holding a direction: Space means run, not sit or knock
+    if (MOVE_KEYS.some((k) => keys.has(k))) return;
     const free = nearestEmptyStall(me.x, me.y);
     if (free >= 0) {
       if (!e.repeat) tryEnter(free);
@@ -1768,11 +1795,15 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   keys.delete(e.code);
-  if (e.code === 'Space') setHold(false);
+  if (e.code === 'Space') {
+    spaceHeld = false;
+    setHold(false);
+  }
 });
 
 window.addEventListener('blur', () => {
   keys.clear();
+  spaceHeld = false;
   setHold(false);
 });
 

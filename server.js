@@ -333,7 +333,7 @@ wss.on('connection', (ws, req) => {
     color: pick(COLORS),
     ws,
     x: ROOM_W / 2 + (Math.random() - 0.5) * 300,
-    y: ROOM_D - 120 - Math.random() * 120,
+    y: ROOM_D - 260 - Math.random() * 120,
     dir: 1,
     stall: -1,
     progress: 0,

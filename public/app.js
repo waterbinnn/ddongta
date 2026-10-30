@@ -34,13 +34,13 @@ const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a',
 // a casual fast-food restroom: butter-yellow tile, ketchup-red doors, cream stalls, warm daylight
 const PAL = {
   sky: '#f2d98a', wall: '#f7d55e', wallLine: '#e8bd3c', wallHi: '#fff1a8', band: '#d8382e', bandGlow: '#000000',
-  floorA: '#f3e6c8', floorB: '#e6d2a6', floorLine: '#d3b984', floorGrid: null,
+  floorA: '#f4f1ea', floorB: '#ece7dc', floorLine: '#d8d0c0', checkA: '#f8d978', checkB: '#fff6e0',
   door: '#dd4636', doorDark: '#b0342a', doorLight: '#f2705c', number: '#ffffff',
   part: '#fbf1d9', partTop: '#ffffff', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000',
   hemi: ['#fff8e6', '#c8a868', 1.7], moon: ['#fff1d2', 1.75],
-  lamps: ['#fff3dc'], lampPower: 6, washPower: 0, wash: '#ffffff', shade: '#d8382e',
+  lamps: ['#fff3dc'], lampPower: 6,
   water: ['#8fd0ec', '#1d4a5e'], bench: '#dd4636', stone: '#ffffff',
-  sign: '#d8382e', title: '#d8382e', arch: '#d8382e',
+  sign: '#d8382e', title: '#d8382e',
 };
 
 const $ = (s) => document.querySelector(s);
@@ -310,12 +310,6 @@ function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 
 
 const PROPS = {
   poop: sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#8a5228', P: '#5e3517', h: '#c88a50' }),
-  plant: sprite(['...g...g....', '..gGg.gGg...', '.gGgggGggg..', 'gGggGgggGgg.', '.ggGgggGgg..', '..gggGggg...', '...ggGgg....', '...pppppp...', '...PPPPPP...', '....pppp....', '....pppp....'], { g: '#6cb35f', G: '#3f7a3c', p: '#c0703f', P: '#9a5530' }),
-  bigPlant: sprite([
-    '....g....g.....', '...gGg..gGg....', '..gGggggGggg...', '.gGgGgggGgGgg..', 'gGggGggGggGggg.', '.ggGgggGgggGg..',
-    'gGgggGggGgggGg.', '.gggGgggGgggg..', '..ggGgggGggg...', '...gggGggg.....', '....ggGgg......', '....pppppp.....',
-    '...pPPPPPPp....', '...pPPPPPPp....', '....pppppp.....',
-  ], { g: '#7cc26a', G: '#3f7a3c', p: '#c0703f', P: '#9a5530' }),
   note: sprite(['..NNN', '..N.N', '..N.N', '..N..', 'NNN..', 'NNN..'], { N: '#ffd84a' }),
   marker: sprite(['MMMMM', '.MMM.', '..M..'], { M: '#ffd84a' }),
   halo: sprite(['.AAAAAAAA.', 'A........A', '.AAAAAAAA.'], { A: '#ffe066' }, null, null),
@@ -437,17 +431,28 @@ function canvas(w, h, draw) {
 }
 
 const floorCanvas = canvas(32, 32, (g) => {
+  const tones = [PAL.floorA, PAL.floorB, PAL.floorB, PAL.floorA];
   for (let y = 0; y < 2; y++) {
     for (let x = 0; x < 2; x++) {
-      g.fillStyle = (x + y) % 2 ? PAL.floorB : PAL.floorA;
+      g.fillStyle = tones[y * 2 + x];
       g.fillRect(x * 16, y * 16, 16, 16);
+      g.fillStyle = '#ffffff'; // a soft shine on each tile
+      g.fillRect(x * 16 + 2, y * 16 + 2, 3, 1);
     }
   }
-  g.fillStyle = PAL.floorGrid || PAL.floorLine;
+  g.fillStyle = PAL.floorLine;
   g.fillRect(0, 15, 32, 1);
   g.fillRect(0, 31, 32, 1);
   g.fillRect(15, 0, 1, 32);
   g.fillRect(31, 0, 1, 32);
+});
+// the plaza inlay: mustard and cream checks
+const checkCanvas = canvas(2, 2, (g) => {
+  g.fillStyle = PAL.checkA;
+  g.fillRect(0, 0, 2, 2);
+  g.fillStyle = PAL.checkB;
+  g.fillRect(1, 0, 1, 1);
+  g.fillRect(0, 1, 1, 1);
 });
 const wallCanvas = canvas(16, 16, (g) => {
   g.fillStyle = PAL.wall;
@@ -499,17 +504,47 @@ const mirrorCanvas = canvas(12, 16, (g) => {
   g.fillRect(2, 2, 1, 4);
   g.fillRect(3, 2, 1, 2);
 });
-// drawn after the pixel font has loaded
-const makeSignCanvas = () => canvas(48, 12, (g) => {
-  g.fillStyle = '#1c3d7a';
-  g.fillRect(0, 0, 48, 12);
-  g.fillStyle = '#ffffff';
-  g.fillRect(1, 1, 46, 10);
-  g.fillStyle = '#1c3d7a';
-  g.font = '9px Galmuri9';
-  g.textBaseline = 'top';
-  g.fillText('RESTROOM', 4, 1);
+// the entrance: a lit sign box, a striped awning with a scalloped hem, a welcome mat
+const entranceSignCanvas = () => canvas(96, 18, (g) => {
+  g.fillStyle = PAL.sign;
+  g.fillRect(0, 0, 96, 18);
+  g.fillStyle = '#fffaf0';
+  g.fillRect(2, 2, 92, 14);
+  g.font = '11px Galmuri11';
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  g.fillStyle = PAL.sign;
+  g.fillText('RESTROOM', 48, 9);
+  g.drawImage(PROPS.poop, 5, 5);
+  g.drawImage(PROPS.poop, 83, 5);
 });
+const awningCanvas = canvas(8, 4, (g) => {
+  for (let x = 0; x < 8; x++) {
+    g.fillStyle = x % 4 < 2 ? PAL.sign : '#fffaf0';
+    g.fillRect(x, 0, 1, 4);
+  }
+});
+const valanceCanvas = canvas(8, 4, (g) => {
+  for (let x = 0; x < 8; x++) {
+    g.fillStyle = x % 4 < 2 ? PAL.sign : '#fffaf0';
+    g.fillRect(x, 0, 1, x % 4 === 0 || x % 4 === 3 ? 2 : 4); // scallops
+  }
+});
+const matCanvas = () => canvas(56, 22, (g) => {
+  g.fillStyle = '#8f2a22';
+  g.fillRect(0, 0, 56, 22);
+  g.fillStyle = '#b8392d';
+  g.fillRect(2, 2, 52, 18);
+  g.font = '9px Galmuri9';
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  g.fillStyle = '#ffe9b0';
+  g.fillText('WELCOME', 28, 11);
+});
+const wetSign = () => sprite([
+  '...yyyy...', '..yYYYYy..', '..YYkkYY..', '..YYkkYY..', '.yYYkkYYy.', '.YYYkkYYY.',
+  '.YYYYYYYY.', 'yYYYkkYYYy', 'YYYYkkYYYY', 'YYYYYYYYYY', 'k........k', 'k........k',
+], { Y: '#ffd23f', y: '#e0a91c', k: '#2a1f2b' });
 
 // a door texture per stall: number on top, cracks as it gets knocked
 function drawDoorCanvas(c, n, crack) {
@@ -632,10 +667,10 @@ function buildRoom() {
 
   // floor
   const ft = pixelTex(floorCanvas, true);
-  ft.repeat.set((rw + 6) / 1.2, (rd + 6) / 1.2);
-  floorMesh = mesh(new THREE.PlaneGeometry(rw + 6, rd + 6), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
+  ft.repeat.set((rw + 6) / 1.2, (rd + 20) / 1.2);
+  floorMesh = mesh(new THREE.PlaneGeometry(rw + 6, rd + 20), new THREE.MeshLambertMaterial({ map: ft }), { receive: true });
   floorMesh.rotation.x = -Math.PI / 2;
-  floorMesh.position.set(rw / 2, 0, rd / 2 - 1);
+  floorMesh.position.set(rw / 2, 0, rd / 2 + 6); // runs out past the entrance
   worldRoot.add(floorMesh);
 
   // three tiled walls behind the stall banks, with a red band and sunny windows
@@ -664,81 +699,188 @@ function buildRoom() {
   // glowing signs: the name over the back bank, RESTROOM over the open entrance
   const title = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ map: pixelTex(neonCanvas('똥타', PAL.title || '#ff8fb8', 64)), transparent: true }));
   title.position.set(rw / 2, 4.2, back + 0.03);
-  const archMat = mat(PAL.arch || '#1c222d');
-  const postL = mesh(new THREE.BoxGeometry(0.25, 3.2, 0.25), archMat, { cast: true });
-  postL.position.set(rw / 2 - 2, 1.6, rd + 0.2);
-  const postR = postL.clone();
-  postR.position.x = rw / 2 + 2;
-  const beam = mesh(new THREE.BoxGeometry(4.25, 0.3, 0.25), archMat);
-  beam.position.set(rw / 2, 3.2, rd + 0.2);
-  const neon = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.8), new THREE.MeshBasicMaterial({ map: pixelTex(neonCanvas('RESTROOM', PAL.sign || '#7fe3ff', 96)), transparent: true, side: THREE.DoubleSide }));
-  neon.position.set(rw / 2, 3.85, rd + 0.2);
-  worldRoot.add(title, postL, postR, beam, neon);
+  worldRoot.add(title);
+  buildEntrance(rw / 2, rd + 0.2);
 
-  // the round wash basin in the middle of the plaza
+  // the plaza: checked inlay, tiled basin with a golden poop on top, arc benches, planters, lights
   const bx = toX(BASIN.x);
   const bz = toZ(BASIN.y);
   const br = toX(BASIN.r);
-  const stone = new THREE.MeshPhongMaterial({ color: PAL.stone, shininess: 50 });
-  const island = mesh(new THREE.CylinderGeometry(br, br * 1.08, 0.85, 20), stone, { cast: true, receive: true });
-  island.position.set(bx, 0.425, bz);
-  const water = mesh(new THREE.CylinderGeometry(br * 0.82, br * 0.82, 0.02, 20), new THREE.MeshPhongMaterial({ color: PAL.water[0], emissive: PAL.water[1], shininess: 120 }));
-  water.position.set(bx, 0.86, bz);
-  const pillar = mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.1, 10), mat(PAL.rail, { emissive: '#2a2010' }), { cast: true });
-  pillar.position.set(bx, 1.4, bz);
-  worldRoot.add(island, water, pillar);
-  for (let k = 0; k < 4; k++) {
-    const tap = mesh(new THREE.BoxGeometry(0.06, 0.06, 0.32), mat(PAL.rail));
-    tap.position.set(bx + Math.sin((k * Math.PI) / 2) * 0.22, 1.7, bz + Math.cos((k * Math.PI) / 2) * 0.22);
-    tap.rotation.y = (k * Math.PI) / 2;
-    worldRoot.add(tap);
-  }
+  const inlayR = 4.5;
+  const ct = pixelTex(checkCanvas, true);
+  ct.repeat.set((inlayR * 2) / 0.9, (inlayR * 2) / 0.9);
+  const inlay = mesh(new THREE.CircleGeometry(inlayR, 48), new THREE.MeshLambertMaterial({ map: ct, polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
+  inlay.rotation.x = -Math.PI / 2;
+  inlay.position.set(bx, 0.004, bz);
+  const border = mesh(new THREE.RingGeometry(inlayR, inlayR + 0.18, 48), new THREE.MeshLambertMaterial({ color: PAL.band, polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
+  border.rotation.x = -Math.PI / 2;
+  border.position.set(bx, 0.005, bz);
+  worldRoot.add(inlay, border);
 
-  // benches in a ring around the basin, plants in the corners
+  const white = mat('#fffaf0');
+  const red = mat(PAL.band);
+  const chrome = new THREE.MeshPhongMaterial({ color: '#c9ced6', shininess: 90, specular: '#ffffff' });
+  const body = mesh(new THREE.CylinderGeometry(br, br * 1.06, 0.78, 24), white, { cast: true, receive: true });
+  body.position.set(bx, 0.39, bz);
+  const stripe = mesh(new THREE.CylinderGeometry(br * 1.015, br * 1.03, 0.12, 24), red);
+  stripe.position.set(bx, 0.5, bz);
+  const rim = mesh(new THREE.CylinderGeometry(br * 1.04, br * 1.04, 0.08, 24), white, { receive: true });
+  rim.position.set(bx, 0.82, bz);
+  const water = mesh(new THREE.CylinderGeometry(br * 0.86, br * 0.86, 0.02, 24), new THREE.MeshPhongMaterial({ color: PAL.water[0], emissive: PAL.water[1], shininess: 120 }));
+  water.position.set(bx, 0.86, bz);
+  const column = mesh(new THREE.CylinderGeometry(0.1, 0.14, 1.0, 12), chrome, { cast: true });
+  column.position.set(bx, 1.35, bz);
+  const cap = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 16), chrome);
+  cap.position.set(bx, 1.86, bz);
+  worldRoot.add(body, stripe, rim, water, column, cap);
+  for (let k = 0; k < 4; k++) {
+    const a = (k * Math.PI) / 2 + Math.PI / 4;
+    const tap = mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), chrome);
+    tap.position.set(bx + Math.sin(a) * 0.22, 1.62, bz + Math.cos(a) * 0.22);
+    tap.rotation.y = a;
+    const spout = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 8), chrome);
+    spout.position.set(bx + Math.sin(a) * 0.36, 1.57, bz + Math.cos(a) * 0.36);
+    worldRoot.add(tap, spout);
+  }
+  const statue = pixelSprite(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' }), 0.075);
+  statue.position.set(bx, 1.89, bz);
+  worldRoot.add(statue);
+
+  // low arc benches around the basin: cream base, red cushion
   benchSpots.length = 0;
-  const wood = mat(PAL.bench);
+  const arc = (r1, r2, a0, a1, h) => {
+    const sh = new THREE.Shape();
+    const n = 10;
+    for (let k = 0; k <= n; k++) {
+      const a = a0 + ((a1 - a0) * k) / n;
+      const v = [Math.sin(a) * r2, -Math.cos(a) * r2];
+      k ? sh.lineTo(...v) : sh.moveTo(...v);
+    }
+    for (let k = n; k >= 0; k--) {
+      const a = a0 + ((a1 - a0) * k) / n;
+      sh.lineTo(Math.sin(a) * r1, -Math.cos(a) * r1);
+    }
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 1 });
+    geo.rotateX(-Math.PI / 2);
+    return geo;
+  };
+  const cushion = mat(PAL.bench);
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2 + Math.PI / 6;
     const r = 3.4;
-    const x = bx + Math.sin(a) * r;
-    const z = bz + Math.cos(a) * r;
-    const bench = mesh(new THREE.BoxGeometry(1.5, 0.12, 0.45), wood, { cast: true });
-    bench.position.set(x, 0.45, z);
-    bench.rotation.y = a + Math.PI / 2;
-    const legs = mesh(new THREE.BoxGeometry(1.3, 0.42, 0.3), mat('#1c222d'));
-    legs.position.set(x, 0.21, z);
-    legs.rotation.y = a + Math.PI / 2;
-    worldRoot.add(bench, legs);
-    benchSpots.push({ x: x / U, y: z / U });
-  }
-  const corners = [[2.6, 2.6], [rw - 2.6, 2.6], [2.6, rd - 2.4], [rw - 2.6, rd - 2.4], [bx - 1.6, bz + 1.6], [bx + 1.6, bz - 1.6]];
-  for (const [x, z] of corners) {
-    const p = pixelSprite(PROPS.bigPlant, 0.075);
-    p.position.set(x, 0, z);
-    worldRoot.add(p);
+    const half = 0.34;
+    const base = mesh(arc(r - 0.24, r + 0.24, a - half, a + half, 0.34), white, { cast: true, receive: true });
+    base.position.set(bx, 0, bz);
+    const seat = mesh(arc(r - 0.28, r + 0.28, a - half - 0.01, a + half + 0.01, 0.1), cushion, { cast: true, receive: true });
+    seat.position.set(bx, 0.34, bz);
+    worldRoot.add(base, seat);
+    benchSpots.push({ x: (bx + Math.sin(a) * r) / U, y: (bz + Math.cos(a) * r) / U });
   }
 
-  // warm pendant lamps over the plaza
-  const shade = new THREE.MeshBasicMaterial({ color: PAL.shade });
+  // planters: between the benches (leaving the front and back open) and in the room's corners
+  for (const k of [1, 2, 4, 5]) {
+    const a = (k / 6) * Math.PI * 2;
+    planter(bx + Math.sin(a) * 3.4, bz + Math.cos(a) * 3.4, 0.85, k);
+  }
+  for (const [k, [x, z]] of [[2.6, 2.6], [rw - 2.6, 2.6], [2.6, rd - 2.4], [rw - 2.6, rd - 2.4]].entries()) planter(x, z, 1.15, k + 7);
+
+  // a big ring light over the basin and globe pendants over the plaza
+  const glow = new THREE.MeshBasicMaterial({ color: '#fff6dc' });
   const cord = new THREE.MeshBasicMaterial({ color: '#8a9098' });
-  // soft wash lights along each stall bank so the doors read in the dark
-  if (PAL.washPower) {
-    for (const [x, z] of [[rw * 0.25, 1.2], [rw * 0.75, 1.2], [1.4, rd * 0.3], [1.4, rd * 0.65], [rw - 1.4, rd * 0.3], [rw - 1.4, rd * 0.65]]) {
-      const wash = new THREE.PointLight(PAL.wash, PAL.washPower, 9, 1.4);
-      wash.position.set(x, 2.8, z);
-      lamps.add(wash);
-    }
+  const ring = mesh(new THREE.TorusGeometry(1.7, 0.07, 6, 40), glow);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(bx, 3.5, bz);
+  const ringFrame = mesh(new THREE.TorusGeometry(1.7, 0.09, 6, 40), chrome);
+  ringFrame.rotation.x = Math.PI / 2;
+  ringFrame.position.set(bx, 3.58, bz);
+  lamps.add(ring, ringFrame);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    const line = mesh(new THREE.CylinderGeometry(0.01, 0.01, 2.4, 4), cord);
+    line.position.set(bx + Math.sin(a) * 1.7, 4.8, bz + Math.cos(a) * 1.7);
+    lamps.add(line);
   }
-  const spots = [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72], [bx, bz]];
-  for (const [k, [x, z]] of spots.entries()) {
-    const light = new THREE.PointLight(PAL.lamps[k % PAL.lamps.length], PAL.lampPower, 15, 1.6);
-    light.position.set(x, 3.4, z);
-    const bulb = mesh(new THREE.ConeGeometry(0.35, 0.3, 10, 1, true), shade);
-    bulb.position.set(x, 3.6, z);
-    const line = mesh(new THREE.CylinderGeometry(0.01, 0.01, 2.5, 4), cord);
-    line.position.set(x, 5, z);
-    lamps.add(light, bulb, line);
+  const centre = new THREE.PointLight(PAL.lamps[0], PAL.lampPower * 1.5, 15, 1.6);
+  centre.position.set(bx, 3.3, bz);
+  lamps.add(centre);
+  for (const [x, z] of [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72]]) {
+    const light = new THREE.PointLight(PAL.lamps[0], PAL.lampPower, 15, 1.6);
+    light.position.set(x, 3.2, z);
+    const globe = mesh(new THREE.SphereGeometry(0.24, 12, 8), glow);
+    globe.position.set(x, 3.3, z);
+    const hat = mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.12, 10), red);
+    hat.position.set(x, 3.58, z);
+    const line = mesh(new THREE.CylinderGeometry(0.01, 0.01, 2.6, 4), cord);
+    line.position.set(x, 4.94, z);
+    lamps.add(light, globe, hat, line);
   }
+}
+
+// a potted plant: white pot with a red band, chunky low-poly leaves
+const LEAF_MATS = ['#5fae57', '#4b9446', '#7cc26a'].map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
+function planter(x, z, size, seed) {
+  const g = new THREE.Group();
+  const pot = mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.5, 10), mat('#fffaf0'), { cast: true, receive: true });
+  pot.position.y = 0.25;
+  const band = mesh(new THREE.CylinderGeometry(0.31, 0.3, 0.08, 10), mat(PAL.band));
+  band.position.y = 0.46;
+  const soil = mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.02, 10), mat('#5a3a24'));
+  soil.position.y = 0.5;
+  g.add(pot, band, soil);
+  const rnd = (k) => {
+    const v = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  for (let k = 0; k < 6; k++) {
+    const r = 0.22 + rnd(k) * 0.16;
+    const leaf = mesh(new THREE.IcosahedronGeometry(r, 0), LEAF_MATS[k % 3], { cast: true });
+    const a = rnd(k + 10) * Math.PI * 2;
+    const d = k === 0 ? 0 : 0.12 + rnd(k + 20) * 0.14;
+    leaf.position.set(Math.sin(a) * d, 0.7 + rnd(k + 30) * 0.55 + (k === 0 ? 0.35 : 0), Math.cos(a) * d);
+    leaf.rotation.set(rnd(k + 40) * 3, rnd(k + 50) * 3, 0);
+    g.add(leaf);
+  }
+  g.position.set(x, 0, z);
+  g.scale.setScalar(size);
+  worldRoot.add(g);
+}
+
+// the entrance fades out while the camera looks in through it, so it never hides anyone
+const entrance = { x: 0, z: 0, mats: [], fade: 1 };
+
+// the open entrance: red pillars, a lit RESTROOM sign box, a striped awning, a welcome mat and a wet-floor sign
+function buildEntrance(cx, z) {
+  const red = mat(PAL.band);
+  const white = mat('#fffaf0');
+  Object.assign(entrance, { x: cx, z, fade: 1 });
+  for (const dx of [-2.1, 2.1]) {
+    const pillar = mesh(new THREE.BoxGeometry(0.36, 3.7, 0.36), red, { cast: true });
+    pillar.position.set(cx + dx, 1.85, z);
+    const foot = mesh(new THREE.BoxGeometry(0.46, 0.22, 0.46), white, { cast: true });
+    foot.position.set(cx + dx, 0.11, z);
+    worldRoot.add(pillar, foot);
+  }
+  const signTex = pixelTex(entranceSignCanvas());
+  const face = new THREE.MeshBasicMaterial({ map: signTex });
+  const box = mesh(new THREE.BoxGeometry(4.6, 0.86, 0.3), [red, red, red, red, face, face], { cast: true });
+  box.position.set(cx, 4.05, z);
+  const at = pixelTex(awningCanvas, true);
+  at.repeat.set(4.6 / 0.8, 1);
+  const awning = mesh(new THREE.PlaneGeometry(4.6, 0.75), new THREE.MeshLambertMaterial({ map: at, side: THREE.DoubleSide }), { cast: true });
+  awning.rotation.x = -1.0;
+  awning.position.set(cx, 3.42, z + 0.32);
+  const vt = pixelTex(valanceCanvas, true);
+  vt.repeat.set(4.6 / 0.8, 1);
+  const valance = mesh(new THREE.PlaneGeometry(4.6, 0.2), new THREE.MeshLambertMaterial({ map: vt, side: THREE.DoubleSide, transparent: true, alphaTest: 0.5 }));
+  valance.position.set(cx, 3.12, z + 0.63);
+  const mat2 = mesh(new THREE.PlaneGeometry(2.8, 1.1), new THREE.MeshLambertMaterial({ map: pixelTex(matCanvas()), polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
+  mat2.rotation.x = -Math.PI / 2;
+  mat2.position.set(cx, 0.006, z - 0.75);
+  const wet = pixelSprite(wetSign(), 0.065);
+  wet.position.set(cx + 2.9, 0, z - 0.6);
+  worldRoot.add(box, awning, valance, mat2, wet);
+  entrance.mats = [red, white, face, awning.material, valance.material];
+  for (const m of entrance.mats) m.transparent = true;
 }
 
 // a point in a stall's local space, in world space
@@ -1236,6 +1378,12 @@ function updateCamera(dt) {
   camera.lookAt(cam.fx, 0.9, cam.fz);
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
   sun.target.position.set(cam.fx, 0, cam.fz - 1);
+  const lookingIn = pz > entrance.z - 0.5 && cam.fz < entrance.z && Math.abs(px - entrance.x) < 9;
+  entrance.fade = lerp(entrance.fade, lookingIn ? 0.2 : 1, k);
+  for (const m of entrance.mats) {
+    m.opacity = entrance.fade;
+    m.depthWrite = entrance.fade > 0.95;
+  }
 }
 
 // ---------- per-frame placement ----------
@@ -2129,7 +2277,7 @@ $('#soundBtn').innerHTML = `${icoImg('soundOff')}<span>소리 켜기</span>`;
 $('#peopleIcon').innerHTML = icoImg('people');
 $('#todayIcon').innerHTML = icoImg('poop');
 
-document.fonts.load('9px Galmuri9').finally(() => {
+Promise.all([document.fonts.load('9px Galmuri9'), document.fonts.load('11px Galmuri11')]).finally(() => {
   connect();
   requestAnimationFrame(frame);
 });

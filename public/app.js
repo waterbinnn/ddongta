@@ -24,6 +24,7 @@ const DOOR_TOP = 1.55;
 const PART_BOT = 0.3;
 const PART_TOP = 1.75;
 const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at -1.1)
+const SIT_LIFT = 0.12; // raise the sitter so the face is fully above the door
 const PX_M = 0.05; // meters per sprite pixel
 const PILE_MAX = 10;
 
@@ -58,6 +59,7 @@ let held = [];
 const users = new Map();
 const me = { x: 100, y: 300, s: -1, p: 0, ready: false, rolling: false, pd: false, q: 0, b: false };
 let pendingBench = false;
+let pendingWash = false;
 let spaceHeld = false; // arrows + Space = run
 const keys = new Set();
 let target = null;
@@ -314,6 +316,8 @@ const PROPS = {
   note: sprite(['..NNN', '..N.N', '..N.N', '..N..', 'NNN..', 'NNN..'], { N: '#ffd84a' }),
   marker: sprite(['MMMMM', '.MMM.', '..M..'], { M: '#ffd84a' }),
   halo: sprite(['.AAAAAAAA.', 'A........A', '.AAAAAAAA.'], { A: '#ffe066' }, null, null),
+  bubble: sprite(['.bbb.', 'bWccb', 'bcccb', 'bcccb', '.bbb.'], { b: '#bfe8ff', W: '#ffffff', c: '#eaf7ff' }, null, null),
+  drop: sprite(['.d.', 'ddd', '.d.'], { d: '#8fd6ff' }, null, null),
 };
 
 const ICON_PAL = {
@@ -790,16 +794,16 @@ function makeStall(i) {
 
   // whoever sits here: upper body peeks over the door, feet show under it
   const sitter = new THREE.Mesh(G.card, new THREE.MeshBasicMaterial({ map: texOf(PROPS.poop), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-  sitter.position.set(STALL_M / 2, 0, SEAT_Z); // right on the front of the toilet bowl
+  sitter.position.set(STALL_M / 2, SIT_LIFT, SEAT_Z); // on the bowl, lifted so the whole face clears the door
   sitter.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
   const marker = pixelSprite(PROPS.marker);
-  marker.position.set(STALL_M / 2, 2.15, SEAT_Z);
+  marker.position.set(STALL_M / 2, 2.15 + SIT_LIFT, SEAT_Z);
   marker.visible = false;
   const halo = pixelSprite(PROPS.halo);
-  halo.position.set(STALL_M / 2, 2.07, SEAT_Z);
+  halo.position.set(STALL_M / 2, 2.07 + SIT_LIFT, SEAT_Z);
   halo.visible = false;
 
   const pile = new THREE.Group();
@@ -811,7 +815,7 @@ function makeStall(i) {
 
   const mosaic = new THREE.Mesh(G.mosaic, mosaicMat);
   mosaic.rotation.x = -Math.PI / 2;
-  mosaic.position.set(STALL_M / 2 + 0.02, DOOR_TOP + 0.04, -STALL_D / 2 + 0.05);
+  mosaic.position.set(STALL_M / 2 + 0.02, 1.33, -STALL_D / 2 + 0.05); // waist height: hides only the lower body
   mosaic.visible = false;
 
   g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
@@ -1066,7 +1070,22 @@ function tryKnock(i) {
 
 const ringBell = () => send({ t: 'bell' });
 const jump = () => me.s === -1 && !me.rolling && send({ t: 'jump' });
-const washHands = () => send({ t: 'wash' });
+// step up to the nearest spot on the basin's rim, then wash
+function washHands() {
+  const dx = me.x - BASIN.x;
+  const dy = me.y - BASIN.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const spot = { x: BASIN.x + (dx / d) * (BASIN.r + 40), y: BASIN.y + (dy / d) * (BASIN.r + 40) };
+  if (Math.hypot(spot.x - me.x, spot.y - me.y) < 8) {
+    sendMove(true);
+    send({ t: 'wash' });
+    return;
+  }
+  target = spot;
+  pendingEnter = -1;
+  pendingBench = false;
+  pendingWash = true;
+}
 
 function nearSink() {
   return Math.hypot(me.x - BASIN.x, me.y - BASIN.y) < BASIN.r + 110;
@@ -1109,6 +1128,7 @@ function moveMe(dt) {
     target = null;
     pendingEnter = -1;
     pendingBench = false;
+    pendingWash = false;
   } else if (target) {
     const dx = target.x - me.x;
     const dy = target.y - me.y;
@@ -1121,6 +1141,11 @@ function moveMe(dt) {
         sendMove(true);
         send({ t: 'bench', on: true });
         pendingBench = false;
+      }
+      if (pendingWash) {
+        sendMove(true);
+        send({ t: 'wash' });
+        pendingWash = false;
       }
     } else {
       vx = dx / dist;
@@ -1265,7 +1290,7 @@ function placeWalkers(dt, t) {
       e.marker.position.set(X, 1.25 + lift + (Math.floor(t / 300) % 2) * 0.04, Z);
       continue;
     }
-    if (washing) e.view = 'left';
+    if (washing) e.view = viewFor(Math.atan2(BASIN.x - e.rx, BASIN.y - e.ry)); // look at the basin
     if (rolling) {
       setSpriteCanvas(e.spr, body('front', { face: 'dizzy', look: e.look, pantsDown: true }));
       e.spr.center.set(0.5, 0.5);
@@ -1323,7 +1348,7 @@ function animateStalls(dt, t) {
       s.sitter.position.x = STALL_M / 2 + jig;
       s.sitter.rotation.y = cam.yaw - LAYOUT[i].rot; // turn toward the camera, but stay upright
       s.halo.visible = face === 'bliss';
-      s.marker.position.y = 2.17 + (Math.floor(t / 300) % 2) * 0.04;
+      s.marker.position.y = 2.17 + SIT_LIFT + (Math.floor(t / 300) % 2) * 0.04;
     } else {
       s.halo.visible = false;
     }
@@ -1419,13 +1444,48 @@ function onBell(m) {
   playSound('bird', m.id === meId ? 1.6 : Math.max(0.5, distVol(m.stall)) * 1.1);
 }
 
+const washFx = [];
+const streamGeo = new THREE.CylinderGeometry(0.03, 0.05, 1, 6);
+
 function onWash(m) {
   const e = users.get(m.id);
   if (!e) return;
-  e.washUntil = performance.now() + 2000;
-  const at = new THREE.Vector3(toX(e.rx) - 0.2, 1.0, toZ(e.ry));
-  pop(at, '뽀득뽀득');
-  setTimeout(() => pop(at.clone().add(new THREE.Vector3(0, 0.2, 0)), '✨'), 900);
+  e.washUntil = performance.now() + 2200;
+  const ux = toX(e.rx);
+  const uz = toZ(e.ry);
+  const bx = toX(BASIN.x);
+  const bz = toZ(BASIN.y);
+  const len = Math.hypot(ux - bx, uz - bz) || 1;
+  const dir = { x: (ux - bx) / len, z: (uz - bz) / len }; // from the basin toward the person
+  const hands = new THREE.Vector3(ux - dir.x * 0.35, 0.95, uz - dir.z * 0.35);
+  pop(hands.clone().add(new THREE.Vector3(0, 0.45, 0)), '뽀득뽀득');
+  if (!document.hidden) {
+    // a stream of water from the tap toward this person's hands
+    const top = 1.68;
+    const bottom = 0.88;
+    const stream = new THREE.Mesh(streamGeo, new THREE.MeshBasicMaterial({ color: '#9fe0ff', transparent: true, opacity: 0.8 }));
+    stream.position.set(bx + dir.x * 0.42, (top + bottom) / 2, bz + dir.z * 0.42);
+    stream.scale.y = top - bottom;
+    fxRoot.add(stream);
+    washFx.push({ o: stream, t: 0, life: 2.2, kind: 'stream' });
+    // soap bubbles floating up from the hands
+    for (let k = 0; k < 12; k++) {
+      const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(PROPS.bubble), transparent: true }));
+      const size = 0.08 + Math.random() * 0.1;
+      b.scale.set(size, size, 1);
+      b.position.set(hands.x + (Math.random() - 0.5) * 0.3, hands.y + Math.random() * 0.1, hands.z + (Math.random() - 0.5) * 0.3);
+      fxRoot.add(b);
+      washFx.push({ o: b, t: -k * 0.12, life: 1.6 + Math.random() * 0.8, kind: 'bubble', vx: (Math.random() - 0.5) * 0.25, vz: (Math.random() - 0.5) * 0.25, vy: 0.25 + Math.random() * 0.3, seed: Math.random() * 6 });
+    }
+    // little splashes on the water
+    for (let k = 0; k < 6; k++) {
+      const d = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(PROPS.drop), transparent: true }));
+      d.scale.set(0.06, 0.06, 1);
+      d.position.set(bx + dir.x * 0.42, 0.9, bz + dir.z * 0.42);
+      fxRoot.add(d);
+      washFx.push({ o: d, t: -k * 0.25, life: 0.6, kind: 'drop', vx: (Math.random() - 0.5) * 0.8, vz: (Math.random() - 0.5) * 0.8, vy: 1 + Math.random() * 0.8 });
+    }
+  }
   playWash(m.id === meId ? 0.5 : 0.15);
   if (m.id === meId) setTimeout(() => toast('손 씻기 끝! 뽀송뽀송해졌어요'), 1800);
 }
@@ -1490,6 +1550,34 @@ function updateEffects(dt) {
       notes.splice(k, 1);
     }
   }
+  for (let k = washFx.length - 1; k >= 0; k--) {
+    const f = washFx[k];
+    f.t += dt;
+    f.o.visible = f.t > 0;
+    if (f.t > 0) {
+      const life = f.t / f.life;
+      if (f.kind === 'stream') {
+        f.o.scale.x = f.o.scale.z = 1 + Math.sin(f.t * 30) * 0.15;
+        f.o.material.opacity = 0.8 * Math.min(1, (f.life - f.t) / 0.4);
+      } else if (f.kind === 'bubble') {
+        f.o.position.x += (f.vx + Math.sin(f.t * 3 + f.seed) * 0.12) * dt;
+        f.o.position.z += f.vz * dt;
+        f.o.position.y += f.vy * dt;
+        f.o.material.opacity = Math.min(1, (1 - life) * 2.5);
+      } else {
+        f.vy -= 6 * dt;
+        f.o.position.x += f.vx * dt;
+        f.o.position.z += f.vz * dt;
+        f.o.position.y = Math.max(0.88, f.o.position.y + f.vy * dt);
+        f.o.material.opacity = 1 - life;
+      }
+    }
+    if (f.t >= f.life) {
+      fxRoot.remove(f.o);
+      f.o.material.dispose();
+      washFx.splice(k, 1);
+    }
+  }
   if (tapMark) {
     tapMark.t += dt;
     const k = tapMark.t / 0.6;
@@ -1516,7 +1604,7 @@ function headOf(id) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
-  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 2.2, SEAT_Z);
+  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 2.2 + SIT_LIFT, SEAT_Z);
   return new THREE.Vector3(toX(e.rx), 1.2, toZ(e.ry));
 }
 

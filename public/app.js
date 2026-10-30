@@ -73,7 +73,7 @@ let target = null;
 let pendingEnter = -1;
 let holding = false;
 let lastSent = { x: 0, y: 0, t: 0 };
-let soundOn = false;
+let soundOn = true; // on from the start (quietly); browsers still need one tap or key before it can play
 const happyUntil = new Map();
 
 // ---------- pixel sprite helpers ----------
@@ -1491,9 +1491,11 @@ function send(msg) {
 }
 
 let greeted = false;
+let roomNo = 1;
 function handle(m) {
   if (m.t === 'welcome') {
     meId = m.you;
+    roomNo = m.no || 1;
     retries = 0;
     serverDown(false);
     if (m.layout) {
@@ -1546,7 +1548,7 @@ function handle(m) {
 
 let lastFlushed = -1;
 function applyState(st) {
-  $('#online').textContent = `${st.users.length}명 볼일 중`;
+  $('#online').textContent = `${roomNo > 1 ? `${roomNo}호점 · ` : ''}${st.users.length}명 볼일 중`;
   if (st.flushed !== lastFlushed) {
     const el = $('#todayCount');
     el.textContent = st.flushed.toLocaleString('ko-KR');
@@ -1894,8 +1896,13 @@ function updateCamera(dt) {
   if (sy > 1e-3) room = Math.min(room, (rw - m - cam.fx) / sy);
   if (cy < -1e-3) room = Math.min(room, (cam.fz - m) / -cy);
   room = Math.max(0.3, room);
+  // backed up against a wall: rather than squeezing in close, swing round to the open side of the room
+  if (me.s === -1 && !focusKey && room < Math.min(cam.tDist, 10) * 0.55) {
+    const toOpen = Math.atan2(rw / 2 - cam.fx, toZ(ROOM_D) / 2 - cam.fz);
+    cam.tYaw = lerpAngle(cam.tYaw, toOpen, 1 - Math.exp(-dt * 1.6));
+  }
   const wantPitch = Math.min(0.95, Math.max(cam.tPitch, Math.acos(Math.min(1, room / cam.tDist)))); // never a straight-down ceiling view
-  const wantDist = Math.max(1.5, Math.min(cam.tDist, room / Math.cos(wantPitch)));
+  const wantDist = Math.max(DIST_MIN, Math.min(cam.tDist, room / Math.cos(wantPitch))); // never closer than the zoom limit
   cam.pitch = lerp(cam.pitch, wantPitch, k);
   cam.dist = lerp(cam.dist, wantDist, k);
   const cp = Math.cos(cam.pitch);
@@ -2097,7 +2104,7 @@ function onPoop(m) {
     if (m.gold) sparkle(from);
   }
   if (m.gold) {
-    feedChat(m.id, '황금똥이 나왔다!', 'gold');
+    floatGold();
     playDing();
     if (m.id === meId) toast('황금똥이 나왔어요! 오늘은 운수 좋은 날');
   }
@@ -2232,6 +2239,22 @@ function sparkle(at) {
     fxRoot.add(b);
     washFx.push({ o: b, t: -k * 0.05, life: 1.2 + Math.random() * 0.6, kind: 'bubble', vx: (Math.random() - 0.5) * 0.5, vz: (Math.random() - 0.5) * 0.5, vy: 0.5 + Math.random() * 0.5, seed: Math.random() * 6 });
   }
+}
+
+// a golden poop drifts across the top of the screen whenever anyone makes one
+let goldSrc = '';
+function floatGold() {
+  if (document.hidden || document.querySelectorAll('.gold-float').length > 8) return;
+  goldSrc ||= PROPS.goldPoop.toDataURL();
+  const el = document.createElement('img');
+  el.className = 'gold-float';
+  el.src = goldSrc;
+  el.alt = '';
+  el.style.top = `${64 + Math.random() * 90}px`;
+  el.style.animationDuration = `${7 + Math.random() * 4}s`;
+  if (Math.random() < 0.5) el.classList.add('rtl');
+  el.addEventListener('animationend', () => el.remove());
+  document.body.append(el);
 }
 
 let tapMark = null;
@@ -2421,7 +2444,7 @@ function feedChat(id, text, kind = '') {
   msg.textContent = text;
   row.append(dot, where, msg);
   box.append(row);
-  while (box.children.length > 6) box.firstChild.remove();
+  while (box.children.length > 10) box.firstChild.remove();
   setTimeout(() => row.classList.add('out'), 10000);
   setTimeout(() => row.remove(), 10800);
 }
@@ -2629,6 +2652,16 @@ function toast(text) {
 
 let audio = null;
 const actx = () => (audio ??= new AudioContext());
+// everything plays through one quiet master, so sound can be on from the start without being loud
+let master = null;
+const out = () => {
+  if (!master) {
+    master = actx().createGain();
+    master.gain.value = 0.55;
+    master.connect(actx().destination);
+  }
+  return master;
+};
 const buffers = {};
 
 async function loadSounds() {
@@ -2649,7 +2682,7 @@ function playSound(name, volume) {
   src.buffer = buffers[name];
   const gain = actx().createGain();
   gain.gain.value = volume;
-  src.connect(gain).connect(actx().destination);
+  src.connect(gain).connect(out());
   src.start();
 }
 
@@ -2662,7 +2695,7 @@ function tone(type, f0, f1, dur, volume, delay = 0) {
   osc.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.8);
   gain.gain.setValueAtTime(volume, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  osc.connect(gain).connect(actx().destination);
+  osc.connect(gain).connect(out());
   osc.start(t);
   osc.stop(t + dur + 0.02);
 }
@@ -2698,7 +2731,7 @@ function noiseBurst(dur, volume, highpass, delay = 0) {
   filter.frequency.value = highpass;
   const gain = ctx.createGain();
   gain.gain.value = volume;
-  src.connect(filter).connect(gain).connect(ctx.destination);
+  src.connect(filter).connect(gain).connect(out());
   src.start(ctx.currentTime + delay);
 }
 
@@ -2730,7 +2763,7 @@ function playCrash(volume) {
   src.buffer = buf;
   const gain = actx().createGain();
   gain.gain.value = volume;
-  src.connect(gain).connect(actx().destination);
+  src.connect(gain).connect(out());
   src.start();
   tone('sawtooth', 140, 40, 0.4, volume * 0.5);
 }
@@ -2840,7 +2873,7 @@ function pluckNote(bus, f, t, vol, decay) {
   o.stop(t + decay + 0.05);
 }
 
-const MUSIC_VOLUME = 0.32;
+const MUSIC_VOLUME = 0.2; // a soft background
 let music = null;
 function startMusic() {
   if (music) return;
@@ -2854,8 +2887,8 @@ function startMusic() {
   wet.gain.value = 0.4;
   const verb = ctx.createConvolver();
   verb.buffer = reverbImpulse(2.6);
-  bus.connect(dry).connect(ctx.destination);
-  bus.connect(verb).connect(wet).connect(ctx.destination);
+  bus.connect(dry).connect(out());
+  bus.connect(verb).connect(wet).connect(out());
   const state = { bus, t0: ctx.currentTime + 0.2, loop: 0, i: 0, timer: 0 };
   music = state;
   const schedule = () => {
@@ -2941,6 +2974,16 @@ document.addEventListener('pointerdown', wakeAudio, true);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) wakeAudio();
 });
+
+// the first tap or key anywhere starts the music (browsers don't allow sound before that)
+const startSoundOnce = () => {
+  if (!soundOn || music) return;
+  unlockAudio();
+  startMusic();
+  loadSounds();
+};
+document.addEventListener('pointerdown', startSoundOnce, true);
+document.addEventListener('keydown', startSoundOnce, true);
 
 $('#soundBtn').addEventListener('click', async () => {
   soundOn = !soundOn;
@@ -3190,7 +3233,8 @@ if (OG) {
   document.body.append(title);
 }
 
-$('#soundBtn').innerHTML = `${icoImg('soundOff')}<span>소리 켜기</span>`;
+$('#soundBtn').innerHTML = icoImg('soundOn');
+$('#soundBtn').setAttribute('aria-label', '소리 끄기');
 $('#peopleIcon').innerHTML = icoImg('people');
 $('#todayIcon').innerHTML = icoImg('poop');
 $('#downIcon').innerHTML = icoImg('poop');

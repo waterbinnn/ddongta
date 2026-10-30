@@ -86,21 +86,53 @@ const kstDate = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 1
 let today = kstDate();
 let flushedToday = 0;
 
+// "today's poops" survives restarts and deploys when a Key Value store is attached (REDIS_URL on Render)
+let kv = null;
+if (process.env.REDIS_URL) {
+  const { createClient } = require('redis');
+  kv = createClient({ url: process.env.REDIS_URL, socket: { reconnectStrategy: (n) => Math.min(1000 * 2 ** n, 60000) } });
+  let lastWarn = 0;
+  kv.on('error', (err) => {
+    if (Date.now() - lastWarn < 60000) return; // at most once a minute
+    lastWarn = Date.now();
+    console.warn('key value:', err.message);
+  });
+  kv.connect()
+    .then(() => kv.get(`flushed:${today}`))
+    .then((saved) => {
+      flushedToday = Math.max(flushedToday, Number(saved) || 0);
+    })
+    .catch((err) => console.warn('key value unavailable:', err.message));
+}
+function countPoop() {
+  flushedToday++;
+  if (kv?.isReady) kv.multi().incr(`flushed:${today}`).expire(`flushed:${today}`, 3 * 86400).exec().catch(() => {});
+}
+
 const newMeta = () => ({ pile: 0, hp: DOOR_HP, knockedAt: 0, reservedFor: 0, reservedUntil: 0 });
 
+// Restrooms: the first one is always open; when every open one is full another opens (2호점, 3호점 ...)
+// and extra ones close again after standing empty for a while.
+const MAX_ROOMS = 20; // 1,400 people
+const EMPTY_CLOSE_MS = 10 * 60 * 1000;
 const rooms = [];
-for (const theme of OPEN_THEMES) {
-  const label = THEMES[theme];
-  for (let no = 1; no <= SERVERS_PER_THEME; no++) {
-    rooms.push({
-      id: `${theme}-${no}`, theme, label, no,
-      stalls: Array(MAX_STALLS).fill(null), // all 50 stalls from the start
-      meta: Array.from({ length: MAX_STALLS }, newMeta),
-      users: new Set(),
-      dirty: false,
-    });
-  }
+function openRoom(theme) {
+  const used = new Set(rooms.filter((r) => r.theme === theme).map((r) => r.no));
+  let no = 1;
+  while (used.has(no)) no++;
+  const room = {
+    id: `${theme}-${no}`, theme, label: THEMES[theme], no,
+    stalls: Array(MAX_STALLS).fill(null), // all 50 stalls from the start
+    meta: Array.from({ length: MAX_STALLS }, newMeta),
+    users: new Set(),
+    dirty: false,
+    emptySince: Date.now(),
+  };
+  rooms.push(room);
+  rooms.sort((a, b) => a.no - b.no);
+  return room;
 }
+for (const theme of OPEN_THEMES) for (let k = 0; k < SERVERS_PER_THEME; k++) openRoom(theme);
 const isFull = (room) => room.users.size >= ROOM_CAP;
 // each stall: the left corner of its door line, its rotation (three.js y rotation), and
 // the spot in front of the door where people stand to enter or knock
@@ -247,6 +279,11 @@ setInterval(() => {
     flushedToday = 0;
   }
   const now = Date.now();
+  for (let k = rooms.length - 1; k >= 0; k--) {
+    const r = rooms[k];
+    if (r.users.size) r.emptySince = now;
+    else if (r.no > 1 && now - r.emptySince > EMPTY_CLOSE_MS) rooms.splice(k, 1);
+  }
   for (const room of rooms) {
     for (const u of room.users) {
       if (u.roll) {
@@ -267,7 +304,7 @@ setInterval(() => {
       if (u.progress >= 100) {
         u.progress = 0;
         u.count++;
-        flushedToday++;
+        countPoop();
         const m = room.meta[u.stall];
         m.pile++; // every stall keeps its own poop tower
         const gold = Math.random() < GOLD_CHANCE;
@@ -330,12 +367,13 @@ let nextId = 1;
 wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://localhost').searchParams;
   const wanted = rooms.find((r) => r.id === q.get('room')) || rooms[0];
-  const room = !isFull(wanted) ? wanted : rooms.find((r) => r.theme === wanted.theme && !isFull(r)) || rooms.find((r) => !isFull(r));
+  let room = !isFull(wanted) ? wanted : rooms.find((r) => r.theme === wanted.theme && !isFull(r)) || rooms.find((r) => !isFull(r));
+  if (!room && rooms.length < MAX_ROOMS) room = openRoom(wanted.theme);
   if (!room) {
     send(ws, { t: 'full' });
     return ws.close();
   }
-  const notice = wanted !== room ? `${wanted.label}이 꽉 차서 ${room.label}로 안내했어요` : null;
+  const notice = wanted !== room ? `${wanted.no}호점이 꽉 차서 ${room.no}호점으로 안내했어요` : null;
 
   const now = Date.now();
   const user = {
@@ -465,3 +503,9 @@ setInterval(() => {
 }, 30000);
 
 server.listen(PORT, () => console.log(`ddongta running at http://localhost:${PORT}`));
+
+// Render's free plan puts the server to sleep after 15 minutes without visitors, and the next visitor
+// then waits ~50s. A request to our own public address every 10 minutes counts as a visitor.
+if (process.env.RENDER) {
+  setInterval(() => fetch(`${SITE}/api/rooms`).catch(() => {}), 10 * 60 * 1000);
+}

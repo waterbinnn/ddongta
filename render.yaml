@@ -9,3 +9,16 @@ services:
     autoDeploy: true
     buildCommand: npm ci
     startCommand: npm start
+    envVars:
+      # keeps "today's poops" across restarts and deploys
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ddongta-kv
+          property: connectionString
+
+  # a small free Key Value store, reachable only from the web service
+  - type: keyvalue
+    name: ddongta-kv
+    plan: free
+    ipAllowList: []

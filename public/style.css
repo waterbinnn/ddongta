@@ -200,15 +200,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   white-space: nowrap;
   -webkit-touch-callout: none;
   touch-action: none;
-  transition: transform 0.08s, box-shadow 0.08s, background 0.2s;
+  transition: transform 0.15s ease-out, box-shadow 0.15s;
 }
 
-.act:hover { background: rgba(44, 52, 68, 0.95); }
-.act:active, .act.on { transform: translateY(1px) scale(0.97); box-shadow: none; }
+/* hover just grows a little; pressing shrinks it */
+.act:hover { transform: scale(1.06); }
+.act:active, .act.on { transform: scale(0.95); box-shadow: none; }
 .act .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
 
 .act.main { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; padding: 0 20px; font-size: 14px; }
-.act.main:hover { filter: brightness(1.03); }
 .act.main.knock { background: var(--coral); color: var(--coral-ink); }
 /* the knock button gets angrier as the door weakens */
 .act.main.knock.k1 { background: #ff7a5c; color: #4a160c; }
@@ -521,3 +521,34 @@ body.typing .keys { display: none; }
 .down-retry i:nth-child(2) { animation-delay: 0.2s; }
 .down-retry i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes blink { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }
+
+/* golden poops drifting across the top of the screen */
+.gold-float {
+  position: fixed;
+  left: 0;
+  width: 34px;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 15;
+  filter: drop-shadow(0 0 6px rgba(255, 214, 80, 0.9));
+  animation: goldDrift 8s linear forwards;
+}
+.gold-float.rtl { animation-name: goldDriftBack; }
+@keyframes goldDrift {
+  0% { transform: translate(-60px, 0) rotate(-8deg); opacity: 0; }
+  8% { opacity: 1; }
+  25% { transform: translate(25vw, -12px) rotate(8deg); }
+  50% { transform: translate(50vw, 6px) rotate(-6deg); }
+  75% { transform: translate(75vw, -10px) rotate(6deg); }
+  92% { opacity: 1; }
+  100% { transform: translate(calc(100vw + 20px), 0) rotate(-4deg); opacity: 0; }
+}
+@keyframes goldDriftBack {
+  0% { transform: translate(calc(100vw + 20px), 0) rotate(8deg); opacity: 0; }
+  8% { opacity: 1; }
+  25% { transform: translate(75vw, -12px) rotate(-8deg); }
+  50% { transform: translate(50vw, 6px) rotate(6deg); }
+  75% { transform: translate(25vw, -10px) rotate(-6deg); }
+  92% { opacity: 1; }
+  100% { transform: translate(-60px, 0) rotate(4deg); opacity: 0; }
+}

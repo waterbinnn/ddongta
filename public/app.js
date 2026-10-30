@@ -1081,7 +1081,16 @@ const sky = new THREE.Mesh(
     depthWrite: false,
     fog: false,
     vertexShader: 'varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 horizon; varying vec3 vPos; void main() { float h = clamp(normalize(vPos).y * 1.6, 0.0, 1.0); gl_FragColor = vec4(mix(horizon, top, h), 1.0); #include <colorspace_fragment> }',
+    fragmentShader: [
+      'uniform vec3 top;',
+      'uniform vec3 horizon;',
+      'varying vec3 vPos;',
+      'void main() {',
+      '  float h = clamp(normalize(vPos).y * 1.6, 0.0, 1.0);',
+      '  gl_FragColor = vec4(mix(horizon, top, h), 1.0);',
+      '  #include <colorspace_fragment>', // directives need a line of their own on strict GPUs
+      '}',
+    ].join('\n'),
   }),
 );
 const stars = (() => {
@@ -1800,7 +1809,7 @@ function updateCamera(dt) {
   if (sy > 1e-3) room = Math.min(room, (rw - m - cam.fx) / sy);
   if (cy < -1e-3) room = Math.min(room, (cam.fz - m) / -cy);
   room = Math.max(0.3, room);
-  const wantPitch = Math.min(1.35, Math.max(cam.tPitch, Math.acos(Math.min(1, room / cam.tDist))));
+  const wantPitch = Math.min(0.95, Math.max(cam.tPitch, Math.acos(Math.min(1, room / cam.tDist)))); // never a straight-down ceiling view
   const wantDist = Math.max(1.5, Math.min(cam.tDist, room / Math.cos(wantPitch)));
   cam.pitch = lerp(cam.pitch, wantPitch, k);
   cam.dist = lerp(cam.dist, wantDist, k);
@@ -2873,10 +2882,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (MOVE_KEYS.includes(e.code)) {
     e.preventDefault();
-    if (me.s !== -1) {
-      if (e.code === 'ArrowDown' || e.code === 'KeyS') exitStall();
-      return;
-    }
+    if (me.s !== -1) return; // in a stall the arrows do nothing; only Esc (or the button) gets you out
     keys.add(e.code);
   } else if (e.code === 'Space') {
     e.preventDefault();
@@ -2887,6 +2893,10 @@ window.addEventListener('keydown', (e) => {
     }
     // holding a direction: Space means run, not sit or knock
     if (MOVE_KEYS.some((k) => keys.has(k))) return;
+    if (nearSink()) {
+      if (!e.repeat) washHands();
+      return;
+    }
     const free = nearestEmptyStall(me.x, me.y);
     if (free >= 0) {
       if (!e.repeat) tryEnter(free);
@@ -3006,7 +3016,7 @@ canvasEl.addEventListener('pointermove', (e) => {
     if (dragged) {
       cam.tYaw = clamp(cam.tYaw - dx * 0.006, -YAW_MAX, YAW_MAX);
       manualCamAt = performance.now();
-      cam.tPitch = clamp(cam.tPitch + dy * 0.004, 0.2, 1.3);
+      cam.tPitch = clamp(cam.tPitch + dy * 0.004, 0.2, 0.95);
     }
   } else if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];

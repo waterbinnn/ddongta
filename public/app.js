@@ -646,7 +646,8 @@ function setSpriteCanvas(s, c, density = PX_M) {
 
 let floorMesh = null;
 let builtFor = 0;
-const benchSpots = []; // where people sit, in server units
+const benchSpots = []; // the middle of each bench, in server units
+const benchSeats = []; // three seats along each bench, so people sit side by side
 
 function buildRoom() {
   worldRoot.clear();
@@ -734,6 +735,7 @@ function buildRoom() {
 
   // low arc benches around the basin: cream base, red cushion
   benchSpots.length = 0;
+  benchSeats.length = 0;
   const arc = (r1, r2, a0, a1, h) => {
     const sh = new THREE.Shape();
     const n = 10;
@@ -761,6 +763,7 @@ function buildRoom() {
     seat.position.set(bx, 0.34, bz);
     worldRoot.add(base, seat);
     benchSpots.push({ x: (bx + Math.sin(a) * r) / U, y: (bz + Math.cos(a) * r) / U });
+    benchSeats.push([-0.26, 0, 0.26].map((da) => ({ x: (bx + Math.sin(a + da) * r) / U, y: (bz + Math.cos(a + da) * r) / U })));
   }
 
   // planters: between the benches (leaving the front and back open) and in the room's corners
@@ -1234,8 +1237,21 @@ function nearBench() {
   return benchSpots.findIndex((b) => Math.hypot(me.x - b.x, me.y - b.y) < 110);
 }
 
+// the closest seat on that bench nobody is sitting on yet
+function freeSeat(k) {
+  const taken = (seat) => [...users.entries()].some(([id, e]) => id !== meId && e.data.b && Math.hypot(e.data.x - seat.x, e.data.y - seat.y) < 35);
+  const free = (benchSeats[k] || []).filter((seat) => !taken(seat));
+  free.sort((a, b) => Math.hypot(me.x - a.x, me.y - a.y) - Math.hypot(me.x - b.x, me.y - b.y));
+  return free[0] || null;
+}
+
 function goSitOnBench(k) {
-  target = { x: benchSpots[k].x, y: benchSpots[k].y };
+  const seat = freeSeat(k);
+  if (!seat) {
+    toast('이 벤치는 자리가 꽉 찼어요');
+    return;
+  }
+  target = { x: seat.x, y: seat.y };
   pendingEnter = -1;
   pendingBench = true;
 }
@@ -1312,11 +1328,6 @@ function moveMe(dt) {
     if (bd < keepOut && bd > 0) {
       me.x = BASIN.x + (bdx / bd) * keepOut;
       me.y = BASIN.y + (bdy / bd) * keepOut;
-    }
-    // walking into the door of an empty stall goes inside
-    if (ix || iz) {
-      const i = nearestEmptyStall(me.x, me.y, 40);
-      if (i >= 0 && (vx / len) * -LAYOUT[i].fx + (vy / len) * -LAYOUT[i].fy > 0.6) tryEnter(i);
     }
   }
   sendMove(false);
@@ -2523,12 +2534,10 @@ function tapTo(x, y) {
   if (!hit) return;
   const i = hit.object.userData.stall;
   if (i !== undefined) {
-    if (freeFor(i)) walkToStall(i);
-    else {
-      target = { x: LAYOUT[i].x, y: LAYOUT[i].y };
-      pendingEnter = -1;
-      showTapMark(toX(target.x), toZ(target.y));
-    }
+    // tapping a stall only walks up to its door; going in is always your own choice (button or Space)
+    target = { x: LAYOUT[i].x, y: LAYOUT[i].y };
+    pendingEnter = -1;
+    showTapMark(toX(target.x), toZ(target.y));
     return;
   }
   target = { x: clamp(hit.point.x / U, 45, ROOM_W - 45), y: clamp(hit.point.z / U, 45, ROOM_D - 40) };

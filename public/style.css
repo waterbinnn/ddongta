@@ -5,20 +5,20 @@
 
 /* soft, airy UI over a pixel world: frosted white chips, gentle shadows, pastel accents */
 :root {
-  --bg: #12161f;
-  --glass: rgba(24, 29, 39, 0.62);
-  --glass-strong: rgba(30, 36, 48, 0.88);
-  --line: rgba(255, 255, 255, 0.1);
-  --text: #e9edf3;
-  --muted: #9aa6b5;
-  --accent: #ffd978;
-  --accent-ink: #5b4614;
-  --coral: #ffa494;
+  --bg: #f2d98a;
+  --glass: rgba(255, 252, 242, 0.84);
+  --glass-strong: rgba(255, 252, 242, 0.95);
+  --line: rgba(120, 72, 20, 0.14);
+  --text: #4a3520;
+  --muted: #9a7d58;
+  --accent: #ffd34e;
+  --accent-ink: #5b3a0c;
+  --coral: #ff8a76;
   --coral-ink: #6a2a22;
   --poop: #c69466;
   --poop-light: #f4e9dc;
-  --shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow: 0 6px 18px rgba(120, 72, 20, 0.16);
+  --shadow-sm: 0 2px 6px rgba(120, 72, 20, 0.14);
 }
 
 * { box-sizing: border-box; }
@@ -90,7 +90,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .status .item { display: flex; align-items: center; gap: 6px; }
 .status .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
 .status .sep { width: 1px; height: 12px; background: var(--line); }
-.status b { color: #ffd978; font-weight: 400; display: inline-block; }
+.status b { color: #d8382e; font-weight: 400; display: inline-block; }
 .status b.bump { animation: bump 0.4s ease-out; }
 
 @keyframes bump {
@@ -332,7 +332,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   gap: 3px 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 11px;
-  color: rgba(233, 237, 243, 0.6);
+  color: #6b5233;
   -webkit-font-smoothing: antialiased;
   white-space: nowrap;
   pointer-events: none;
@@ -342,8 +342,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font: inherit;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 0 rgba(120, 72, 20, 0.25);
   color: var(--text);
   font-weight: 600;
 }
@@ -395,7 +395,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transition: opacity 0.8s, transform 0.8s;
 }
 
-.feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+.feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
 .feed .line b { flex-shrink: 0; font-weight: 400; color: var(--muted); font-size: 11px; }
 .feed .line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feed .line.mine { background: rgba(255, 217, 120, 0.2); border-color: rgba(255, 217, 120, 0.35); }
@@ -407,26 +407,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .top .right { display: flex; gap: 6px; }
-.look { height: 36px; padding: 0 14px; color: var(--muted); font-size: 12px; }
-.look:hover, .sound:hover { color: var(--text); }
+.sound:hover { color: var(--text); }
 
-/* neon look: pink/cyan accents and glowing edges on the UI */
-[data-look="neon"] {
-  --bg: #0b0814;
-  --glass: rgba(20, 14, 32, 0.66);
-  --glass-strong: rgba(26, 18, 42, 0.9);
-  --line: rgba(255, 79, 163, 0.28);
-  --accent: #ff6fb5;
-  --accent-ink: #ffffff;
-  --coral: #5ff2ff;
-  --coral-ink: #0b0814;
-}
-
-[data-look="neon"] .chip,
-[data-look="neon"] .act,
-[data-look="neon"] .chat { box-shadow: 0 0 0 1px rgba(255, 79, 163, 0.15), 0 0 16px rgba(255, 79, 163, 0.18); }
-[data-look="neon"] .chat:focus-within { box-shadow: 0 0 0 1px rgba(95, 242, 255, 0.5), 0 0 22px rgba(95, 242, 255, 0.3); }
-[data-look="neon"] .status b { color: #5ff2ff; }
-[data-look="neon"] .feed .line.mine { background: rgba(255, 111, 181, 0.2); border-color: rgba(255, 111, 181, 0.45); }
-[data-look="neon"] .bubble { background: rgba(26, 18, 42, 0.92); color: #f3eaff; box-shadow: 0 0 0 1px rgba(95, 242, 255, 0.35), 0 0 14px rgba(95, 242, 255, 0.25); }
-[data-look="neon"] .bubble.mine { background: rgba(255, 111, 181, 0.92); color: #fff; }

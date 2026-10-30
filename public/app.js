@@ -1465,15 +1465,17 @@ function updateCamera(dt) {
   camera.lookAt(cam.fx, 0.9, cam.fz);
   // while typing, the keyboard covers the bottom of the screen: slide the picture up so you
   // sit in the middle of what is still visible, between the top bar and the chat box
-  const vv = window.visualViewport;
+  // Measured from the real positions of the top bar, the chat box and the canvas, because phones
+  // handle the keyboard differently (iPhones shrink and scroll the page, others just cover it).
   let want = 0;
-  if (vv && document.body.classList.contains('typing')) {
-    const top = vv.offsetTop + 56;
-    const bottom = vv.offsetTop + vv.height - 76;
-    if (bottom > top) want = Math.max(0, H / 2 - (top + bottom) / 2);
+  if (document.body.classList.contains('typing')) {
+    const top = $('.top').getBoundingClientRect().bottom + 30;
+    const bottom = $('#chatBox').getBoundingClientRect().top - 10;
+    const c = canvasEl.getBoundingClientRect();
+    if (bottom > top && c.height > 0) want = (c.top + c.height / 2 - (top + bottom) / 2) * (H / c.height);
   }
   cam.shift = lerp(cam.shift || 0, want, k);
-  if (cam.shift > 0.5) camera.setViewOffset(W, H, 0, cam.shift, W, H);
+  if (Math.abs(cam.shift) > 0.5) camera.setViewOffset(W, H, 0, cam.shift, W, H);
   else if (camera.view?.enabled) camera.clearViewOffset();
   sun.position.set(cam.fx - 6, 12, cam.fz + 9);
   sun.target.position.set(cam.fx, 0, cam.fz - 1);

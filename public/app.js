@@ -31,7 +31,7 @@ const worldW = () => ENTRANCE_W + stalls.length * STALL_W + END_PAD;
 
 const INK = '#2a1f2b';
 const SKIN = '#ffd9b8';
-const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a'];
+const HAIRS = ['#3b2a20', '#5a3a24', '#1f1b22', '#8a5530', '#4a3460', '#c26a3a', '#d8b26a', '#7a7a86'];
 // a classic American public restroom: pale tile walls, navy trim, gray floor, beige metal stalls
 const PAL = {
   sky: '#c9d3da', wall: '#e9eef1', wallLine: '#cfd8de', band: '#2f5d8a',
@@ -169,70 +169,136 @@ const FACES = {
 };
 const SIDE_FACE = [[10, 6], [12, 8]];
 
+// every visitor gets a look picked from their id: hair style, skin, cap, glasses, stripes, pants
+const SKINS = ['#ffd9b8', '#f6c8a2', '#e8b08a', '#c98e64', '#9a6644'];
+const STYLES = ['short', 'long', 'bun', 'cap', 'curly', 'buzz'];
+const PANTS = ['#3b4a6b', '#5a4636', '#2f2f3a', '#56683a', '#7a4a5a'];
+const CAPS = ['#e5484d', '#3a7bd5', '#46a758', '#f5a524', '#8a5cd0'];
+const GLASSES = [[3, 5], [4, 5], [5, 5], [3, 7], [4, 7], [5, 7], [3, 6], [5, 6], [8, 5], [9, 5], [10, 5], [8, 7], [9, 7], [10, 7], [8, 6], [10, 6], [6, 6], [7, 6]];
+
+function hashId(n) {
+  let x = Math.imul(n + 1, 2654435761) >>> 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 2246822519) >>> 0;
+  x ^= x >>> 13;
+  return x >>> 0;
+}
+
+function lookFor(u) {
+  const h = hashId(u.id);
+  const pick = (arr, shift) => arr[(h >>> shift) % arr.length];
+  const look = {
+    c: u.c, skin: pick(SKINS, 0), h: pick(HAIRS, 3), style: pick(STYLES, 7), pants: pick(PANTS, 11), cap: pick(CAPS, 15),
+    glasses: (h >>> 19) % 5 === 0, stripe: (h >>> 23) % 3 === 0,
+  };
+  look.key = [look.c, look.skin, look.h, look.style, look.pants, look.cap, look.glasses, look.stripe].join('|');
+  return look;
+}
+
+function headRows(v, style) {
+  let rows = HEAD[v].map((r) => r.split(''));
+  const set = (r, c, ch) => {
+    if (rows[r] && c >= 0 && c < rows[r].length) rows[r][c] = ch;
+  };
+  const swap = (r, from, to) => {
+    if (rows[r]) rows[r] = rows[r].map((ch) => (ch === from ? to : ch));
+  };
+  let dy = 0;
+  if (style === 'long') {
+    if (v === 'front') {
+      for (let r = 5; r <= 10; r++) {
+        set(r, 1, 'H');
+        set(r, 12, 'H');
+        if (r >= 8) {
+          set(r, 0, 'H');
+          set(r, 13, 'H');
+        }
+      }
+    } else if (v === 'back') {
+      for (let r = 8; r <= 10; r++) for (let c = 1; c <= 12; c++) set(r, c, 'H');
+    } else {
+      for (let r = 5; r <= 10; r++) {
+        set(r, 2, 'H');
+        set(r, 3, 'H');
+        if (r >= 8) set(r, 1, 'H');
+      }
+    }
+  } else if (style === 'cap') {
+    for (let r = 0; r <= 3; r++) swap(r, 'H', 'Q');
+    if (v === 'front') rows[4] = '.QQQQQQQQQQQQ.'.split('');
+    else if (v === 'side') rows[4] = '..QQQQQQQQQQQQ'.split('');
+    else swap(4, 'H', 'Q');
+  } else if (style === 'bun') {
+    rows = ['.....HHHH.....'.split(''), ...rows];
+    dy = 1;
+  } else if (style === 'curly') {
+    rows[0] = '..HH.HHHH.HH..'.split('');
+    if (v !== 'side') {
+      set(4, 0, 'H');
+      set(4, 13, 'H');
+      set(5, 0, 'H');
+      set(5, 13, 'H');
+    }
+  } else if (style === 'buzz') {
+    rows[0] = '..............'.split('');
+    rows[1] = '...HHHHHHHH...'.split('');
+    if (v === 'front') rows[4] = '.HSSSSSSSSSSH.'.split('');
+  }
+  return { rows: rows.map((r) => r.join('')), dy };
+}
+
+// a TV-style censor: chunky 2x2 skin-tone blocks over the hips only
+function mosaicOver(c, top, height, look) {
+  const g = c.getContext('2d');
+  const tones = [look.skin, shade(look.skin, -0.14), shade(look.skin, 0.08), shade(look.skin, -0.26)];
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 1; x < 13; x += 2) {
+      g.fillStyle = tones[(x * 3 + y * 5 + x * y) % tones.length];
+      g.fillRect(x + 1, top + y + 1, 2, 2);
+    }
+  }
+}
+
 const charCache = new Map();
-function charSprite(view, frame, face, look, pantsDown, upperOnly = false) {
-  const key = `${view}|${frame}|${face}|${look.c}|${look.h}|${pantsDown}|${upperOnly}`;
+// mode: 'stand' (walking), 'toilet' (seated, long legs to the floor) or 'bench'
+function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 'stand' }) {
+  const key = `${view}|${frame}|${face}|${look.key}|${pantsDown}|${mode}`;
   let c = charCache.get(key);
   if (c) return c;
   const v = view === 'back' ? 'back' : view === 'front' ? 'front' : 'side';
   const legView = v === 'side' ? 'side' : 'front';
-  const rows = [...HEAD[v], ...BODY[v]];
-  if (!upperOnly) {
-    rows.push(pantsDown ? UNDIES[v] : HIPS[v]);
-    rows.push(...(pantsDown ? LEGS_DOWN[legView] : LEGS[legView][frame]));
-  }
-  const pal = {
-    H: look.h, S: SKIN, s: shade(SKIN, -0.12), C: look.c, c: shade(look.c, -0.22),
-    P: pantsDown ? look.c : '#3b4a6b', B: '#2c2630', W: '#ffffff',
-  };
-  let extra = null;
-  if (v === 'front') extra = Object.entries(FACES[face] || FACES.idle).map(([k, pts]) => [FACE_COL[k], pts]);
-  if (v === 'side') extra = [[INK, SIDE_FACE]];
-  c = sprite(rows, pal, extra);
-  if (view === 'left') c = flip(c);
-  charCache.set(key, c);
-  return c;
-}
-
-// someone on the toilet: head peeks over the door and the (long, cartoon) legs reach the floor,
-// so the gap under the door shows bare legs, pants around the ankles and shoes without a cut
-const sitterCache = new Map();
-function sitterSprite(look, face) {
-  const key = `${look.c}|${look.h}|${face}`;
-  let c = sitterCache.get(key);
-  if (!c) {
-    const rows = [...HEAD.front, ...BODY.front, UNDIES.front];
+  const { rows: head, dy } = headRows(v, look.style);
+  const rows = [...head, ...BODY[v].map((r, k) => (look.stripe && k % 2 === 1 ? r.replace(/C/g, 'L') : r))];
+  const hips = rows.length;
+  let censor = null;
+  if (mode === 'toilet') {
+    rows.push(UNDIES.front);
     for (let k = 0; k < 20; k++) rows.push('...SS....SS...');
     rows.push('..PPPP..PPPP..', '...BB....BB...');
-    const pal = { H: look.h, S: SKIN, s: shade(SKIN, -0.12), C: look.c, c: shade(look.c, -0.22), P: look.c, B: '#2c2630', W: '#ffffff' };
-    c = sprite(rows, pal, Object.entries(FACES[face] || FACES.idle).map(([k2, pts]) => [FACE_COL[k2], pts]));
-    sitterCache.set(key, c);
+    censor = [hips - 1, 4];
+  } else if (mode === 'bench') {
+    rows.push(HIPS.front, '..PPPPPPPPPP..', '...BB....BB...');
+  } else {
+    rows.push(pantsDown ? UNDIES[v] : HIPS[v]);
+    rows.push(...(pantsDown ? LEGS_DOWN[legView] : LEGS[legView][frame]));
+    if (pantsDown) censor = [hips - 1, 4];
   }
-  return c;
-}
-
-// sitting on a bench
-const benchCache = new Map();
-function benchSprite(look, face) {
-  const key = `${look.c}|${look.h}|${face}`;
-  let c = benchCache.get(key);
-  if (!c) {
-    const rows = [...HEAD.front, ...BODY.front, HIPS.front, '..PPPPPPPPPP..', '...BB....BB...'];
-    const pal = { H: look.h, S: SKIN, s: shade(SKIN, -0.12), C: look.c, c: shade(look.c, -0.22), P: '#3b4a6b', B: '#2c2630' };
-    c = sprite(rows, pal, Object.entries(FACES[face] || FACES.idle).map(([k2, pts]) => [FACE_COL[k2], pts]));
-    benchCache.set(key, c);
+  const pal = {
+    H: look.h, Q: look.cap, S: look.skin, s: shade(look.skin, -0.12), C: look.c, c: shade(look.c, -0.22), L: shade(look.c, 0.25),
+    P: look.pants, B: '#2c2630', W: '#ffffff',
+  };
+  const shift = (pts) => pts.map(([x, y]) => [x, y + dy]);
+  const extra = [];
+  if (v === 'front') {
+    for (const [k, pts] of Object.entries(FACES[face] || FACES.idle)) extra.push([FACE_COL[k], shift(pts)]);
+    if (look.glasses) extra.push(['#2a2a35', shift(GLASSES)]);
+  } else if (v === 'side') {
+    extra.push([INK, shift(SIDE_FACE)]);
   }
-  return c;
-}
-
-// legs + pants around the ankles, seen in the gap under a stall door
-const feetCache = new Map();
-function feetSprite(look) {
-  let c = feetCache.get(look.c);
-  if (!c) {
-    c = sprite(['...SS....SS...', '...SS....SS...', '...SS....SS...', '..PPPP..PPPP..', '...BB....BB...'], { S: SKIN, P: look.c, B: '#2c2630' });
-    feetCache.set(look.c, c);
-  }
+  c = sprite(rows, pal, extra);
+  if (censor) mosaicOver(c, censor[0], censor[1], look);
+  if (view === 'left') c = flip(c);
+  charCache.set(key, c);
   return c;
 }
 
@@ -327,7 +393,6 @@ function resize() {
   renderer.domElement.style.height = `${H}px`;
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
-  document.documentElement.style.setProperty('--u', Math.min(H / 190, W / 150) >= 4 ? 2 : 1);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -470,7 +535,6 @@ const M = {
   sink: new THREE.MeshPhongMaterial({ color: '#ffffff', shininess: 40 }),
   wood: mat('#b88a5c'),
   metal: new THREE.MeshPhongMaterial({ color: '#c9ced3', shininess: 80 }),
-  mosaic: null, // filled in below once the pixel helpers exist
 };
 const G = {
   partition: new THREE.BoxGeometry(0.04, PART_TOP - PART_BOT, STALL_D),
@@ -487,22 +551,7 @@ const G = {
   blob: new THREE.CircleGeometry(0.28, 14),
   chip: new THREE.BoxGeometry(0.06, 0.04, 0.03),
   card: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), // bottom-anchored upright card
-  mosaic: new THREE.PlaneGeometry(STALL_M - 0.1, STALL_D - 0.15),
 };
-
-// censorship mosaic: chunky blocks in skin and clothing tones
-M.mosaic = new THREE.MeshBasicMaterial({
-  map: pixelTex(canvas(6, 8, (g) => {
-    const tones = ['#ffd9b8', '#f2c4a0', '#e8b48e', '#ffe6cf', '#d9a37f', '#c9d3da'];
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 6; x++) {
-      g.fillStyle = tones[(x * 7 + y * 13 + x * y) % tones.length];
-      g.fillRect(x, y, 1, 1);
-    }
-  })),
-  transparent: true,
-  opacity: 0.92,
-  side: THREE.DoubleSide,
-});
 
 function mesh(geo, material, { cast = false, receive = false } = {}) {
   const m = new THREE.Mesh(geo, material);
@@ -676,11 +725,6 @@ function makeStall(i) {
   const sitter = new THREE.Mesh(G.card, new THREE.MeshBasicMaterial({ map: texOf(PROPS.poop), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
   sitter.position.set(STALL_M / 2, 0, -0.5);
   sitter.visible = false;
-  // a mosaic sheet over the stall so peeking from above shows nothing rude
-  const mosaic = new THREE.Mesh(G.mosaic, M.mosaic);
-  mosaic.rotation.x = -Math.PI / 2;
-  mosaic.position.set(STALL_M / 2 + 0.02, DOOR_TOP + 0.02, -STALL_D / 2 + 0.05);
-  mosaic.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
@@ -698,11 +742,11 @@ function makeStall(i) {
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
 
-  g.add(part, cap, post, rail, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
+  g.add(part, cap, post, rail, hinge, toilet, sitter, feet, marker, halo, pile, hit);
   stallRoot.add(g);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, mosaic, feet, marker, halo, pile,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, feet, marker, halo, pile,
     open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0,
   };
 }
@@ -745,8 +789,8 @@ function setPile(s, count) {
 // ---------- characters ----------
 
 function makeWalker(u) {
-  const look = { c: u.c, h: HAIRS[u.id % HAIRS.length] };
-  const spr = pixelSprite(charSprite('front', 0, 'idle', look, false));
+  const look = lookFor(u);
+  const spr = pixelSprite(body('front', { look }));
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
@@ -1117,7 +1161,7 @@ function placeWalkers(dt, t) {
     }
     const washing = (e.washUntil || 0) > performance.now();
     if (u.b && !rolling) {
-      setSpriteCanvas(e.spr, benchSprite(e.look, face));
+      setSpriteCanvas(e.spr, body('front', { face, look: e.look, mode: 'bench' }));
       e.spr.center.set(0.5, 0);
       e.spr.material.rotation = 0;
       e.spr.position.set(X, 0.3 + lift, BENCH_Z - 0.12);
@@ -1128,13 +1172,13 @@ function placeWalkers(dt, t) {
     }
     if (washing) e.view = 'left';
     if (rolling) {
-      setSpriteCanvas(e.spr, charSprite('front', 0, 'dizzy', e.look, true));
+      setSpriteCanvas(e.spr, body('front', { face: 'dizzy', look: e.look, pantsDown: true }));
       e.spr.center.set(0.5, 0.5);
       e.spr.position.set(X, 0.55, Z);
       e.spr.material.rotation = (Math.floor(t / 90) % 4) * (Math.PI / 2);
     } else {
       const frame = e.walking ? (Math.floor(e.phase) % 2 ? 1 : 2) : 0;
-      setSpriteCanvas(e.spr, charSprite(e.view, frame, face, e.look, pantsDown));
+      setSpriteCanvas(e.spr, body(e.view, { frame, face, look: e.look, pantsDown }));
       e.spr.center.set(0.5, 0);
       e.spr.material.rotation = 0;
       e.spr.position.set(X, (e.walking && Math.floor(e.phase) % 2 ? 0.04 : 0) + lift, Z);
@@ -1173,13 +1217,12 @@ function animateStalls(dt, t) {
 
     const occ = occId ? users.get(occId) : null;
     s.sitter.visible = Boolean(occ);
-    s.mosaic.visible = Boolean(occ);
     s.feet.visible = false;
     s.marker.visible = occId === meId;
     if (occ) {
       const u = occ.data;
       const face = exprOf(u, i);
-      setSpriteCanvas(s.sitter, sitterSprite(occ.look, face));
+      setSpriteCanvas(s.sitter, body('front', { face, look: occ.look, mode: 'toilet' }));
       const jig = u.h && Math.floor(t / 70) % 2 ? 0.02 : 0;
       s.sitter.position.x = STALL_M / 2 + jig;
       s.sitter.rotation.y = cam.yaw; // turn toward the camera, but stay upright
@@ -1487,7 +1530,6 @@ function renderActions() {
   actionMode = mode;
   const bar = $('#actions');
   bar.innerHTML = '';
-  const hop = miniBtn('jump', '점프', jump);
   if (mode === 'inside') {
     const push = mainBtn('poop', '꾹 눌러서 힘주기', null, 'push');
     push.addEventListener('pointerdown', (e) => {
@@ -1502,15 +1544,15 @@ function renderActions() {
     b.disabled = true;
     bar.append(b);
   } else if (mode === 'benched') {
-    bar.append(mainBtn('exit', '일어나기', () => send({ t: 'bench', on: false })), hop);
+    bar.append(mainBtn('exit', '일어나기', () => send({ t: 'bench', on: false })));
   } else if (mode === 'sink') {
-    bar.append(mainBtn('wash', '손 씻기', washHands), hop);
+    bar.append(mainBtn('wash', '손 씻기', washHands));
   } else if (mode === 'near') {
-    bar.append(mainBtn('door', '이 칸에 앉기', () => tryEnter(nearestEmptyStall(me.x, me.y))), hop);
+    bar.append(mainBtn('door', '이 칸에 앉기', () => tryEnter(nearestEmptyStall(me.x, me.y))));
   } else if (mode === 'knock') {
-    bar.append(mainBtn('knock', '똑똑, 계세요?', () => tryKnock(nearestOccupiedStall(me.x, me.y)), 'knock'), hop);
+    bar.append(mainBtn('knock', '똑똑, 계세요?', () => tryKnock(nearestOccupiedStall(me.x, me.y)), 'knock'));
   } else if (mode.startsWith('bench')) {
-    bar.append(mainBtn('bench', '벤치에 앉기', () => goSitOnBench(bench)), hop);
+    bar.append(mainBtn('bench', '벤치에 앉기', () => goSitOnBench(bench)));
   } else if (mode === 'full') {
     bar.append(mainBtn('knock', '만칸이에요 · 노크하러 가기', () => {
       const i = closestAnywhere((k) => stalls[k] && stalls[k] !== meId);
@@ -1519,12 +1561,12 @@ function renderActions() {
         pendingEnter = -1;
         showTapMark(toX(target.x), toZ(target.y));
       }
-    }), hop);
+    }));
   } else {
     bar.append(mainBtn('find', '빈 칸 찾기', () => {
       const i = closestAnywhere(freeFor);
       if (i >= 0) walkToStall(i);
-    }), hop);
+    }));
   }
 }
 
@@ -1831,7 +1873,6 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 $('#soundBtn').innerHTML = `${icoImg('soundOff')}<span>소리 켜기</span>`;
 $('#peopleIcon').innerHTML = icoImg('people');
 $('#todayIcon').innerHTML = icoImg('poop');
-setTimeout(() => $('#hint').classList.add('out'), 8000);
 
 document.fonts.load('9px Galmuri9').finally(() => {
   connect();

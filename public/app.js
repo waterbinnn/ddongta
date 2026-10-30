@@ -19,12 +19,12 @@ const toZ = (y) => y * U;
 const STALL_M = STALL_W * U;
 const STALL_D = 1.6;
 const DOOR_W = 0.94;
-const DOOR_BOT = 0.38; // the famous American gap
-const DOOR_TOP = 1.55;
+const DOOR_BOT = 0.3; // the famous American gap: feet show underneath
+const DOOR_TOP = 0.9; // a low half-door, so whoever sits inside shows their whole face over it
+const SIT_Y = 0.1; // the sitter perches on the bowl, feet just off the floor
 const PART_BOT = 0.3;
 const PART_TOP = 1.75;
 const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at -1.1)
-const SIT_LIFT = 0.12; // raise the sitter so the face is fully above the door
 const PX_M = 0.05; // meters per sprite pixel
 const PILE_MAX = 10;
 
@@ -134,52 +134,71 @@ function flip(c) {
 
 // ---------- character art ----------
 
+// chibi proportions: a big round head with full cheeks, low-set sparkly eyes, a small body, short legs
 const HEAD = {
-  front: ['....HHHHHH....', '..HHHHHHHHHH..', '.HHHHHHHHHHHH.', '.HHHHHHHHHHHH.', '.HHSHHSSHHSHH.', '.HSSSSSSSSSSH.', '.SSSSSSSSSSSS.', '.SSSSSSSSSSSS.', '.SSSSSSSSSSSS.', '..SSSSSSSSSS..', '....ssssss....'],
-  back: ['....HHHHHH....', '..HHHHHHHHHH..', '.HHHHHHHHHHHH.', '.HHHHHHHHHHHH.', '.HHHHHHHHHHHH.', '.HHHHHHHHHHHH.', '.HHHHHHHHHHHH.', '.HHHHHHHHHHHH.', '.SHHHHHHHHHHS.', '..HHHHHHHHHH..', '....ssssss....'],
-  side: ['....HHHHHH....', '...HHHHHHHHH..', '..HHHHHHHHHHH.', '..HHHHHHHHHHH.', '..HHHHHHHSHHS.', '..HHHHHSSSSSS.', '..HHHHSSSSSSS.', '..HHHSSSSSSSS.', '..HHHSSSSSSSSS', '...HSSSSSSSS..', '.....ssssss...'],
-};
-const BODY = {
-  front: ['...CCCCCCCC...', '..CCCCCCCCCC..', '.SCCCCCCCCCCS.', '..cCCCCCCCCc..'],
-  back: ['...CCCCCCCC...', '..CCCCCCCCCC..', '.SCCCCCCCCCCS.', '..cCCCCCCCCc..'],
-  side: ['....CCCCCC....', '...CCCCCCCC...', '...CCCCSCCC...', '...cCCCCCCc...'],
-};
-const HIPS = { front: '...PPPPPPPP...', back: '...PPPPPPPP...', side: '....PPPPPP....' };
-const UNDIES = { front: '...WWWWWWWW...', back: '...WWWWWWWW...', side: '....WWWWWW....' };
-const LEGS = {
   front: [
-    ['...PPP..PPP...', '...PP....PP...', '...BB....BB...'],
-    ['...PPP..PPP...', '..PP......PP..', '..BB......BB..'],
-    ['....PPPPPP....', '....PP..PP....', '....BB..BB....'],
+    '....HHHHHH....', '..HhhHHHHHHH..', '.HhhHHHHHHHHH.', '.HHHHHHHHHHHH.', 'HHHHHHHHHHHHHH', 'HHSSSSSSSSSSHH',
+    'HSSSSSSSSSSSSH', 'SSSSSSSSSSSSSS', 'SSSSSSSSSSSSSS', '.SSSSSSSSSSSS.', '..SSSSSSSSSS..',
+  ],
+  back: [
+    '....HHHHHH....', '..HHHHHHHhhH..', '.HHHHHHHHhhHH.', '.HHHHHHHHHHHH.', 'HHHHHHHHHHHHHH', 'HHHHHHHHHHHHHH',
+    'HHHHHHHHHHHHHH', 'HHHHHHHHHHHHHH', 'HHHHHHHHHHHHHH', '.HHHHHHHHHHHH.', '...ssssssss...',
   ],
   side: [
-    ['....PPPPP.....', '....PP.PP.....', '....BB.BBB....'],
-    ['....PPPPP.....', '...PP...PP....', '..BB....BBB...'],
-    ['....PPPPP.....', '....PPPP......', '....BBBBB.....'],
+    '....HHHHHH....', '...HHHHHhhHH..', '..HHHHHHHhhHH.', '..HHHHHHHHHHH.', '.HHHHHHHHHSHH.', '.HHHHHHSSSSSS.',
+    '.HHHHHSSSSSSS.', '.HHHHSSSSSSSSS', '.HHHHSSSSSSSSS', '..HHSSSSSSSS..', '....SSSSSSS...',
+  ],
+};
+const BODY = {
+  front: ['....CCCCCC....', '...CCCCCCCC...', '..SCCCCCCCCS..', '...cCCCCCCc...'],
+  back: ['....CCCCCC....', '...CCCCCCCC...', '..SCCCCCCCCS..', '...cCCCCCCc...'],
+  side: ['.....CCCC.....', '....CCCCCC....', '....CCCSCC....', '....cCCCCc....'],
+};
+const HIPS = { front: '....PPPPPP....', back: '....PPPPPP....', side: '.....PPPP.....' };
+const UNDIES = { front: '....WWWWWW....', back: '....WWWWWW....', side: '.....WWWW.....' };
+const LEGS = {
+  front: [
+    ['....PP..PP....', '....BB..BB....'],
+    ['...PP....PP...', '...BB....BB...'],
+    ['.....PPPP.....', '.....BBBB.....'],
+  ],
+  side: [
+    ['.....PPP......', '.....BBBB.....'],
+    ['....PP..PP....', '...BB...BBB...'],
+    ['.....PPPP.....', '.....BBBB.....'],
   ],
 };
 const LEGS_DOWN = {
-  front: ['...SS....SS...', '..PPPP..PPPP..', '...BB....BB...'],
-  side: ['....SS.SS.....', '...PPPPPPP....', '....BB.BBB....'],
+  front: ['....SS..SS....', '...PPP..PPP...', '....BB..BB....'],
+  side: ['.....SS.S.....', '....PPPPPP....', '.....BB.BB....'],
 };
 
-const FACE_COL = { K: INK, W: '#ffffff', B: '#7cc6ff', R: '#ff8fa3', T: '#ff6b81' };
-const FACES = {
-  idle: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [6, 8], [7, 8]] },
-  neutral: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [5, 8], [6, 8], [7, 8], [8, 8]] },
-  urgent: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [5, 8], [8, 8]], W: [[6, 8], [7, 8]], B: [[12, 4], [12, 5]] },
-  strain: { K: [[3, 5], [4, 6], [3, 7], [10, 5], [9, 6], [10, 7], [5, 8], [6, 9], [7, 8], [8, 9]], R: [[2, 8], [11, 8]], B: [[12, 3], [12, 4]] },
-  ok: { K: [[4, 5], [4, 6], [9, 5], [9, 6], [5, 8], [6, 9], [7, 9], [8, 8]], R: [[2, 8], [11, 8]] },
-  bliss: { K: [[3, 6], [4, 5], [5, 6], [8, 6], [9, 5], [10, 6], [5, 8], [6, 8], [7, 8], [8, 8]], R: [[2, 7], [11, 7]], T: [[6, 9], [7, 9]] },
-  relaxed: { K: [[3, 6], [4, 6], [9, 6], [10, 6], [6, 8], [7, 8]], R: [[2, 8], [11, 8]] },
-  dizzy: { K: [[3, 5], [5, 5], [4, 6], [3, 7], [5, 7], [8, 5], [10, 5], [9, 6], [8, 7], [10, 7], [6, 9], [7, 9]] },
-  shock: { K: [[4, 5], [5, 5], [4, 6], [5, 6], [8, 5], [9, 5], [8, 6], [9, 6], [6, 8], [7, 8], [6, 9], [7, 9]], R: [[2, 7], [2, 8], [11, 7], [11, 8]], B: [[12, 3], [12, 4]] },
+// faces are painted over the front head: eyes on rows 6-7, cheeks on row 8, mouth on rows 9-10
+const FACE_COL = { K: INK, W: '#ffffff', B: '#7cc6ff', R: '#ff9fb2', T: '#ff6b81' };
+const EYES = { W: [[3, 6], [9, 6]], K: [[4, 6], [3, 7], [4, 7], [10, 6], [9, 7], [10, 7]] };
+const CHEEKS = [[1, 8], [2, 8], [11, 8], [12, 8]];
+const makeFace = (parts) => {
+  const out = { K: [], W: [], B: [], R: [...CHEEKS], T: [] };
+  for (const p of parts) for (const [k, pts] of Object.entries(p)) out[k].push(...pts);
+  return out;
 };
-const SIDE_FACE = [[10, 6], [12, 8]];
+const FACES = {
+  idle: makeFace([EYES, { K: [[6, 9], [7, 9]] }]),
+  neutral: makeFace([EYES, { K: [[5, 9], [6, 9], [7, 9], [8, 9]] }]),
+  urgent: makeFace([EYES, { K: [[5, 9], [8, 9]], W: [[6, 9], [7, 9]], B: [[13, 5], [13, 6]] }]),
+  strain: makeFace([{ K: [[3, 6], [4, 7], [3, 8], [10, 6], [9, 7], [10, 8], [5, 9], [6, 10], [7, 9], [8, 10]], B: [[13, 4], [13, 5]] }]),
+  ok: makeFace([EYES, { K: [[5, 9], [6, 10], [7, 10], [8, 9]] }]),
+  bliss: makeFace([{ K: [[2, 7], [3, 6], [4, 7], [9, 7], [10, 6], [11, 7], [5, 9], [6, 10], [7, 10], [8, 9]], T: [[6, 9], [7, 9]] }]),
+  relaxed: makeFace([{ K: [[3, 7], [4, 7], [9, 7], [10, 7], [6, 9], [7, 9]] }]),
+  dizzy: makeFace([{ K: [[2, 6], [4, 6], [3, 7], [2, 8], [4, 8], [9, 6], [11, 6], [10, 7], [9, 8], [11, 8], [5, 10], [6, 9], [7, 10], [8, 9]] }]),
+  shock: makeFace([{ K: [[3, 6], [4, 6], [3, 7], [4, 7], [9, 6], [10, 6], [9, 7], [10, 7], [6, 9], [7, 9], [6, 10], [7, 10]], B: [[13, 4], [13, 5]] }]),
+};
+const SIDE_FACE = { W: [[10, 6]], K: [[11, 6], [10, 7], [11, 7], [12, 9]], R: [[10, 8], [11, 8]] };
 
 // every visitor gets a look picked from their id: hair style, skin, cap, stripes, pants
 const SKINS = ['#ffd9b8', '#f6c8a2', '#e8b08a', '#c98e64', '#9a6644'];
-const STYLES = ['short', 'long', 'bun', 'cap', 'curly', 'buzz'];
+const STYLES_GIRL = ['long', 'pigtails', 'ponytail', 'bob', 'bun'];
+const STYLES_BOY = ['short', 'cap', 'curly', 'buzz', 'short'];
 const PANTS = ['#3b4a6b', '#5a4636', '#2f2f3a', '#56683a', '#7a4a5a'];
 const CAPS = ['#e5484d', '#3a7bd5', '#46a758', '#f5a524', '#8a5cd0'];
 
@@ -194,9 +213,10 @@ function hashId(n) {
 function lookFor(u) {
   const h = hashId(u.id);
   const pick = (arr, shift) => arr[(h >>> shift) % arr.length];
+  const girl = (h >>> 27) % 2 === 0; // about half the visitors, told apart only by longer hair
   const look = {
-    c: u.c, skin: pick(SKINS, 0), h: pick(HAIRS, 3), style: pick(STYLES, 7), pants: pick(PANTS, 11), cap: pick(CAPS, 15),
-    stripe: (h >>> 23) % 3 === 0,
+    c: u.c, skin: pick(SKINS, 0), h: pick(HAIRS, 3), style: pick(girl ? STYLES_GIRL : STYLES_BOY, 7), pants: pick(PANTS, 11),
+    cap: pick(CAPS, 15), stripe: (h >>> 23) % 3 === 0,
   };
   look.key = [look.c, look.skin, look.h, look.style, look.pants, look.cap, look.stripe].join('|');
   return look;
@@ -214,26 +234,29 @@ function headRows(v, style) {
   if (style === 'long') {
     if (v === 'front') {
       for (let r = 5; r <= 10; r++) {
+        set(r, 0, 'H');
+        set(r, 13, 'H');
+      }
+      for (const r of [9, 10]) {
         set(r, 1, 'H');
         set(r, 12, 'H');
-        if (r >= 8) {
-          set(r, 0, 'H');
-          set(r, 13, 'H');
-        }
       }
     } else if (v === 'back') {
-      for (let r = 8; r <= 10; r++) for (let c = 1; c <= 12; c++) set(r, c, 'H');
+      for (let r = 9; r <= 10; r++) for (let c = 0; c <= 13; c++) set(r, c, 'H');
     } else {
-      for (let r = 5; r <= 10; r++) {
+      for (let r = 7; r <= 10; r++) {
+        set(r, 1, 'H');
         set(r, 2, 'H');
         set(r, 3, 'H');
-        if (r >= 8) set(r, 1, 'H');
       }
     }
   } else if (style === 'cap') {
-    for (let r = 0; r <= 3; r++) swap(r, 'H', 'Q');
-    if (v === 'front') rows[4] = '.QQQQQQQQQQQQ.'.split('');
-    else if (v === 'side') rows[4] = '..QQQQQQQQQQQQ'.split('');
+    for (let r = 0; r <= 3; r++) {
+      swap(r, 'H', 'Q');
+      swap(r, 'h', 'Q');
+    }
+    if (v === 'front') rows[4] = 'QQQQQQQQQQQQQQ'.split('');
+    else if (v === 'side') rows[4] = '.QQQQQQQQQQQQQ'.split('');
     else swap(4, 'H', 'Q');
   } else if (style === 'bun') {
     rows = ['.....HHHH.....'.split(''), ...rows];
@@ -241,33 +264,88 @@ function headRows(v, style) {
   } else if (style === 'curly') {
     rows[0] = '..HH.HHHH.HH..'.split('');
     if (v !== 'side') {
-      set(4, 0, 'H');
-      set(4, 13, 'H');
-      set(5, 0, 'H');
-      set(5, 13, 'H');
+      set(6, 0, 'H');
+      set(6, 13, 'H');
+      set(9, 0, 'H');
+      set(9, 13, 'H');
+    }
+  } else if (style === 'bob') {
+    if (v === 'front') {
+      for (let r = 5; r <= 9; r++) {
+        set(r, 0, 'H');
+        set(r, 13, 'H');
+      }
+      set(10, 1, 'H');
+      set(10, 12, 'H');
+    } else if (v === 'back') {
+      for (let r = 9; r <= 10; r++) for (let c = 0; c <= 13; c++) set(r, c, 'H');
+    } else {
+      for (let r = 7; r <= 10; r++) for (let c = 1; c <= 3; c++) set(r, c, 'H');
     }
   } else if (style === 'buzz') {
     rows[0] = '..............'.split('');
     rows[1] = '...HHHHHHHH...'.split('');
-    if (v === 'front') rows[4] = '.HSSSSSSSSSSH.'.split('');
+    if (v === 'front') {
+      rows[4] = 'HHSSSSSSSSSSHH'.split('');
+      rows[5] = 'HSSSSSSSSSSSSH'.split('');
+    }
   }
   return { rows: rows.map((r) => r.join('')), dy };
 }
 
-// a TV-style censor: chunky 2x2 skin-tone blocks over the hips only
-function mosaicOver(c, top, height, look) {
+// hair that falls past the head (long hair, pigtails, ponytails), painted onto the finished rows
+function dressHair(lines, v, look, dy) {
+  const rows = lines.map((r) => r.split(''));
+  const set = (r, c, ch) => {
+    const row = rows[r + dy];
+    if (row && c >= 0 && c < row.length) row[c] = ch;
+  };
+  const st = look.style;
+  if (st === 'long') {
+    if (v === 'front') {
+      for (const r of [11, 12]) for (const c of [1, 2, 11, 12]) set(r, c, 'H');
+      set(13, 1, 'H');
+      set(13, 12, 'H');
+    } else if (v === 'back') {
+      for (const r of [11, 12]) for (let c = 3; c <= 10; c++) set(r, c, 'H');
+      for (let c = 4; c <= 9; c++) set(13, c, 'H');
+    } else {
+      for (const r of [11, 12]) for (const c of [3, 4]) set(r, c, 'H');
+    }
+  } else if (st === 'pigtails') {
+    if (v === 'side') {
+      for (let r = 8; r <= 12; r++) for (const c of [0, 1]) set(r, c, 'H');
+    } else {
+      set(9, 0, 'H');
+      set(9, 13, 'H');
+      for (let r = 10; r <= 13; r++) for (const c of [0, 1, 12, 13]) set(r, c, 'H');
+    }
+  } else if (st === 'ponytail') {
+    if (v === 'back') {
+      for (let r = 11; r <= 13; r++) for (const c of [6, 7]) set(r, c, 'H');
+    } else if (v === 'side') {
+      for (let r = 4; r <= 9; r++) set(r, 0, 'H');
+    }
+  }
+  rows.forEach((r, i) => (lines[i] = r.join('')));
+}
+
+// a frosted censor: chunky, slightly see-through white blocks over the lower body
+const FROST = ['#ffffff', '#f3f6f8', '#e7ecf0', '#fbfcfd', '#dde4ea', '#eef2f5'];
+function mosaicOver(c, top, height) {
   const g = c.getContext('2d');
-  const tones = [look.skin, shade(look.skin, -0.14), shade(look.skin, 0.08), shade(look.skin, -0.26)];
+  g.globalAlpha = 0.88;
   for (let y = 0; y < height; y += 2) {
-    for (let x = 1; x < 13; x += 2) {
-      g.fillStyle = tones[(x * 3 + y * 5 + x * y) % tones.length];
+    for (let x = 2; x < 12; x += 2) {
+      g.fillStyle = FROST[(x * 7 + y * 13 + x * y) % FROST.length];
       g.fillRect(x + 1, top + y + 1, 2, 2);
     }
   }
+  g.globalAlpha = 1;
 }
 
 const charCache = new Map();
-// mode: 'stand' (walking), 'toilet' (seated, long legs to the floor) or 'bench'
+// mode: 'stand' (walking), 'toilet' (sat on the bowl) or 'bench'
 function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 'stand' }) {
   const key = `${view}|${frame}|${face}|${look.key}|${pantsDown}|${mode}`;
   let c = charCache.get(key);
@@ -276,15 +354,16 @@ function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 
   const legView = v === 'side' ? 'side' : 'front';
   const { rows: head, dy } = headRows(v, look.style);
   const rows = [...head, ...BODY[v].map((r, k) => (look.stripe && k % 2 === 1 ? r.replace(/C/g, 'L') : r))];
+  dressHair(rows, v, look, dy);
   const hips = rows.length;
   let censor = null;
   if (mode === 'toilet') {
-    rows.push(UNDIES.front);
-    for (let k = 0; k < 20; k++) rows.push('...SS....SS...');
-    rows.push('..PPPP..PPPP..', '...BB....BB...');
-    censor = [hips - 1, 4];
+    // sat on the bowl: knees forward, short shins, pants round the ankles, feet on the floor
+    rows.push(UNDIES.front, '...SSSSSSSS...');
+    for (let k = 0; k < 5; k++) rows.push('....SS..SS....');
+    rows.push('...PPP..PPP...', '....BB..BB....'); // the floating censor in front covers this (see makeStall)
   } else if (mode === 'bench') {
-    rows.push(HIPS.front, '..PPPPPPPPPP..', '...BB....BB...');
+    rows.push(HIPS.front, '...PPPPPPPP...', '....BB..BB....');
   } else {
     rows.push(pantsDown ? UNDIES[v] : HIPS[v]);
     rows.push(...(pantsDown ? LEGS_DOWN[legView] : LEGS[legView][frame]));
@@ -292,17 +371,17 @@ function body(view, { frame = 0, face = 'idle', look, pantsDown = false, mode = 
   }
   const pal = {
     H: look.h, Q: look.cap, S: look.skin, s: shade(look.skin, -0.12), C: look.c, c: shade(look.c, -0.22), L: shade(look.c, 0.25),
-    P: look.pants, B: '#2c2630', W: '#ffffff',
+    h: shade(look.h, 0.45), P: look.pants, B: '#2c2630', W: '#ffffff',
   };
   const shift = (pts) => pts.map(([x, y]) => [x, y + dy]);
   const extra = [];
   if (v === 'front') {
     for (const [k, pts] of Object.entries(FACES[face] || FACES.idle)) extra.push([FACE_COL[k], shift(pts)]);
   } else if (v === 'side') {
-    extra.push([INK, shift(SIDE_FACE)]);
+    for (const [k, pts] of Object.entries(SIDE_FACE)) extra.push([FACE_COL[k], shift(pts)]);
   }
   c = sprite(rows, pal, extra);
-  if (censor) mosaicOver(c, censor[0], censor[1], look);
+  if (censor) mosaicOver(c, censor[0], censor[1]);
   if (view === 'left') c = flip(c);
   charCache.set(key, c);
   return c;
@@ -563,7 +642,7 @@ function drawDoorCanvas(c, n, crack) {
     const pts = [
       [[5, 4], [6, 5], [6, 6], [7, 7], [7, 8], [8, 9]],
       [[w - 6, h - 9], [w - 7, h - 8], [w - 7, h - 7], [w - 8, h - 6], [w - 9, h - 5]],
-      [[9, 12], [10, 13], [9, 14], [10, 15], [11, 16], [11, 17]],
+      [[9, 9], [10, 10], [9, 11], [10, 12]],
     ];
     for (let k = 0; k < crack; k++) for (const [x, y] of pts[k]) g.fillRect(x, y, 1, 1);
     g.fillStyle = `rgba(230,60,60,${crack * 0.12})`;
@@ -602,22 +681,22 @@ const G = {
   hit: new THREE.BoxGeometry(STALL_M, 2, 0.6),
   blob: new THREE.CircleGeometry(0.28, 14),
   chip: new THREE.BoxGeometry(0.06, 0.04, 0.03),
-  mosaic: new THREE.PlaneGeometry(STALL_M - 0.1, STALL_D - 0.15),
   card: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), // bottom-anchored upright card
+  censor: new THREE.PlaneGeometry(0.8, 0.75), // lies flat over the lap
 };
 
-// censor sheet over an occupied stall: frosted white blocks, sitting just under the eyes
-const mosaicMat = new THREE.MeshBasicMaterial({
-  map: pixelTex(canvas(6, 8, (g) => {
-    const tones = ['#ffffff', '#f3f6f8', '#e7ecf0', '#fbfcfd', '#dde4ea', '#eef2f5'];
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 6; x++) {
-      g.fillStyle = tones[(x * 7 + y * 13 + x * y) % tones.length];
+// the censor that hovers over the lap of whoever sits on a toilet: chunky frosted blocks, seen from above
+const censorMat = new THREE.MeshBasicMaterial({
+  map: pixelTex(canvas(7, 5, (g) => {
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 7; x++) {
+      g.fillStyle = FROST[(x * 7 + y * 13 + x * y) % FROST.length];
       g.fillRect(x, y, 1, 1);
     }
   })),
   transparent: true,
-  opacity: 0.8, // frosted, a little see-through
+  opacity: 0.97, // nearly solid, so nothing shows through from any angle
   side: THREE.DoubleSide,
+  depthWrite: false,
 });
 
 function mesh(geo, material, { cast = false, receive = false } = {}) {
@@ -894,7 +973,7 @@ function makeStall(i) {
   // door with its own pixel texture
   const doorCanvas = document.createElement('canvas');
   doorCanvas.width = 20;
-  doorCanvas.height = 24;
+  doorCanvas.height = 13;
   drawDoorCanvas(doorCanvas, i + 1, 0);
   const doorTex = pixelTex(doorCanvas);
   const face = new THREE.MeshLambertMaterial({ map: doorTex });
@@ -921,18 +1000,22 @@ function makeStall(i) {
   tank.position.set(0, 0.62, -0.38);
   toilet.add(bowl, seat, water, tank);
 
-  // whoever sits here: upper body peeks over the door, feet show under it
+  // whoever sits here: the face shows over the half-door, the feet under it
   const sitter = new THREE.Mesh(G.card, new THREE.MeshBasicMaterial({ map: texOf(PROPS.poop), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-  sitter.position.set(STALL_M / 2, SIT_LIFT, SEAT_Z); // on the bowl, lifted so the whole face clears the door
+  sitter.position.set(STALL_M / 2, SIT_Y, SEAT_Z); // on the bowl
   sitter.visible = false;
+  const censor = new THREE.Mesh(G.censor, censorMat);
+  censor.rotation.x = -Math.PI / 2;
+  censor.position.set(STALL_M / 2, 0.72, SEAT_Z + 0.15); // just below the chest, covering lap and legs
+  censor.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
   const marker = pixelSprite(PROPS.marker);
-  marker.position.set(STALL_M / 2, 2.15 + SIT_LIFT, SEAT_Z);
+  marker.position.set(STALL_M / 2, 1.6, SEAT_Z);
   marker.visible = false;
   const halo = pixelSprite(PROPS.halo);
-  halo.position.set(STALL_M / 2, 2.07 + SIT_LIFT, SEAT_Z);
+  halo.position.set(STALL_M / 2, 1.52, SEAT_Z);
   halo.visible = false;
 
   const pile = new THREE.Group();
@@ -942,12 +1025,8 @@ function makeStall(i) {
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
 
-  const mosaic = new THREE.Mesh(G.mosaic, mosaicMat);
-  mosaic.rotation.x = -Math.PI / 2;
-  mosaic.position.set(STALL_M / 2 + 0.02, 1.33, -STALL_D / 2 + 0.05); // waist height: hides only the lower body
-  mosaic.visible = false;
 
-  g.add(part, cap, post, hinge, toilet, sitter, mosaic, feet, marker, halo, pile, hit);
+  g.add(part, cap, post, hinge, toilet, sitter, censor, feet, marker, halo, pile, hit);
 
   // the last stall in a bank has no neighbour closing its right side, so give it its own wall
   const endX = L.cx + Math.cos(L.rot) * STALL_W;
@@ -965,7 +1044,7 @@ function makeStall(i) {
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, mosaic, feet, marker, halo, pile,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, sitter, censor, feet, marker, halo, pile,
     open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0,
   };
 }
@@ -1608,8 +1687,8 @@ function animateStalls(dt, t) {
 
     const occ = occId ? users.get(occId) : null;
     s.sitter.visible = Boolean(occ);
-    s.mosaic.visible = Boolean(occ);
     s.feet.visible = false;
+    s.censor.visible = Boolean(occ);
     s.marker.visible = occId === meId;
     if (occ) {
       const u = occ.data;
@@ -1621,7 +1700,7 @@ function animateStalls(dt, t) {
       const rel = Math.atan2(Math.sin(cam.yaw - LAYOUT[i].rot), Math.cos(cam.yaw - LAYOUT[i].rot));
       s.sitter.rotation.y = clamp(rel, -1.1, 1.1);
       s.halo.visible = face === 'bliss';
-      s.marker.position.y = 2.17 + SIT_LIFT + (Math.floor(t / 300) % 2) * 0.04;
+      s.marker.position.y = 1.6 + (Math.floor(t / 300) % 2) * 0.04;
     } else {
       s.halo.visible = false;
     }
@@ -1711,7 +1790,7 @@ function onBreak(m) {
     debris.push({ o: door, v: out(3.4, (Math.random() - 0.5) * 1.5).setY(3), w: new THREE.Vector3(-5, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 4), life: 3.2, door: true });
     for (let k = 0; k < 12; k++) {
       const chip = mesh(G.chip, M.doorEdge);
-      chip.position.copy(stallWorld(m.stall, 0.1 + Math.random() * 0.9, DOOR_BOT + Math.random() * 1.1, 0.05));
+      chip.position.copy(stallWorld(m.stall, 0.1 + Math.random() * 0.9, DOOR_BOT + Math.random() * (DOOR_TOP - DOOR_BOT), 0.05));
       fxRoot.add(chip);
       debris.push({ o: chip, v: out(1 + Math.random() * 2.5, (Math.random() - 0.5) * 3).setY(1 + Math.random() * 3), w: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10), life: 1.3 });
     }
@@ -1911,7 +1990,7 @@ function headOf(id) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
-  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 2.2 + SIT_LIFT, SEAT_Z);
+  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 1.55, SEAT_Z);
   return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, 1.2); // screen-up, like the markers
 }
 
@@ -2737,7 +2816,7 @@ if (OG) {
   document.body.classList.add('og');
   const title = document.createElement('div');
   title.className = 'og-title';
-  title.innerHTML = '<b>똥타</b><span>다같이 들어와서, 각자 칸에 앉아 볼일 보며 떠드는 온라인 뒷간</span>';
+  title.innerHTML = '<b>똥타</b>';
   document.body.append(title);
 }
 

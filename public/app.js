@@ -1071,10 +1071,20 @@ function buildOutside(rw, rd, back) {
   }
 }
 
-// the sky: a dome that blends from the zenith colour to the horizon colour, with stars at night
-const skyUniforms = { top: { value: new THREE.Color('#7fb8e6') }, horizon: { value: new THREE.Color('#e8f4fb') } };
+// the sky: a dome that blends from the zenith colour to the horizon colour, with a sun and its glow by day,
+// a moon and stars at night, and puffy clouds drifting slowly round
+const skyUniforms = {
+  top: { value: new THREE.Color('#2f6fc0') },
+  mid: { value: new THREE.Color('#5b98da') },
+  horizon: { value: new THREE.Color('#bcd8ee') },
+  sunDir: { value: new THREE.Vector3(0, 0.6, -0.8).normalize() },
+  sunColor: { value: new THREE.Color('#fff4d6') },
+  sunGlow: { value: 1 },
+  moonDir: { value: new THREE.Vector3(0.4, 0.5, -0.75).normalize() },
+  moonVis: { value: 0 },
+};
 const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(400, 32, 16),
+  new THREE.SphereGeometry(400, 48, 24),
   new THREE.ShaderMaterial({
     uniforms: skyUniforms,
     side: THREE.BackSide,
@@ -1083,11 +1093,34 @@ const sky = new THREE.Mesh(
     vertexShader: 'varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: [
       'uniform vec3 top;',
+      'uniform vec3 mid;',
       'uniform vec3 horizon;',
+      'uniform vec3 sunDir;',
+      'uniform vec3 sunColor;',
+      'uniform float sunGlow;',
+      'uniform vec3 moonDir;',
+      'uniform float moonVis;',
       'varying vec3 vPos;',
       'void main() {',
-      '  float h = clamp(normalize(vPos).y * 1.6, 0.0, 1.0);',
-      '  gl_FragColor = vec4(mix(horizon, top, h), 1.0);',
+      '  vec3 d = normalize(vPos);',
+      // three bands: a pale horizon, the sky colour, a deeper zenith
+      '  vec3 col = mix(horizon, mid, smoothstep(0.0, 0.28, d.y));',
+      '  col = mix(col, top, smoothstep(0.22, 0.95, d.y));',
+      // depth: the side facing the sun glows warmer near the horizon, the far side sits cooler and darker
+      '  vec2 dirXZ = normalize(d.xz + 1e-5);',
+      '  vec2 sunFlat = normalize(sunDir.xz + 1e-5);',
+      '  float toward = dot(dirXZ, sunFlat) * 0.5 + 0.5;',
+      '  float low = 1.0 - smoothstep(0.0, 0.45, d.y);',
+      '  col += sunColor * pow(toward, 3.0) * low * 0.22 * sunGlow;',
+      '  col *= mix(1.0, 0.86, (1.0 - toward) * low * min(sunGlow, 1.0));',
+      // a thin bright haze right on the horizon
+      '  col += horizon * 0.12 * (1.0 - smoothstep(0.0, 0.06, abs(d.y)));',
+      '  col = mix(col, horizon * 0.75, clamp(-d.y * 4.0, 0.0, 1.0));', // below the horizon
+      '  float s = max(dot(d, sunDir), 0.0);',
+      '  col += sunColor * sunGlow * (smoothstep(0.9985, 0.9992, s) * 1.2 + pow(s, 28.0) * 0.35 + pow(s, 5.0) * 0.12);',
+      '  float m = max(dot(d, moonDir), 0.0);',
+      '  col += moonVis * (vec3(1.0, 0.96, 0.84) * smoothstep(0.9990, 0.9994, m) + vec3(0.55, 0.62, 0.95) * pow(m, 80.0) * 0.25);',
+      '  gl_FragColor = vec4(col, 1.0);',
       '  #include <colorspace_fragment>', // directives need a line of their own on strict GPUs
       '}',
     ].join('\n'),
@@ -1105,7 +1138,36 @@ const stars = (() => {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
   return new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
 })();
-scene.add(sky, stars);
+// puffy clouds made of soft balls; they take the sun's colour (white by day, peach at sunset, slate at night)
+const clouds = new THREE.Group();
+const cloudMat = new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a3f4a' }); // emissive follows the sky (applyTimeOfDay)
+{
+  const puff = new THREE.IcosahedronGeometry(1, 2);
+  const rnd = (k) => {
+    const v = Math.sin(k * 57.31 + 3.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  for (let k = 0; k < 18; k++) {
+    const c = new THREE.Group();
+    const n = 4 + Math.floor(rnd(k) * 4);
+    for (let i = 0; i < n; i++) {
+      const p = new THREE.Mesh(puff, cloudMat);
+      const r = 3 + rnd(k * 9 + i) * 3.5;
+      p.scale.set(r * 1.2, r * 0.75, r);
+      p.position.set((i - n / 2) * 4 + rnd(k + i * 3) * 2, rnd(k * 2 + i) * 2.5, rnd(k * 4 + i) * 4 - 2);
+      c.add(p);
+    }
+    const a = (k / 18) * Math.PI * 2 + rnd(k + 50) * 0.3;
+    const dist = 100 + rnd(k + 70) * 120;
+    // low over the horizon, where the camera actually looks (the ground falls away out there)
+    c.position.set(Math.cos(a) * dist, -6 + rnd(k + 90) * 24, Math.sin(a) * dist);
+    c.rotation.y = -a;
+    const size = 1.1 + rnd(k + 110) * 1.1;
+    c.scale.setScalar(size);
+    clouds.add(c);
+  }
+}
+scene.add(sky, stars, clouds);
 
 // a potted plant: white pot with a red band, chunky low-poly leaves
 const LEAF_MATS = ['#5fae57', '#4b9446', '#7cc26a'].map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
@@ -1173,15 +1235,18 @@ function buildEntrance(cx, z) {
 // a starry night with the ceiling lights turned up, and a lilac dawn. ?hour=21 previews an hour.
 const lampLights = []; // [light, share of PAL.lampPower]
 const DAYTIME = [
-  // hour, sky at the top, sky at the horizon, sky light, sun, sun colour, ceiling lights
-  [0, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
-  [5, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
-  [6.5, '#8ea4d8', '#ffd0b8', 0.8, 0.75, '#ffd0b0', 1.5],
-  [8, '#6fb1e3', '#dff0f7', PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
-  [17, '#6fb1e3', '#dff0f7', PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
-  [18.5, '#6d6fb4', '#ffb27a', 0.85, 0.85, '#ffaa6a', 1.5],
-  [20, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
-  [24, '#0b1230', '#2a3560', 0.55, 0.3, '#a9b8ff', 2.6],
+  // hour, sky at the top, in the middle, at the horizon, sky light, sun, sun colour, ceiling lights
+  [0, '#03060f', '#0a1228', '#18223f', 0.55, 0.3, '#a9b8ff', 2.6],
+  [5, '#03060f', '#0a1228', '#18223f', 0.55, 0.3, '#a9b8ff', 2.6],
+  [6.3, '#1f3466', '#4f6a9e', '#aab9d2', 0.75, 0.6, '#ffd27a', 1.6],
+  [7.5, '#3a6fb4', '#6f9fd2', '#c4d8ea', 0.95, 1.0, '#ffe8c8', 1.1],
+  [9, '#2f6fc0', '#5b98da', '#bcd8ee', PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
+  [16.5, '#2f6fc0', '#5b98da', '#bcd8ee', PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
+  [18, '#3a5a9a', '#7f9cc4', '#f2b45a', 0.9, 0.9, '#ffb24a', 1.4],
+  [18.8, '#24345f', '#5b6f9a', '#e8743a', 0.75, 0.55, '#ff8a3a', 1.9],
+  [19.6, '#0f1836', '#2a3a66', '#4a4f72', 0.6, 0.35, '#a9b8ff', 2.4],
+  [20.3, '#03060f', '#0a1228', '#18223f', 0.55, 0.3, '#a9b8ff', 2.6],
+  [24, '#03060f', '#0a1228', '#18223f', 0.55, 0.3, '#a9b8ff', 2.6],
 ];
 const forcedHour = new URLSearchParams(location.search).get('hour');
 function applyTimeOfDay() {
@@ -1196,14 +1261,34 @@ function applyTimeOfDay() {
   const f = h1 > h0 ? (h - h0) / (h1 - h0) : 0;
   const mix = (x, y) => new THREE.Color(x).lerp(new THREE.Color(y), f);
   skyUniforms.top.value.copy(mix(a[0], b[0]));
-  skyUniforms.horizon.value.copy(mix(a[1], b[1]));
+  skyUniforms.mid.value.copy(mix(a[1], b[1]));
+  skyUniforms.horizon.value.copy(mix(a[2], b[2]));
   scene.background.copy(skyUniforms.horizon.value);
   scene.fog.color.copy(skyUniforms.horizon.value); // far things fade into the same sky
+  cloudMat.emissive.copy(skyUniforms.horizon.value).multiplyScalar(0.6); // soft undersides in the sky's own colour
   stars.material.opacity = clamp(h < 12 ? (5.5 - h) / 1 : (h - 19.5) / 1, 0, 1);
-  hemi.intensity = lerp(a[2], b[2], f);
-  sun.intensity = lerp(a[3], b[3], f);
-  sun.color.copy(mix(a[4], b[4]));
-  const lampScale = lerp(a[5], b[5], f);
+  // the sun rises in the east, passes high over the back wall and sets in the west; the moon does the same at night
+  const arc = (t, peak) => {
+    const el = Math.sin(Math.PI * t) * peak;
+    const az = Math.PI * t;
+    return new THREE.Vector3(Math.cos(az) * Math.cos(el), Math.sin(el), -Math.sin(az) * Math.cos(el));
+  };
+  const day = (h - 6) / 12.8;
+  if (day > -0.02 && day < 1.02) {
+    const dir = arc(clamp(day, 0, 1), 1.05);
+    skyUniforms.sunDir.value.copy(dir);
+    skyUniforms.sunGlow.value = clamp(dir.y * 6 + 0.4, 0, 1) * (1 + (1 - dir.y) * 0.6); // a bigger glow when low
+  } else {
+    skyUniforms.sunGlow.value = 0;
+  }
+  skyUniforms.sunColor.value.copy(mix(a[5], b[5]));
+  const nightT = ((h - 19 + 24) % 24) / 11;
+  skyUniforms.moonVis.value = nightT < 1 ? clamp(Math.min(nightT, 1 - nightT) * 8, 0, 1) : 0;
+  if (nightT < 1) skyUniforms.moonDir.value.copy(arc(nightT, 0.9));
+  hemi.intensity = lerp(a[3], b[3], f);
+  sun.intensity = lerp(a[4], b[4], f);
+  sun.color.copy(mix(a[5], b[5]));
+  const lampScale = lerp(a[6], b[6], f);
   for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
 }
 setInterval(applyTimeOfDay, 60 * 1000);
@@ -2389,6 +2474,7 @@ function frame(t) {
   animateStalls(dt, t);
   updateEffects(dt);
   updateCamera(dt);
+  clouds.rotation.y += dt * 0.004; // clouds drift slowly round
   renderer.render(scene, camera);
   updateLabels(dt);
   renderActions();
@@ -2893,8 +2979,17 @@ window.addEventListener('keydown', (e) => {
     }
     // holding a direction: Space means run, not sit or knock
     if (MOVE_KEYS.some((k) => keys.has(k))) return;
+    if (me.b) {
+      if (!e.repeat) send({ t: 'bench', on: false }); // Space again gets you up
+      return;
+    }
     if (nearSink()) {
       if (!e.repeat) washHands();
+      return;
+    }
+    const bench = nearBench();
+    if (bench >= 0) {
+      if (!e.repeat) goSitOnBench(bench);
       return;
     }
     const free = nearestEmptyStall(me.x, me.y);

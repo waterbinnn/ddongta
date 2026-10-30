@@ -39,8 +39,8 @@ const PAL = {
   floorA: '#f8d978', floorB: '#fff6e0', floorLine: '#ecd49a',
   door: '#dd4636', doorDark: '#b0342a', doorLight: '#f2705c', number: '#ffffff',
   part: '#fbf1d9', partTop: '#ffffff', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000',
-  hemi: ['#fff8e6', '#c8a868', 1.7], moon: ['#fff1d2', 1.75],
-  lamps: ['#fff3dc'], lampPower: 6,
+  hemi: ['#fff8e6', '#c8a868', 1.05], moon: ['#fff1d2', 1.1],
+  lamps: ['#fff3dc'], lampPower: 3.5,
   water: ['#8fd0ec', '#1d4a5e'], bench: '#dd4636', stone: '#ffffff',
   sign: '#d8382e', title: '#d8382e',
 };
@@ -453,7 +453,7 @@ scene.background = new THREE.Color(PAL.sky);
 scene.fog = new THREE.Fog(PAL.sky, 34, 80);
 const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 140);
 const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
-const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // warm daylight
+const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // the sun by day, the moon at night
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
 Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 10, bottom: -10, near: 1, far: 40 });
@@ -539,20 +539,34 @@ const wallCanvas = canvas(16, 16, (g) => {
   g.fillRect(7, 0, 1, 16);
   g.fillRect(15, 0, 1, 16);
 });
-const windowCanvas = canvas(16, 20, (g) => {
+// the windows show the sky at the visitor's own time of day (redrawn by applyTimeOfDay)
+const windowCanvas = canvas(16, 20, () => {});
+const winTex = pixelTex(windowCanvas);
+function drawWindow(top, bottom, night) {
+  const g = windowCanvas.getContext('2d');
   g.fillStyle = '#ffffff';
   g.fillRect(0, 0, 16, 20);
   const grad = g.createLinearGradient(0, 0, 0, 20);
-  grad.addColorStop(0, '#a8d4ef');
-  grad.addColorStop(1, '#e8f4fb');
+  grad.addColorStop(0, top);
+  grad.addColorStop(1, bottom);
   g.fillStyle = grad;
   g.fillRect(1, 1, 14, 18);
+  if (night > 0.5) {
+    g.fillStyle = '#ffffff'; // stars
+    for (const [x, y] of [[3, 3], [11, 4], [5, 12], [12, 15], [2, 16]]) g.fillRect(x, y, 1, 1);
+    g.fillStyle = '#ffe9a8'; // the moon
+    g.fillRect(10, 11, 2, 2);
+    g.fillRect(11, 10, 1, 1);
+  } else {
+    g.fillStyle = 'rgba(255,255,255,0.8)'; // glare
+    g.fillRect(2, 2, 3, 1);
+    g.fillRect(10, 11, 3, 1);
+  }
   g.fillStyle = '#ffffff';
   g.fillRect(7, 1, 2, 18);
   g.fillRect(1, 9, 14, 1);
-  g.fillRect(2, 2, 3, 1); // glare
-  g.fillRect(10, 11, 3, 1);
-});
+  winTex.needsUpdate = true;
+}
 
 // glowing neon text
 const neonCanvas = (text, color, w) => canvas(w, 16, (g) => {
@@ -762,7 +776,6 @@ function buildRoom() {
   wall(rw + 2 * STALL_D, rw / 2, back, 0);
   wall(rd + STALL_D, back, (rd - STALL_D) / 2, Math.PI / 2);
   wall(rd + STALL_D, rw - back, (rd - STALL_D) / 2, -Math.PI / 2);
-  const winTex = pixelTex(windowCanvas);
   for (let x = 2.2; x < rw - 1; x += 4.4) {
     const win = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.5), new THREE.MeshBasicMaterial({ map: winTex }));
     win.position.set(x, 3.2, back + 0.02);
@@ -870,11 +883,14 @@ function buildRoom() {
     line.position.set(bx + Math.sin(a) * 1.7, 4.8, bz + Math.cos(a) * 1.7);
     lamps.add(line);
   }
+  lampLights.length = 0;
   const centre = new THREE.PointLight(PAL.lamps[0], PAL.lampPower * 1.5, 15, 1.6);
+  lampLights.push([centre, 1.5]);
   centre.position.set(bx, 3.3, bz);
   lamps.add(centre);
   for (const [x, z] of [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72]]) {
     const light = new THREE.PointLight(PAL.lamps[0], PAL.lampPower, 15, 1.6);
+    lampLights.push([light, 1]);
     light.position.set(x, 3.2, z);
     const globe = mesh(new THREE.SphereGeometry(0.24, 12, 8), glow);
     globe.position.set(x, 3.3, z);
@@ -884,6 +900,7 @@ function buildRoom() {
     line.position.set(x, 4.94, z);
     lamps.add(light, globe, hat, line);
   }
+  applyTimeOfDay();
 }
 
 // a potted plant: white pot with a red band, chunky low-poly leaves
@@ -946,6 +963,47 @@ function buildEntrance(cx, z) {
   wet.position.set(cx + 2.9, 0, z - 0.6);
   worldRoot.add(box, awning, valance, mat2, wet);
 }
+
+// ---------- time of day ----------
+// The windows and the light follow the visitor's clock: blue sky by day, a pink-orange sunset,
+// a starry night with the ceiling lights turned up, and a lilac dawn. ?hour=21 previews an hour.
+const lampLights = []; // [light, share of PAL.lampPower]
+const DAYTIME = [
+  // hour, window top, window bottom, sky outside, sky light, sun, sun colour, ceiling lights
+  [0, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
+  [5, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
+  [6.5, '#9fb3e0', '#ffc8b0', '#e2c39c', 0.8, 0.75, '#ffd0b0', 1.5],
+  [8, '#a8d4ef', '#e8f4fb', PAL.sky, PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
+  [17, '#a8d4ef', '#e8f4fb', PAL.sky, PAL.hemi[2], PAL.moon[1], PAL.moon[0], 1],
+  [18.5, '#ee8a5e', '#ffd39a', '#e3a874', 0.85, 0.85, '#ffaa6a', 1.5],
+  [20, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
+  [24, '#16204a', '#34477e', '#3a3552', 0.55, 0.3, '#a9b8ff', 2.6],
+];
+const forcedHour = new URLSearchParams(location.search).get('hour');
+function applyTimeOfDay() {
+  const now = new Date();
+  let h = forcedHour !== null ? Number(forcedHour) : now.getHours() + now.getMinutes() / 60;
+  if (OG || !Number.isFinite(h)) h = 12; // the link preview is always a sunny day
+  h = ((h % 24) + 24) % 24;
+  let k = 0;
+  while (DAYTIME[k + 1][0] < h) k++;
+  const [h0, ...a] = DAYTIME[k];
+  const [h1, ...b] = DAYTIME[k + 1];
+  const f = h1 > h0 ? (h - h0) / (h1 - h0) : 0;
+  const mix = (x, y) => new THREE.Color(x).lerp(new THREE.Color(y), f);
+  const top = mix(a[0], b[0]);
+  const bottom = mix(a[1], b[1]);
+  const night = h < 6 || h > 19.3 ? 1 : 0;
+  drawWindow(`#${top.getHexString()}`, `#${bottom.getHexString()}`, night);
+  scene.background.copy(mix(a[2], b[2]));
+  scene.fog.color.copy(scene.background);
+  hemi.intensity = lerp(a[3], b[3], f);
+  sun.intensity = lerp(a[4], b[4], f);
+  sun.color.copy(mix(a[5], b[5]));
+  const lampScale = lerp(a[6], b[6], f);
+  for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
+}
+setInterval(applyTimeOfDay, 60 * 1000);
 
 // a point in a stall's local space, in world space
 function stallWorld(i, lx, ly, lz) {

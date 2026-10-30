@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>똥타 · 온라인 뒷간</title>
+  <meta name="description" content="다같이 들어와서, 각자 칸에 앉아서 똥 싸고, 같이 떠드는 온라인 뒷간">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💩</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="highway">
+  <div class="scene" id="scene"></div>
+  <div class="labels" id="labels"></div>
+
+  <header class="top">
+    <button class="pill room-btn" id="roomBtn" aria-haspopup="true" aria-expanded="false">
+      <span class="logo">💩 똥타</span>
+      <span class="divider"></span>
+      <span class="room-name" id="roomName">연결 중...</span>
+      <span class="caret">⌄</span>
+    </button>
+    <div class="pill-group">
+      <span class="stat" id="online" title="지금 화장실에 있는 사람">👥 0</span>
+      <span class="stat" id="flushed" title="오늘 내려간 똥">💩 0</span>
+      <button class="icon-btn" id="soundBtn" aria-label="소리 켜기">🔇</button>
+    </div>
+    <div class="room-menu" id="roomMenu" hidden>
+      <div class="theme-tabs" id="themeTabs"></div>
+      <div class="server-list" id="serverList"></div>
+    </div>
+  </header>
+
+  <div class="queue" id="queue" hidden></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <form class="chat-box" id="chatBox" hidden>
+    <input id="chatInput" maxlength="80" placeholder="한마디 하기..." autocomplete="off" enterkeyhint="send">
+    <button type="submit">보내기</button>
+  </form>
+
+  <nav class="actions" id="actions"></nav>
+  <div class="hint" id="hint">방향키 이동 · <b>Space</b> 들어가기 / 힘주기 / 노크 연타 · <b>B</b> 에티켓벨 · <b>Esc</b> 나오기 · <b>Enter</b> 채팅</div>
+
+  <div class="loading" id="loading">💩 화장실 청소 중...</div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

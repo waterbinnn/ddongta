@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>똥타 · 온라인 뒷간</title>
+  <meta name="description" content="다같이 들어와서, 각자 칸에 앉아서 똥 싸고, 같이 떠드는 온라인 뒷간">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💩</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="usa">
+  <div class="scene" id="scene"></div>
+  <div class="labels" id="labels"></div>
+
+  <header class="top">
+    <div class="panel room-btn"><span id="peopleIcon"></span><span id="online">문 여는 중...</span></div>
+    <button class="panel sound-btn" id="soundBtn" type="button" aria-label="소리 켜기"></button>
+  </header>
+
+  <div class="panel badge" id="queue" hidden></div>
+  <div class="panel toast" id="toast" hidden></div>
+
+  <form class="panel chat-box" id="chatBox">
+    <input id="chatInput" maxlength="80" placeholder="칸 너머로 한마디..." autocomplete="off" enterkeyhint="send">
+    <button type="submit">보내기</button>
+  </form>
+
+  <nav class="actions" id="actions"></nav>
+  <div class="today"><span id="todayIcon"></span>오늘 다같이 <b id="todayCount">0</b>번 퐁당</div>
+  <div class="hint" id="hint">드래그로 둘러보고 휠로 확대 · 방향키로 걷고 스페이스바로 앉기·힘주기·노크 · J 점프</div>
+
+  <div class="loading" id="loading"><span id="loadingIcon"></span>휴지 채우는 중...</div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

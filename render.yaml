@@ -1,0 +1,8 @@
+# One-click deploy on Render (render.com): New > Blueprint > pick this repo.
+services:
+  - type: web
+    name: ddongta
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start

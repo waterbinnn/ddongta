@@ -1726,6 +1726,8 @@ function renderActions() {
   actionMode = mode;
   const bar = $('#actions');
   bar.innerHTML = '';
+  const pad = $('#pushPad');
+  pad.innerHTML = '';
   if (mode === 'inside') {
     const push = mainBtn('poop', '꾹 눌러서 힘주기', null, 'push');
     push.addEventListener('pointerdown', (e) => {
@@ -1734,7 +1736,8 @@ function renderActions() {
       setHold(true);
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
-    bar.append(push, miniBtn('bird', '에티켓벨', ringBell), miniBtn('exit', '나가기', exitStall));
+    pad.append(push); // only the poop button lives in the bottom-right
+    bar.append(miniBtn('bird', '에티켓벨', ringBell), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;

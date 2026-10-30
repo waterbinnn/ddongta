@@ -184,60 +184,71 @@ button { font: inherit; color: inherit; cursor: pointer; }
   z-index: 20;
 }
 
-.actions {
-  /* game-style action cluster in the bottom-right corner */
-  position: fixed;
-  right: calc(20px + env(safe-area-inset-right));
-  bottom: calc(84px + env(safe-area-inset-bottom));
+.actions { display: flex; gap: 6px; justify-content: center; }
+
+.act {
   display: flex;
-  flex-direction: row-reverse; /* the main button sits furthest right */
-  align-items: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  transition: transform 0.08s, box-shadow 0.08s, background 0.2s;
+}
+
+.act:hover { background: rgba(44, 52, 68, 0.95); }
+.act:active, .act.on { transform: translateY(1px) scale(0.97); box-shadow: none; }
+.act .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
+
+.act.main { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; padding: 0 20px; font-size: 14px; }
+.act.main:hover { filter: brightness(1.03); }
+.act.main.knock { background: var(--coral); color: var(--coral-ink); }
+.act.main:disabled { opacity: 0.7; cursor: default; }
+
+.act.mini { padding: 0 14px; font-size: 12px; color: var(--text); }
+
+/* ---------- the poop button: a big round game button in the bottom-right ---------- */
+
+.push-pad {
+  position: fixed;
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: calc(28px + env(safe-area-inset-bottom));
   z-index: 21;
 }
 
-.act {
+.push-pad .act.main.push {
   position: relative;
-  display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 2px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--glass-strong);
-  color: var(--text);
-  box-shadow: var(--shadow);
-  -webkit-touch-callout: none;
-  touch-action: none;
-  transition: transform 0.08s, box-shadow 0.15s, background 0.2s;
-}
-
-.act:active, .act.on { transform: scale(0.94); }
-.act .ico { position: relative; z-index: 1; width: calc(var(--w) * 3px); height: calc(var(--h) * 3px); }
-
-/* small round helpers (etiquette bell, leave) */
-.act.mini { width: 56px; height: 56px; font-size: 10px; color: var(--muted); }
-.act.mini .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
-.act.mini:hover { background: rgba(44, 52, 68, 0.95); color: var(--text); }
-
-/* the one big action: glowing, with its label floating above */
-.act.main {
-  width: 96px;
-  height: 96px;
+  width: 112px;
+  height: 112px;
+  padding: 0;
   border: 0;
-  background: radial-gradient(circle at 35% 30%, #ffe9a8, var(--accent) 60%, #e9b94a);
-  color: var(--accent-ink);
-  box-shadow: 0 0 0 0 rgba(255, 217, 120, 0.55), var(--shadow);
-  animation: glow 1.8s ease-out infinite;
+  border-radius: 50%;
+  background: conic-gradient(var(--poop) var(--p, 0%), rgba(255, 255, 255, 0.14) 0);
+  box-shadow: var(--shadow);
 }
 
-.act.main.knock {
-  background: radial-gradient(circle at 35% 30%, #ffd0c6, var(--coral) 60%, #e8806e);
-  animation-name: glow-coral;
+.push-pad .act.main.push::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff7ea, var(--poop-light) 65%, #e6d2b8);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08);
 }
 
-.act.main span {
+.push-pad .act.main.push .ico { position: relative; z-index: 1; width: calc(var(--w) * 3px); height: calc(var(--h) * 3px); }
+
+/* the status ("끄응...") floats above the button */
+.push-pad .act.main.push span {
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
@@ -247,44 +258,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--text);
   box-shadow: var(--shadow-sm);
   font-size: 13px;
-  font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
 }
 
-.act.main:disabled { opacity: 0.75; cursor: default; animation: none; }
-
-@keyframes glow {
-  0% { box-shadow: 0 0 0 0 rgba(255, 217, 120, 0.55), var(--shadow); }
-  70% { box-shadow: 0 0 0 18px rgba(255, 217, 120, 0), var(--shadow); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 217, 120, 0), var(--shadow); }
-}
-
-@keyframes glow-coral {
-  0% { box-shadow: 0 0 0 0 rgba(255, 164, 148, 0.55), var(--shadow); }
-  70% { box-shadow: 0 0 0 18px rgba(255, 164, 148, 0), var(--shadow); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 164, 148, 0), var(--shadow); }
-}
-
-/* the push button: a ring gauge fills around the poop as you hold */
-.act.main.push {
-  width: 112px;
-  height: 112px;
-  background: conic-gradient(var(--poop) var(--p, 0%), rgba(255, 255, 255, 0.14) 0);
-  animation: none;
-}
-
-.act.main.push::before {
-  content: "";
-  position: absolute;
-  inset: 9px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff7ea, var(--poop-light) 65%, #e6d2b8);
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08);
-}
-
-.act.main.push.on .ico { animation: grunt 0.18s steps(2) infinite; }
-.act.main.push.done { background: conic-gradient(var(--accent) 100%, transparent 0); box-shadow: 0 0 28px rgba(255, 217, 120, 0.7); }
+.push-pad .act.main.push:active, .push-pad .act.main.push.on { transform: scale(0.94); }
+.push-pad .act.main.push.on .ico { animation: grunt 0.18s steps(2) infinite; }
+.push-pad .act.main.push.done { background: conic-gradient(var(--accent) 100%, transparent 0); box-shadow: 0 0 28px rgba(255, 217, 120, 0.7); }
 
 @keyframes grunt {
   from { transform: translate(-1px, 1px) scale(1); }
@@ -292,10 +272,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media (max-width: 520px) {
-  .actions { right: 12px; bottom: calc(118px + env(safe-area-inset-bottom)); }
-  .act.main { width: 84px; height: 84px; }
-  .act.main.push { width: 96px; height: 96px; }
-  .act.mini { width: 50px; height: 50px; }
+  .push-pad { right: 14px; bottom: calc(118px + env(safe-area-inset-bottom)); }
+  .push-pad .act.main.push { width: 96px; height: 96px; }
 }
 
 .chat {

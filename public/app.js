@@ -1492,7 +1492,15 @@ function viewFor(facing) {
   return rel > 0 ? 'right' : 'left';
 }
 
+// head-top markers float "up" on screen, not straight up in the world, so looking down from above
+// they still sit over the head instead of landing on the face
+const camUp = new THREE.Vector3();
+function overHead(obj, x, baseY, z, h) {
+  obj.position.set(x, baseY, z).addScaledVector(camUp, h);
+}
+
 function placeWalkers(dt, t) {
+  camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
   for (const [id, e] of users) {
     const u = e.data;
     const mine = id === meId;
@@ -1545,7 +1553,7 @@ function placeWalkers(dt, t) {
       e.spr.position.set(X, 0.3 + lift, Z);
       e.blob.position.set(X, 0.01, Z);
       e.halo.visible = false;
-      e.marker.position.set(X, 1.25 + lift + (Math.floor(t / 300) % 2) * 0.04, Z);
+      overHead(e.marker, X, 0.3 + lift, Z, 0.95 + (Math.floor(t / 300) % 2) * 0.04);
       continue;
     }
     if (washing) e.view = viewFor(Math.atan2(BASIN.x - e.rx, BASIN.y - e.ry)); // look at the basin
@@ -1563,8 +1571,8 @@ function placeWalkers(dt, t) {
     }
     e.blob.position.set(X, 0.01, Z);
     e.halo.visible = face === 'bliss' && !rolling;
-    e.halo.position.set(X, 1.12, Z);
-    e.marker.position.set(X, 1.25 + lift + (Math.floor(t / 300) % 2) * 0.04, Z);
+    overHead(e.halo, X, lift, Z, 1.12);
+    overHead(e.marker, X, lift, Z, 1.25 + (Math.floor(t / 300) % 2) * 0.04);
   }
 }
 
@@ -1899,7 +1907,7 @@ function headOf(id) {
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
   if (seat !== -1) return stallWorld(seat, STALL_M / 2, 2.2 + SIT_LIFT, SEAT_Z);
-  return new THREE.Vector3(toX(e.rx), 1.2, toZ(e.ry));
+  return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, 1.2); // screen-up, like the markers
 }
 
 function updateLabels(dt) {
@@ -1911,7 +1919,7 @@ function updateLabels(dt) {
       if (h) f.anchor.copy(h);
     }
     const pos = f.anchor.clone();
-    pos.y += (f.stack || 0) + f.rise * Math.min(1, f.age / f.life);
+    pos.addScaledVector(camUp, (f.stack || 0) + f.rise * Math.min(1, f.age / f.life));
     const p = toScreen(pos);
     const fadeIn = Math.min(1, f.age / 0.15);
     const fadeOut = Math.min(1, (f.life - f.age) / 0.8);

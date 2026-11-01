@@ -124,9 +124,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-.badge { top: calc(62px + var(--top-edge)); z-index: 19; background: rgba(255, 211, 78, 0.72); color: var(--accent-ink); border-color: transparent; }
-.toast { top: calc(62px + var(--top-edge)); z-index: 18; background: var(--glass-soft); box-shadow: var(--shadow); transition: opacity 0.5s; }
-.badge:not([hidden]) ~ .toast { top: calc(102px + var(--top-edge)); }
+.badge { top: calc(100px + var(--top-edge)); z-index: 19; background: rgba(255, 211, 78, 0.72); color: var(--accent-ink); border-color: transparent; }
+/* (below the 공간 이동 button, never over it) */
+.toast { top: calc(100px + var(--top-edge)); z-index: 18; background: var(--glass-soft); box-shadow: var(--shadow); transition: opacity 0.5s; }
+.badge:not([hidden]) ~ .toast { top: calc(140px + var(--top-edge)); }
 .toast.out { opacity: 0; }
 .badge[hidden], .toast[hidden] { display: none; }
 
@@ -152,7 +153,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* the name of the place you just walked into, like a title card */
 .place-name {
   position: fixed;
-  top: calc(108px + var(--top-edge));
+  top: calc(146px + var(--top-edge)); /* under the toast */
   left: 50%;
   z-index: 17;
   display: flex;
@@ -171,7 +172,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .place-name::before, .place-name::after { content: ''; width: 28px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0.8; }
 .place-name.on { opacity: 1; transform: translate(-50%, 0); }
-@media (max-width: 520px) { .place-name { font-size: 19px; top: calc(96px + var(--top-edge)); } }
+@media (max-width: 520px) { .place-name { font-size: 19px; top: calc(144px + var(--top-edge)); } }
 
 /* ---------- labels over the scene ---------- */
 
@@ -268,14 +269,15 @@ body:not(.wish-near) .chat { display: none; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .actions .break { flex-basis: 100%; height: 0; } /* starts a new line of buttons */
 
-/* the side rail: a column of small buttons at the right edge, out of the way of the main bar */
+/* the side rail: a column of small buttons in the bottom right corner, just above the main bar and out of the way
+   of the scene (on a phone, level with the stick on the other side), growing upward as buttons come */
 .rail {
   position: fixed;
   right: calc(12px + env(safe-area-inset-right));
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: calc(110px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: flex-end;
   gap: 8px;
   z-index: 20;
@@ -597,6 +599,7 @@ body.typing .keys { display: none; }
     touch-action: none;
     z-index: 12;
   }
+  .rail { bottom: calc(150px + env(safe-area-inset-bottom)); } /* level with the stick */
   .joy .knob {
     position: absolute;
     left: 50%;

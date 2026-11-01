@@ -248,37 +248,13 @@ let roomStanding = false; // up off the toilet, standing in the room
 let roomSeat = -1; // sitting on one of the room's seats (the stool, the sofa), resting; -1 when not
 let roomLastSeat = 0; // the last one, to get up beside it
 let bookOpen = false; // reading the book, until you close it
-let bookPage = 0; // which spread it's open at
 let danceUntil = 0; // dancing until then
 const reading = () => bookOpen;
 const dancing = () => performance.now() < danceUntil;
-// the book on the shelf: 『쾌변의 기술』, two pages a spread
-const BOOK = [
-  ['제1장 · 신호', '모든 일에는 때가 있다. 똥도 그렇다. 신호가 오면 하던 일을 내려놓고 일어서라. 미룬 신호는 다시 오지 않거나, 가장 곤란할 때 다시 온다.', '몸이 보내는 신호를 듣는 사람은 하루가 가볍다. 오늘 아침 당신의 배는 무엇이라 말했는가.'],
-  ['제2장 · 자세', '무릎을 엉덩이보다 조금 높이 두면 길이 곧아진다. 옛사람들이 쪼그려 앉았던 데에는 다 이유가 있다.', '허리를 살짝 숙이고 숨을 길게 내쉬어라. 힘은 주는 것이 아니라 흘려보내는 것이다.'],
-  ['제3장 · 기다림', '나오지 않는 날도 있다. 그런 날에는 물을 한 잔 마시고 창밖을 보라. 조급함은 장을 굳게 만든다.', '기다림은 패배가 아니다. 좋은 것은 대개 천천히 온다.'],
-  ['제4장 · 비움', '다 비우고 일어설 때의 가벼움을 기억하라. 그것이 오늘을 버티게 하는 작은 승리다.', '비워야 채울 수 있다. 장도, 마음도, 메일함도.'],
-  ['맺음말', '이 책을 변기 위에서 다 읽었다면, 당신은 이미 너무 오래 앉아 있었다.', '다리 저리기 전에 일어나라. 그리고 손을 씻어라.\n\n— 끝 —'],
-];
-function showBookPage() {
-  const [chapter, left, right] = BOOK[bookPage];
-  $('#book .chapter').textContent = chapter;
-  $('#book .left p').textContent = left;
-  $('#book .right p').textContent = right;
-  $('#book .left .no').textContent = bookPage * 2 + 1;
-  $('#book .right .no').textContent = bookPage * 2 + 2;
-}
-// 책 읽기 / 책 덮기: open it where you left off, close it whenever
+// 책 읽기 / 책 덮기: a book open in your hands until you close it (nothing pops up on the screen)
 function toggleBook() {
   bookOpen = !bookOpen;
-  if (bookOpen) {
-    setHold(false);
-    showBookPage();
-  }
-}
-function turnPage() {
-  bookPage = (bookPage + 1) % BOOK.length;
-  showBookPage();
+  if (bookOpen) setHold(false);
 }
 // up off the toilet, the stool or the sofa (there's no button for it: tap anywhere, or press the down arrow)
 function standUpInRoom() {
@@ -1165,7 +1141,7 @@ function applyTimeOfDay() {
   for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
   const dark = clamp((lampScale - 1) / 1.6, 0, 1); // 0 by day, 1 at night
   for (const glow of glows) glow(dark);
-  room.windowMat.color.copy(skyUniforms.mid.value).lerp(skyUniforms.horizon.value, 0.4);
+  room.windowMat.color.setScalar(lerp(1, 0.2, clamp((lampScale - 1) / 1.6, 0, 1))); // the view outside darkens at night
 }
 setInterval(applyTimeOfDay, 60 * 1000);
 
@@ -1184,8 +1160,8 @@ const wishHits = []; // the golden poop statue: tapping it walks you up to it
 // what a stall is called: "공중화장실 3번 칸" or "프리미엄 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
 
-// A premium room's spot: a bay of the open temple's colonnade. There is no door; only the room's number is carved
-// on the architrave above, with a small light beside it (green free, red in use). Whoever is inside is in their own
+// A premium room's spot: a bay of the open pavilion. There is no door; only the room's number is on a plaque on the
+// beam above, with a small light beside it (green free, red in use). Whoever is inside is in their own
 // room, so nobody shows out here.
 function makePrivateDoor(i) {
   const L = LAYOUT[i];
@@ -1194,12 +1170,12 @@ function makePrivateDoor(i) {
   const doorCanvas = canvas(48, 112, () => {}); // (no door to draw; kept so the stall code can treat every stall alike)
   const doorTex = new THREE.CanvasTexture(doorCanvas);
   doorTex.colorSpace = THREE.SRGBColorSpace;
-  // the number, carved into a small marble tablet on the architrave above this bay of the colonnade
+  // the number, on a small plaque on the beam above this bay of the pavilion
   const archY = GROUNDS.wallH * U - 0.64;
   const plate = canvas(64, 36, (c) => {
-    c.fillStyle = '#ece6da';
+    c.fillStyle = '#e8d6b0'; // pale wood
     c.fillRect(0, 0, 64, 36);
-    c.fillStyle = '#6b5a44';
+    c.fillStyle = '#4a3220';
     c.font = '600 24px Georgia, "Times New Roman", serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
@@ -1209,10 +1185,10 @@ function makePrivateDoor(i) {
   plateTex.colorSpace = THREE.SRGBColorSpace;
   const face = new THREE.MeshLambertMaterial({ map: plateTex }); // (lights up under the pointer)
   const tablet = mesh(new THREE.PlaneGeometry(0.34, 0.19), face);
-  tablet.position.set(0.55, archY, 0.43);
+  tablet.position.set(0.55, archY, 0.53);
   g.add(tablet);
   const lock = mesh(G.lock, M.lockGreen);
-  lock.position.set(0.8, archY, 0.435);
+  lock.position.set(0.8, archY, 0.535);
   g.add(lock);
   const hinge = new THREE.Group(); // no door to swing any more
   hinge.visible = false;
@@ -1941,7 +1917,7 @@ function clearDist(fx, fz, yaw, pitch, dist) {
   const P = GROUNDS.public;
   const T = GROUNDS.private;
   const walls = [
-    { x0: T.x0 - 35, x1: T.x1 + 35, y0: T.y0 - 50, y1: T.y1 + 50, lo: GROUNDS.wallH * U - 0.85, h: GROUNDS.wallH * U + 1.3 }, // the open temple's roof, overhead
+    { x0: T.x0 - 130, x1: T.x1 + 130, y0: T.y0 - 150, y1: T.y1 + 150, lo: GROUNDS.wallH * U - 0.85, h: GROUNDS.wallH * U + 2.0 }, // the pavilion's thatched roof, overhead
     { x0: P.x0, x1: P.x1, y0: P.y0, y1: P.doorLine }, // the stalls and the back wall
     { x0: P.x0 - 20, x1: P.x0 + 20, y0: P.y0, y1: P.y1 }, // the side walls
     { x0: P.x1 - 20, x1: P.x1 + 20, y0: P.y0, y1: P.y1 },
@@ -2286,7 +2262,6 @@ function syncRoom(t, dt) {
   }
   if (spot === 'wash') bookOpen = false;
   if (spot !== 'stand') danceUntil = 0;
-  $('#book').hidden = !bookOpen;
   room.mood.tick(t / 1000, dancing());
   if (!dancing() && room.mood.name !== 'party' && partyLit) room.mood.set(room.mood.name); // the party's over: back to how it was
   partyLit = dancing() || room.mood.name === 'party';
@@ -4170,7 +4145,6 @@ document.addEventListener('keydown', startSoundOnce, true);
 
 $('#recenterBtn').innerHTML = icoImg('recenter');
 $('#recenterBtn').addEventListener('click', recenterCam);
-$('#turnPage').addEventListener('click', turnPage);
 // the sound button opens a small menu: effects only / with music / off
 const SOUND_MODES = {
   fx: { icon: 'soundOn', label: '효과음만', toast: '효과음만 들려요' },

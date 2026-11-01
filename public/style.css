@@ -282,33 +282,6 @@ body:not(.wish-near) .chat { display: none; }
 }
 .rail:empty { display: none; }
 
-/* the book open in your hands: two cream pages in a serif, a soft fold down the middle */
-.book {
-  position: fixed;
-  left: 50%;
-  top: calc(84px + var(--top-edge, 0px));
-  transform: translateX(-50%);
-  z-index: 18;
-  width: min(560px, calc(100vw - 24px));
-  padding: 10px 12px 12px;
-  border-radius: 8px;
-  background: #6b3b2a; /* the cover, showing round the pages */
-  box-shadow: 0 10px 30px rgba(30, 15, 5, 0.35);
-  font-family: "Nanum Myeongjo", "AppleMyungjo", "Batang", Georgia, serif;
-}
-.book[hidden] { display: none; }
-.book .title { text-align: center; color: #f3dfb8; font-size: 12px; letter-spacing: 0.08em; margin-bottom: 6px; }
-.book .spread { display: grid; grid-template-columns: 1fr 1fr; background: #fbf6ea; border-radius: 3px; }
-.book .page { position: relative; min-height: 150px; padding: 16px 18px 26px; color: #3d2c1e; }
-.book .left { background: linear-gradient(to left, rgba(120, 90, 50, 0.16), transparent 18%); }
-.book .right { background: linear-gradient(to right, rgba(120, 90, 50, 0.16), transparent 18%); }
-.book .chapter { font-size: 12px; color: #a07a4a; margin-bottom: 8px; }
-.book p { margin: 0; font-size: 14px; line-height: 1.7; white-space: pre-line; }
-.book .no { position: absolute; bottom: 8px; font-size: 10px; color: #a8957a; }
-.book .left .no { left: 18px; }
-.book .right .no { right: 18px; }
-.book .turn { position: absolute; right: 14px; bottom: -14px; padding: 5px 12px; border: 0; border-radius: 999px; background: #f3dfb8; color: #4a2f1c; font: 600 12px -apple-system, BlinkMacSystemFont, sans-serif; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); cursor: pointer; }
-@media (max-width: 480px) { .book p { font-size: 13px; } .book .page { padding: 12px 12px 24px; min-height: 130px; } }
 .rail .act { height: 38px; }
 /* stuck with 변비 and a drink in hand: the drink is the way out */
 .rail .act.urge { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; animation: urge 1.2s ease-in-out infinite; }

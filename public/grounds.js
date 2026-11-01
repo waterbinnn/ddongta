@@ -261,10 +261,9 @@ export function buildGrounds(kit) {
     add(mirror, x1 - 0.12, 1.55, cz);
   }
 
-  // ---------- the premium restroom: an open marble temple, like one on the Acropolis. A colonnade all round with
-  // nothing between the columns, so you see straight through to the trees beyond; an entablature (architrave, a frieze
-  // of triglyphs, a cornice) on top, a low roof with a pediment at each end, a golden poop in relief in the front one,
-  // and a marble floor with a key-pattern border underneath. Bronze braziers burn inside at night ----------
+  // ---------- the premium restroom: an open resort pavilion, like a Balinese bale. Teak posts all round with nothing
+  // between them, a deep, steep thatched roof hanging low over the eaves, a slate floor edged in teak, tiki torches
+  // at the front corners and palms leaning over it all ----------
   {
     const p = L.private;
     const x0 = p.x0 * U;
@@ -276,123 +275,153 @@ export function buildGrounds(kit) {
     const cz = (z0 + z1) / 2;
     const W = x1 - x0;
     const D = z1 - z0;
-    const marble = new THREE.MeshPhongMaterial({ color: '#f1ece2', shininess: 18 });
-    const shade = new THREE.MeshPhongMaterial({ color: '#ddd5c7', shininess: 10 }); // the same marble in shadowed details
-    // the floor: a marble platform barely above the grass, a Greek key running round its edge
-    const keyTex = (() => {
+    const canvasMat = (w, h, draw, extra = {}) => {
       const c = document.createElement('canvas');
-      c.width = 512;
-      c.height = 256;
-      const g = c.getContext('2d');
-      g.fillStyle = '#efe9dd';
-      g.fillRect(0, 0, 512, 256);
-      g.strokeStyle = '#b9ac96';
-      g.lineWidth = 3;
-      for (let k = 0; k < 2; k++) g.strokeRect(10 + k * 14, 10 + k * 14, 492 - k * 28, 236 - k * 28);
-      const step = 16;
-      g.lineWidth = 2.5;
-      const meander = (x, y, dir) => {
-        g.beginPath();
-        g.moveTo(x, y);
-        for (const [dx, dy] of [[0, -step], [step * 1.5, 0], [0, step * 0.75], [-step * 0.75, 0], [0, -step * 0.4]]) g.lineTo((x += dx * dir), (y += dy));
-        g.stroke();
-      };
-      for (let x = 44; x < 470; x += step * 2) meander(x, 32, 1);
-      for (let x = 44; x < 470; x += step * 2) meander(x, 236, 1);
+      c.width = w;
+      c.height = h;
+      draw(c.getContext('2d'));
       const t = new THREE.CanvasTexture(c);
       t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    })();
-    block(W + 1.2, 0.04, D + 1.2, new THREE.MeshPhongMaterial({ map: keyTex, shininess: 20 }), cx, 0.02, cz, { receive: true });
-    // the columns: base, fluted shaft, capital
-    const cols = L.templeColumns.map((c) => [c.x * U, c.y * U]);
-    const COL_H = WH - 0.8; // up to the entablature
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return new THREE.MeshLambertMaterial({ map: t, ...extra });
+    };
+    const teak = canvasMat(64, 256, (g) => {
+      g.fillStyle = '#9a663a';
+      g.fillRect(0, 0, 64, 256);
+      for (let k = 0; k < 24; k++) {
+        g.fillStyle = k % 2 ? 'rgba(120, 72, 36, 0.35)' : 'rgba(190, 136, 84, 0.3)';
+        g.fillRect(rnd(k + 70) * 64, 0, 1 + rnd(k + 90) * 2, 256);
+      }
+    });
+    // the floor: dark slate in big tiles, a teak edge
+    const slate = canvasMat(256, 256, (g) => {
+      for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
+        const t = 0.9 + rnd(ty * 2 + tx + 400) * 0.15;
+        g.fillStyle = `rgb(${Math.round(70 * t)}, ${Math.round(76 * t)}, ${Math.round(78 * t)})`;
+        g.fillRect(tx * 128, ty * 128, 128, 128);
+        g.fillStyle = 'rgba(25, 28, 30, 0.9)';
+        g.fillRect(tx * 128, ty * 128, 128, 2);
+        g.fillRect(tx * 128, ty * 128, 2, 128);
+      }
+    });
+    slate.map.repeat.set((W + 1.2) / 1.2, (D + 1.2) / 1.2);
+    block(W + 1.2, 0.05, D + 1.2, slate, cx, 0.025, cz, { receive: true });
+    for (const s of [-1, 1]) {
+      block(W + 1.3, 0.07, 0.08, teak, cx, 0.035, cz + s * (D + 1.2) / 2);
+      block(0.08, 0.07, D + 1.3, teak, cx + s * (W + 1.2) / 2, 0.035, cz);
+    }
+    // the posts: square teak on stone footings, a carved collar near the top
+    const posts = L.templeColumns.map((c) => [c.x * U, c.y * U]);
+    const POST_H = WH - 0.8;
     const m4 = new THREE.Matrix4();
-    const parts = [
-      [new THREE.CylinderGeometry(0.21, 0.23, 0.12, 20), shade, 0.1],
-      [new THREE.CylinderGeometry(0.135, 0.165, COL_H - 0.34, 20), marble, 0.16 + (COL_H - 0.34) / 2],
-      [new THREE.CylinderGeometry(0.21, 0.14, 0.12, 20), marble, COL_H - 0.16],
-      [new THREE.BoxGeometry(0.44, 0.1, 0.44), shade, COL_H - 0.05],
-    ];
-    for (const [geo, material, y] of parts) {
-      const im = new THREE.InstancedMesh(geo, material, cols.length);
-      cols.forEach(([x, z], k) => im.setMatrixAt(k, m4.makeTranslation(x, y, z)));
+    const stone = mat('#7d7a72');
+    for (const [geo, material, y] of [
+      [new THREE.BoxGeometry(0.34, 0.22, 0.34), stone, 0.11],
+      [new THREE.BoxGeometry(0.2, POST_H - 0.22, 0.2), teak, 0.22 + (POST_H - 0.22) / 2],
+      [new THREE.BoxGeometry(0.26, 0.12, 0.26), teak, POST_H - 0.4],
+    ]) {
+      const im = new THREE.InstancedMesh(geo, material, posts.length);
+      posts.forEach(([x, z], k) => im.setMatrixAt(k, m4.makeTranslation(x, y, z)));
       im.castShadow = im.receiveShadow = true;
       root.add(im);
     }
-    const flute = new THREE.InstancedMesh(new THREE.BoxGeometry(0.018, COL_H - 0.42, 0.018), shade, cols.length * 8);
-    cols.forEach(([x, z], k) => {
-      for (let f = 0; f < 8; f++) {
-        const a = (f / 8) * Math.PI * 2;
-        flute.setMatrixAt(k * 8 + f, m4.makeTranslation(x + Math.cos(a) * 0.15, 0.16 + (COL_H - 0.34) / 2, z + Math.sin(a) * 0.15));
-      }
-    });
-    root.add(flute);
-    // the entablature, on the columns all round (its underside the ceiling, seen from inside)
+    // the ring beam the roof sits on (its front carries the room numbers)
     const ow = W + 0.5;
     const od = D + 0.82;
-    block(ow, 0.32, od, marble, cx, COL_H + 0.16, cz);
-    block(ow - 0.02, 0.3, od - 0.02, shade, cx, COL_H + 0.47, cz);
-    const triglyphs = Math.round(ow / 0.6);
-    for (let k = 0; k <= triglyphs; k++) {
-      const x = cx - ow / 2 + 0.1 + (k * (ow - 0.2)) / triglyphs;
-      for (const z of [cz + od / 2, cz - od / 2]) block(0.18, 0.3, 0.04, marble, x, COL_H + 0.47, z);
+    for (const s of [-1, 1]) {
+      block(ow, 0.3, 0.22, teak, cx, POST_H + 0.15, cz + (s * od) / 2);
+      block(0.22, 0.3, od, teak, cx + (s * ow) / 2, POST_H + 0.15, cz);
     }
-    block(ow + 0.2, 0.14, od + 0.2, marble, cx, COL_H + 0.69, cz); // the cornice
-    // a warm light hidden under the architrave's front edge, for the room spots at night
+    for (let k = 1; k < 6; k++) block(0.12, 0.12, od, teak, cx - ow / 2 + (k * ow) / 6, POST_H + 0.36, cz); // cross beams
+    // a warm light hidden under the front beam, for the room spots at night
     const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
-    block(ow - 0.2, 0.02, 0.04, strip, cx, COL_H - 0.01, cz + od / 2 - 0.02);
-    // the roof: a low gable, the ridge front to back, a pediment at each end
-    const top = COL_H + 0.76;
-    const rise = 1.0;
-    const hx = (ow + 0.2) / 2;
-    const zf = cz + (od + 0.2) / 2;
-    const zb = cz - (od + 0.2) / 2;
-    const v = [[cx - hx, top, zf], [cx + hx, top, zf], [cx, top + rise, zf], [cx - hx, top, zb], [cx + hx, top, zb], [cx, top + rise, zb]];
-    const tris = [[0, 1, 2], [4, 3, 5], [3, 0, 2], [3, 2, 5], [1, 4, 5], [1, 5, 2]];
+    block(ow - 0.2, 0.02, 0.04, strip, cx, POST_H - 0.01, cz + od / 2 - 0.02);
+    // the thatched roof: a steep hip, thick at the eaves, hanging well out over the posts
+    const thatch = canvasMat(128, 128, (g) => {
+      g.fillStyle = '#b8955c';
+      g.fillRect(0, 0, 128, 128);
+      for (let row = 0; row < 128; row += 8) {
+        for (let k = 0; k < 40; k++) {
+          g.strokeStyle = ['rgba(150, 118, 66, 0.7)', 'rgba(214, 186, 128, 0.6)', 'rgba(120, 92, 50, 0.6)'][k % 3];
+          g.lineWidth = 1;
+          const x = rnd(row * 50 + k) * 128;
+          g.beginPath();
+          g.moveTo(x, row);
+          g.lineTo(x + (rnd(row + k * 3) - 0.5) * 4, row + 10);
+          g.stroke();
+        }
+        g.fillStyle = 'rgba(90, 66, 34, 0.35)';
+        g.fillRect(0, row + 7, 128, 1);
+      }
+    }, { side: THREE.DoubleSide });
+    thatch.map.repeat.set(6, 3);
+    const ov = 1.0;
+    const rise = 2.3;
+    const eave = POST_H + 0.42;
+    const [rx0, rx1, rz0, rz1] = [cx - ow / 2 - ov, cx + ow / 2 + ov, cz - od / 2 - ov, cz + od / 2 + ov];
+    const half = (rz1 - rz0) / 2;
+    const top = eave + rise;
+    const v = [[rx0, eave, rz1], [rx1, eave, rz1], [rx1 - half * 0.6, top, cz], [rx0 + half * 0.6, top, cz], [rx1, eave, rz0], [rx0, eave, rz0]];
+    const tris = [[0, 1, 2], [0, 2, 3], [4, 5, 3], [4, 3, 2], [1, 4, 2], [5, 0, 3]];
+    const uv = { 0: [0, 0], 1: [1, 0], 2: [0.8, 1], 3: [0.2, 1], 4: [0, 0], 5: [1, 0] };
     const roofGeo = new THREE.BufferGeometry();
     roofGeo.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat().flatMap((k) => v[k]), 3));
+    roofGeo.setAttribute('uv', new THREE.Float32BufferAttribute(tris.flat().flatMap((k) => uv[k]), 2));
     roofGeo.computeVertexNormals();
-    root.add(mesh(roofGeo, new THREE.MeshPhongMaterial({ color: '#e6dfd2', shininess: 10, side: THREE.DoubleSide }), { cast: true, receive: true }));
-    const slope = Math.atan2(rise, hx);
-    for (const z of [zf + 0.03, zb - 0.03]) {
-      for (const side of [-1, 1]) {
-        const rake = mesh(new THREE.BoxGeometry(Math.hypot(hx, rise) + 0.1, 0.14, 0.16), marble, { cast: true });
-        rake.rotation.z = side * slope;
-        add(rake, cx - (side * hx) / 2, top + rise / 2 + 0.06, z);
-      }
+    root.add(mesh(roofGeo, thatch, { cast: true, receive: true }));
+    // the thick edge of the thatch all round the eaves, and a dark ridge along the top
+    const edge = mat('#8f6f3e');
+    for (const s of [-1, 1]) {
+      block(rx1 - rx0 + 0.1, 0.28, 0.3, edge, cx, eave - 0.1, s < 0 ? rz0 : rz1);
+      block(0.3, 0.28, rz1 - rz0 + 0.1, edge, s < 0 ? rx0 : rx1, eave - 0.1, cz);
     }
-    const relief = new THREE.MeshPhongMaterial({ color: '#ffd400', shininess: 70, emissive: '#7a5a00', emissiveIntensity: 0.25 });
-    [[0.38, 0.11, top + 0.18], [0.27, 0.1, top + 0.36], [0.16, 0.09, top + 0.52]].forEach(([r, h, y]) => {
-      const tier = mesh(new THREE.CylinderGeometry(r * 0.85, r, h, 24), relief, { cast: false });
-      tier.scale.z = 0.35; // flattened against the pediment
-      add(tier, cx, y, zf + 0.04);
-    });
-    const tip = mesh(new THREE.ConeGeometry(0.09, 0.16, 16), relief, { cast: false });
-    tip.scale.z = 0.35;
-    add(tip, cx, top + 0.66, zf + 0.04);
-    // two bronze braziers inside, their fire glowing at night
-    const bronze = new THREE.MeshPhongMaterial({ color: '#8a5a2b', shininess: 60, specular: '#ffcf80' });
+    block(rx1 - rx0 - half * 1.2 + 0.2, 0.16, 0.22, mat('#5e4a2c'), cx, top + 0.04, cz);
+    // tiki torches at the front corners, burning at night
     const fire = new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a1c', emissiveIntensity: 0.3 });
-    for (const x of [x0 + W * 0.25, x1 - W * 0.25]) {
-      for (let k = 0; k < 3; k++) {
-        const a = (k / 3) * Math.PI * 2;
-        const leg = mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.9, 6), bronze);
-        leg.rotation.set(Math.sin(a) * 0.18, 0, -Math.cos(a) * 0.18);
-        add(leg, x + Math.cos(a) * 0.12, 0.45, cz + Math.sin(a) * 0.12);
-      }
-      add(mesh(new THREE.SphereGeometry(0.22, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), bronze), x, 0.98, cz); // the bowl
-      add(mesh(new THREE.ConeGeometry(0.14, 0.3, 10), fire, { cast: false }), x, 1.08, cz); // the flame
-      const flameLight = new THREE.PointLight('#ff9a3c', 0, 5, 1.6);
-      flameLight.position.set(x, 1.3, cz);
-      lamps.add(flameLight);
-      glows.push((dark) => (flameLight.intensity = 2.2 * dark));
+    const bamboo = mat('#b8a06a');
+    for (const x of [x0 - 0.75, x1 + 0.75]) {
+      const z = z1 + 0.9;
+      add(mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.7, 8), bamboo), x, 0.85, z);
+      add(mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.2, 10), mat('#6b4a2c')), x, 1.75, z);
+      add(mesh(new THREE.ConeGeometry(0.08, 0.26, 10), fire, { cast: false }), x, 1.98, z);
+      const flame = new THREE.PointLight('#ff9a3c', 0, 5, 1.6);
+      flame.position.set(x, 2.1, z);
+      lamps.add(flame);
+      glows.push((dark) => (flame.intensity = 2 * dark));
     }
     glows.push((dark) => {
       strip.emissiveIntensity = 0.2 + 0.9 * dark;
       fire.emissiveIntensity = 0.3 + 0.9 * dark;
     });
+    // the palms: a ringed trunk curving up, a crown of drooping fronds, a few coconuts
+    const trunkMat = mat('#8a7458');
+    const frondMat = new THREE.MeshLambertMaterial({ color: '#4f8f3e', side: THREE.DoubleSide });
+    for (const palm of L.palms) {
+      const [px, pz] = P(palm);
+      const n = 8;
+      let x = px;
+      let y = 0;
+      for (let k = 0; k < n; k++) {
+        const seg = palm.h / n;
+        const lean = palm.lean * (k / n) * (k / n);
+        const piece = mesh(new THREE.CylinderGeometry(0.11 - k * 0.006, 0.13 - k * 0.006, seg + 0.02, 10), trunkMat);
+        piece.rotation.z = -lean * 0.6;
+        add(piece, x, y + seg / 2, pz);
+        x += Math.sin(lean * 0.6) * seg;
+        y += seg;
+      }
+      for (let k = 0; k < 9; k++) {
+        const a = (k / 9) * Math.PI * 2;
+        const frond = mesh(new THREE.SphereGeometry(1, 12, 6), frondMat);
+        frond.scale.set(1.5, 0.05, 0.28);
+        frond.position.set(x + Math.cos(a) * 1.2, y - 0.35, pz + Math.sin(a) * 1.2);
+        frond.rotation.set(0, -a, -0.45);
+        root.add(frond);
+      }
+      for (let k = 0; k < 3; k++) add(mesh(new THREE.SphereGeometry(0.1, 10, 8), mat('#6b5a2c')), x + Math.cos(k * 2) * 0.15, y - 0.15, pz + Math.sin(k * 2) * 0.15);
+    }
   }
+
 
 
 

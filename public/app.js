@@ -137,6 +137,30 @@ const PROPS = {
   drop: sprite(['.d.', 'ddd', '.d.'], { d: '#8fd6ff' }, null, null),
 };
 
+// every kind does its own poop: a person the usual swirl, an elephant a big heap of it, dogs and cats little ones,
+// a rabbit a handful of pellets, a giraffe a long log and a wombat (as real wombats do) a cube
+const POOP_ROWS = {
+  swirl: ['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'],
+  pellets: ['........', '.hp.....', '.pP..hp.', '.....pP.', '..hp....', '..pP.hp.', '.....pP.', '........'],
+  log: ['........', '........', '........', '.hhppp..', 'hpppppPP', 'pppppPPP', '.PPPPPP.', '........'],
+  cube: ['........', '.hhhhhh.', '.hppppP.', '.hppppP.', '.hppppP.', '.hppppP.', '.PPPPPP.', '........'],
+};
+const POOPS = Object.fromEntries(
+  Object.entries(POOP_ROWS).map(([shape, rows]) => [
+    shape,
+    [sprite(rows, { p: '#8a5228', P: '#5e3517', h: '#c88a50' }), sprite(rows, { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' })],
+  ]),
+);
+// [shape, size of the one left under you], and the sound it makes
+const POOP_OF = {
+  person: ['swirl', 1], elephant: ['swirl', 1.9], dog: ['swirl', 0.65], cat: ['swirl', 0.6],
+  rabbit: ['pellets', 0.8], giraffe: ['log', 1.2], wombat: ['cube', 0.9],
+};
+const POOP_SOUND = { elephant: '쿵', dog: '톡', cat: '사각', rabbit: '톡톡톡톡', giraffe: '휘이이… 퐁', wombat: '또각' };
+const kindOf = (id) => (id === meId ? me.k : users.get(id)?.data.k) || 'person';
+const poopArt = (id, gold = false) => POOPS[(POOP_OF[kindOf(id)] || POOP_OF.person)[0]][gold ? 1 : 0];
+const poopSize = (id) => (POOP_OF[kindOf(id)] || POOP_OF.person)[1];
+
 const ICON_PAL = {
   D: '#b07a48', d: '#e2b07a', k: '#ffe08a', F: '#ffd9b8', f: '#e6b48c', B: '#8fd0ff', b: '#4f9fd8', Y: '#ffb347',
   y: '#c98a2a', A: '#6dbb7a', W: '#ffffff', w: '#cfe1ec', G: '#9a8a7a', g: '#d8eef8', H: '#8a5a3a', S: '#8a7a6a', x: '#e88a7a',
@@ -2061,7 +2085,7 @@ function placeWalkers(dt, t) {
       e.exMove = move; // each move starts from its beginning
       e.exStart = sec;
     }
-    pose(p, { mode, phase: e.phase, t: mode === 'kick' ? e.kickT : move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h) });
+    pose(p, { mode, phase: e.phase, t: mode === 'kick' ? e.kickT : move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h), upright: Boolean((u.pk || []).length) }); // an animal carrying a drink walks on two legs
     handFor(p, id, u, true);
     if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
@@ -2208,7 +2232,7 @@ function onPoop(m) {
   const inside = byMe && inRoom;
   const h = headOf(m.id);
   if (h) {
-    const sound = m.bush ? '뿌직' : '퐁당';
+    const sound = POOP_SOUND[kindOf(m.id)] || (m.bush ? '뿌직' : '퐁당');
     pop(h.clone(), m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `${sound}! 오늘 ${m.n}번째` : sound, inside);
     if (m.gold && !inside) sparkle(h);
   }
@@ -2222,7 +2246,7 @@ function onPoop(m) {
   if (byMe) {
     flashUntil = performance.now() + 1300;
     buzz([30, 40, 90]);
-    plop(1); // only your own poop makes a sound; a room of dozens would be a racket
+    poopSound(kindOf(m.id)); // only your own poop makes a sound; a room of dozens would be a racket
   }
 }
 
@@ -2236,7 +2260,7 @@ function syncUnder(p, id, show, squat) {
   if (!p.under || p.underGold !== underGold.has(id)) {
     if (p.under) p.group.remove(p.under);
     p.underGold = underGold.has(id);
-    p.under = pixelSprite(p.underGold ? PROPS.goldPoop : PROPS.poop, 0.022);
+    p.under = pixelSprite(poopArt(id, p.underGold), 0.022 * poopSize(id));
     p.group.add(p.under);
   }
   p.under.visible = show;
@@ -2250,7 +2274,7 @@ const leftovers = [];
 const LEFTOVER_S = 45;
 function leaveBehind(p, id) {
   const at = p.under.getWorldPosition(new THREE.Vector3());
-  const s = pixelSprite(underGold.has(id) ? PROPS.goldPoop : PROPS.poop, 0.022);
+  const s = pixelSprite(poopArt(id, underGold.has(id)), 0.022 * poopSize(id));
   s.position.set(at.x, 0.005, at.z);
   s.material.transparent = true;
   fxRoot.add(s);
@@ -2301,7 +2325,7 @@ function syncTower(p, id, count, dt) {
     while (group.children.length > n) group.remove(group.children.at(-1));
     while (group.children.length < n) {
       const k = offset + group.children.length;
-      const s = pixelSprite(golds?.has(k) ? PROPS.goldPoop : PROPS.poop, POOP_PX);
+      const s = pixelSprite(poopArt(id, golds?.has(k)), POOP_PX);
       s.userData.to = poopSpot(k, new THREE.Vector3(), p.height);
       s.position.copy(s.userData.to).add(new THREE.Vector3(0, 0.6, 0)); // drops in from above
       group.add(s);
@@ -2350,7 +2374,7 @@ function onFert(m) {
     const to = bean.landing();
     const n = Math.min(m.n, 30); // a stream of them, not every single one
     for (let k = 0; k < n; k++) {
-      const p = pixelSprite(PROPS.poop, POOP_PX);
+      const p = pixelSprite(poopArt(m.id), POOP_PX);
       const start = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, -Math.random() * 0.8, (Math.random() - 0.5) * 0.4));
       p.position.copy(start);
       fxRoot.add(p);
@@ -3336,6 +3360,27 @@ function plop(volume) {
   if (!soundOn) return;
   if (buffers.plop) playSound('plop', volume);
   else tone('square', 620, 120, 0.2, volume * 0.5);
+}
+
+// each kind's poop lands with its own sound (a person's is the plop from the sound file)
+function poopSound(kind) {
+  if (!soundOn) return;
+  if (kind === 'elephant') {
+    tone('sine', 95, 38, 0.55, 0.7);
+    noiseBurst(0.25, 0.25, 80);
+    roomShake = 0.3; // the ground shakes a little
+  } else if (kind === 'dog') tone('triangle', 900, 480, 0.09, 0.45);
+  else if (kind === 'cat') {
+    noiseBurst(0.1, 0.25, 3200);
+    noiseBurst(0.1, 0.2, 3600, 0.13);
+  } else if (kind === 'rabbit') for (let k = 0; k < 4; k++) tone('triangle', 1100 - k * 60, 600, 0.06, 0.35, k * 0.09);
+  else if (kind === 'giraffe') {
+    tone('sine', 1500, 320, 0.9, 0.18); // a long way down...
+    tone('square', 620, 120, 0.2, 0.4, 0.9); // ...퐁
+  } else if (kind === 'wombat') {
+    tone('triangle', 820, 790, 0.05, 0.5);
+    tone('triangle', 760, 740, 0.06, 0.45, 0.11);
+  } else plop(1);
 }
 
 // knocks get heavier as the door weakens: a polite tap-tap, then thumps, then bangs

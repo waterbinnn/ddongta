@@ -232,10 +232,22 @@ export function makeAnimal(kind) {
   spin.add(root);
   group.add(spin);
   const rest = {};
-  for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R']) rest[n] = parts[n].position.clone();
+  for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R', 'hand_L', 'hand_R']) rest[n] = parts[n].position.clone();
   root.updateMatrixWorld(true);
   const height = new THREE.Box3().setFromObject(root).max.y; // the top of the head, or of the ears
-  return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size };
+  return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size, quad: fourLegs(parts) };
+}
+
+// On all fours: the body tips forward at the waist and the arms become front legs. They're short for that, so
+// they stretch to reach the ground (the paw keeps its shape and just moves down).
+const PITCH = 1.4;
+function fourLegs(P) {
+  for (const n of ['arm_L', 'hand_L']) P[n].geometry.computeBoundingBox();
+  const armReach = -P.arm_L.geometry.boundingBox.min.y; // shoulder to the end of the arm
+  const pawBelow = -P.hand_L.geometry.boundingBox.min.y - armReach; // and how far the paw hangs below that
+  const shoulderY = HIP_Y + P.torso.position.y + P.arm_L.position.y * Math.cos(PITCH); // where the shoulders end up
+  const k = Math.max(1, (shoulderY - pawBelow) / armReach);
+  return { k, handY: (-armReach * (k - 1)) / k };
 }
 
 export function disposePerson(p) {
@@ -289,7 +301,7 @@ function followLegs(p) {
 
 // mode: 'stand' | 'walk' | 'sit' | 'wash' | 'pondwash' | 'roll' | 'jump' | 'squat' (in the bushes)
 //       and the 쾌변 체조 moves: 'bridge' | 'boat' | 'twist' | 'bow'
-export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed = 0 }) {
+export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed = 0, upright = false }) {
   const { parts: P, rest } = p;
   if (!P.hips) return;
   for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R']) {
@@ -297,6 +309,14 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P[n].position.copy(rest[n]);
   }
   P.torso.scale.set(1, 1, 1);
+  if (p.quad) {
+    for (const n of ['arm_L', 'arm_R']) P[n].scale.set(1, 1, 1);
+    for (const n of ['hand_L', 'hand_R']) {
+      P[n].scale.set(1, 1, 1);
+      P[n].position.copy(rest[n]);
+    }
+    P.neck?.rotation.set(0, 0, 0);
+  }
   p.spin.position.set(0, 0, 0);
   p.spin.rotation.set(0, 0, 0);
   p.root.position.set(0, 0, 0);
@@ -304,7 +324,33 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
   if (P.tail) P.tail.rotation.set(0, Math.sin(t * (mode === 'walk' ? 9 : 3) + seed) * 0.35, 0);
 
   const breathe = Math.sin(t * 1.9 + seed) * 0.015;
-  if (mode === 'walk') {
+  if (p.quad && !upright && (mode === 'walk' || mode === 'stand')) {
+    // an animal standing and walking about on all fours, like a real one (it gets up on two legs for everything else)
+    P.torso.rotation.x = PITCH;
+    for (const n of ['arm_L', 'arm_R']) {
+      P[n].rotation.x = -PITCH;
+      P[n].scale.y = p.quad.k;
+    }
+    for (const n of ['hand_L', 'hand_R']) {
+      P[n].scale.y = 1 / p.quad.k;
+      P[n].position.y = rest[n].y + p.quad.handY;
+    }
+    if (P.neck) P.neck.rotation.x = -PITCH - 0.05; // the giraffe holds its neck up
+    else P.head.rotation.x = -PITCH + 0.05; // looking ahead
+    if (mode === 'walk') {
+      // a walking gait: each front leg goes with the hind leg on the other side
+      const s = Math.sin(phase);
+      P.leg_L.rotation.x = s * 0.5;
+      P.leg_R.rotation.x = -s * 0.5;
+      P.arm_L.rotation.x -= s * 0.5;
+      P.arm_R.rotation.x += s * 0.5;
+      P.hips.position.y += Math.abs(Math.cos(phase)) * 0.015;
+      P.head.rotation.z = s * 0.05;
+    } else {
+      P.torso.scale.y = 1 + breathe;
+      P.head.rotation.y = Math.sin(t * 0.6 + seed) * 0.3; // looking about
+    }
+  } else if (mode === 'walk') {
     const s = Math.sin(phase);
     P.leg_L.rotation.x = s * 0.55;
     P.leg_R.rotation.x = -s * 0.55;

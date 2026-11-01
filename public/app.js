@@ -2,6 +2,7 @@
 import * as THREE from '/vendor/three.module.js';
 import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
+import { RoomEnvironment } from '/vendor/jsm/environments/RoomEnvironment.js';
 import { buildPrivateRoom } from './room.js';
 import { makeBeanstalk, beanHeight, heightText } from './beanstalk.js';
 import { doorWoodCanvas } from './nature.js';
@@ -181,6 +182,8 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 sceneEl.append(renderer.domElement);
 
 const scene = new THREE.Scene();
+// a soft studio room for metal to reflect, so gold reads as gold (not brown); used only on the golden poop
+const goldEnv = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 scene.background = new THREE.Color(PAL.sky);
 scene.fog = new THREE.Fog(PAL.sky, 70, 260);
 const FOV = 50; // a wide lens outdoors, so you see the sky and the space around you, not a tunnel
@@ -424,7 +427,7 @@ function buildRoom() {
   vendings.length = 0;
   lamps.clear();
   const { ground } = buildGrounds({
-    L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, M, wishHits, vendingMachine, planter,
+    L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, M, wishHits, vendingMachine, planter, goldEnv,
     tex: { grass: grassCanvas },
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
@@ -441,22 +444,22 @@ function buildRoom() {
 
 // keep a point on the walkable ground and out of buildings and furniture (the same rule as the server's settle)
 function settleLocal(p) {
-  const c = GROUNDS.center;
-  const dx = p.x - c;
-  const dy = p.y - c;
-  const d = Math.hypot(dx, dy);
+  const W = GROUNDS.walk;
+  const e = Math.hypot((p.x - W.x) / W.rx, (p.y - W.y) / W.ry); // 1 on the oval's edge
   const B = GROUNDS.bush;
   const bx = p.x - B.x;
   const by = p.y - B.y;
   const bd = Math.hypot(bx, by);
-  if (d > GROUNDS.walkR && bd > B.r) {
-    // off the grounds: back to the nearer of the grounds' edge or the bushes' edge
-    if (bd - B.r < d - GROUNDS.walkR) {
+  if (e > 1 && bd > B.r) {
+    // off the grounds: back to the nearer of the oval's edge or the big thicket's edge
+    const ox = W.x + (p.x - W.x) / e;
+    const oy = W.y + (p.y - W.y) / e;
+    if (bd - B.r < Math.hypot(p.x - ox, p.y - oy)) {
       p.x = B.x + (bx / bd) * B.r;
       p.y = B.y + (by / bd) * B.r;
     } else {
-      p.x = c + (dx / d) * GROUNDS.walkR;
-      p.y = c + (dy / d) * GROUNDS.walkR;
+      p.x = ox;
+      p.y = oy;
     }
   }
   for (const o of GROUNDS.obstacles) {
@@ -1724,16 +1727,16 @@ function sendMove(force) {
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
 // starts low and far back, looking in through the entrance at the whole plaza
-const cam = { yaw: 0, pitch: 0.24, dist: 9, tYaw: 0, tPitch: 0.24, tDist: 9, fx: 20, fz: 38, look: 0, tLook: 0 }; // look: tilting the view up at the sky
+const cam = { yaw: 0, pitch: 0.24, dist: 9, tYaw: 0, tPitch: 0.24, tDist: 9, fx: 20, fz: 48, look: 0, tLook: 0 }; // look: tilting the view up at the sky
 // link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
-  entrance: { fx: 20, fz: 35, yaw: 0, pitch: 0.3, dist: 11 },
-  plaza: { fx: 20, fz: 20, yaw: 0.5, pitch: 0.5, dist: 16 },
-  stalls: { fx: 20, fz: 11.5, yaw: 0, pitch: 0.35, dist: 16 },
-  above: { fx: 20, fz: 19, yaw: 0.3, pitch: 0.95, dist: 36 },
-  bushes: { fx: -1, fz: 20, yaw: 1.57, pitch: 0.6, dist: 18 },
-  bench: { fx: 19.5, fz: 22, yaw: 0.25, pitch: 0.36, dist: 9.5 },
-  inside: { fx: 20, fz: 38, yaw: Math.PI, pitch: 0.55, dist: 18 }, // from the gate, looking back out
+  entrance: { fx: 20, fz: 45, yaw: 0, pitch: 0.28, dist: 11 },
+  plaza: { fx: 20, fz: 28, yaw: 0.4, pitch: 0.45, dist: 14 },
+  stalls: { fx: 33, fz: 9, yaw: 0, pitch: 0.35, dist: 13 },
+  above: { fx: 20, fz: 22, yaw: 0.3, pitch: 1.05, dist: 46 },
+  bushes: { fx: -4, fz: 22, yaw: 1.57, pitch: 0.6, dist: 18 },
+  bench: { fx: 31, fz: 29, yaw: 0.25, pitch: 0.36, dist: 9.5 },
+  inside: { fx: 20, fz: 44, yaw: Math.PI, pitch: 0.55, dist: 18 }, // from the entrance, looking back out
 };
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
@@ -2007,6 +2010,11 @@ function placeWalkers(dt, t) {
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = benchFacing(e.rx, e.ry);
     else if (move === 'drink') want = cam.yaw;
+    else if (e.kickT > 0 || (mine && nearVendingHere() && !e.walking)) {
+      // at a vending machine: face it, so the kick lands on it
+      const v = GROUNDS.terrace.vendings.reduce((a, b) => (Math.hypot(b.x - e.rx, b.y - e.ry) < Math.hypot(a.x - e.rx, a.y - e.ry) ? b : a));
+      want = Math.atan2(v.x - e.rx, v.y - e.ry);
+    }
     else if (move === 'rub' || move === 'pray') want = Math.atan2(GROUNDS.wish.x - e.rx, GROUNDS.wish.y - e.ry); // facing the golden poop
     else if (move) want = cam.yaw + Math.PI / 2; // exercising: side on to the camera, so the moves show
     else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
@@ -2983,8 +2991,9 @@ function syncHand(p, kind) {
 }
 // tipping it back: the hand up at the mouth, the head back
 function drinkPose(p) {
-  p.parts.arm_R?.rotation.set(-1.85, 0, 0.8); // forward, up and in, to the mouth
-  p.parts.head?.rotation.set(-0.35, 0, 0);
+  // the bottle up at the corner of the mouth, out in front and to the side, so the face doesn't hide it
+  p.parts.arm_R?.rotation.set(-1.95, 0.35, 0.2);
+  p.parts.head?.rotation.set(-0.3, -0.15, 0);
 }
 // what someone holds and whether they're drinking it, after their pose for this frame
 function handFor(p, id, u, free) {

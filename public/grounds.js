@@ -197,7 +197,7 @@ export function buildGrounds(kit) {
       const poop = gltf.scene;
       poop.traverse((o) => {
         if (o.isMesh) {
-          o.material = new THREE.MeshStandardMaterial({ color: '#f0bf55', metalness: 0.75, roughness: 0.3, emissive: '#5a3d08', emissiveIntensity: 0.4 });
+          o.material = new THREE.MeshStandardMaterial({ color: '#ffcc4d', metalness: 1, roughness: 0.18, envMap: kit.goldEnv, envMapIntensity: 1.3, emissive: '#5a3a00', emissiveIntensity: 0.12 }); // polished gold
           o.castShadow = true;
         }
       });
@@ -342,31 +342,31 @@ export function buildGrounds(kit) {
     root.add(shrubMesh, cores, tuftMesh);
   }
 
-  // ---------- lamps along the path, trees round the outside ----------
-  const lampCount = 24;
+  // ---------- lanterns up the way in, round the courtyard and by each place; the forest round the edge ----------
+  const lampCount = L.lampPosts.length;
   const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 2.6, 6), mat('#5b4636'), lampCount);
   const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color: '#fff1c2' }), lampCount);
-  for (let k = 0; k < lampCount; k++) {
-    const a = (k / lampCount) * Math.PI * 2 + 0.1;
-    const x = C + Math.cos(a) * L.lampR * U;
-    const z = C + Math.sin(a) * L.lampR * U;
+  L.lampPosts.forEach((l, k) => {
+    const [x, z] = P(l);
     posts.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 1.3, z));
     heads.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 2.66, z));
-  }
+  });
   root.add(posts, heads);
 
   // ---------- trees, 동물의 숲 style: round, soft broadleaf trees and some cedars ----------
   // the forest beyond the path is scenery; the few trees on the grounds (L.trees) are obstacles on the server too
   const treeSpots = [];
-  for (let k = 0; k < 140; k++) {
+  const W = L.walk;
+  for (let k = 0; k < 170; k++) {
+    // round the oval you can walk on, from just past its edge out into the woods
     const a = rnd(k) * Math.PI * 2;
-    const r = (L.treeR0 + rnd(k + 100) * (L.treeR1 - L.treeR0)) * U;
-    const x = C + Math.cos(a) * r;
-    const z = C + Math.sin(a) * r;
-    // keep the way in clear: no forest in a wide wedge south of the middle, near enough to stand in the view
-    const fromSouth = Math.abs(Math.atan2(x - C, z - C));
-    if (z > C && fromSouth < 0.75 && r < (L.treeR1 * U) - 2) continue;
+    const e = 1.08 + rnd(k + 100) * 0.75;
+    const x = (W.x + Math.cos(a) * W.rx * e) * U;
+    const z = (W.y + Math.sin(a) * W.ry * e) * U;
+    // keep the way in open: none just behind and beside the entrance, where the camera stands as you arrive
+    if (Math.abs(x - L.gate.x * U) < 9 && z > L.gate.y * U - 3 && z < L.gate.y * U + 14) continue;
     if (Math.hypot(x - L.bush.x * U, z - L.bush.y * U) < L.bush.r * U * 0.6) continue; // a clearing in the thicket
+    const r = Math.hypot(x - C, z - C);
     treeSpots.push({ x, z, y: groundY(r), s: 1.7 + rnd(k + 200) * 1.5, cedar: rnd(k + 300) < 0.3, k }); // 4 to 8 m tall
   }
   L.trees.forEach((t, n) => treeSpots.push({ x: t.x * U, z: t.y * U, y: 0, s: t.s * 1.5, cedar: false, k: 600 + n }));
@@ -534,7 +534,7 @@ export function buildGrounds(kit) {
     lamps.add(l);
     lampLights.push([l, share]);
   };
-  light(C, C, 1.4);
+  light(...P(L.bean), 1.4);
   light(((L.public.x0 + L.public.x1) / 2) * U, ((L.public.y0 + L.public.y1) / 2) * U, 1.1);
   light(((L.private.x0 + L.private.x1) / 2) * U, L.private.y1 * U + 1.5, 0.9);
   light(...P(L.exercise), 0.8);

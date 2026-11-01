@@ -3066,6 +3066,8 @@ function frame(t) {
     v.group.rotation.z = v.shake > 0 ? Math.sin(t / 25) * 0.04 * (v.shake / 0.35) : 0;
   }
   if (inRoom) syncGarden(performance.now() / 1000); // the garden outside the window
+  // in the bushes (and at their edge, among the tall grass) you're meant to be hidden: no silhouette there
+  ghostMat.visible = !GROUNDS?.bushes.some((b) => Math.hypot(me.x - b.x, me.y - b.y) <= b.r + 150);
   renderer.render(scene, camera);
   updateLabels(dt);
   placeBeanLabel();

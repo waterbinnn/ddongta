@@ -434,13 +434,13 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
       P.head.rotation.set(0.15, 0, 0);
     }
   } else if (mode === 'pondwash') {
-    // crouched at the pond's edge, rubbing hands in the water
+    // crouched at the pond's edge, leaning out and reaching down into the water
     P.hips.position.y -= 0.12;
     P.leg_L.rotation.set(-1.35, 0, 0.4);
     P.leg_R.rotation.set(-1.35, 0, -0.4);
-    P.torso.rotation.x = 0.4;
-    P.arm_L.rotation.set(-1.1 + Math.sin(t * 14) * 0.1, 0, -0.2);
-    P.arm_R.rotation.set(-1.1 - Math.sin(t * 14) * 0.1, 0, 0.2);
+    P.torso.rotation.x = 0.55;
+    P.arm_L.rotation.set(-0.75 + Math.sin(t * 14) * 0.1, 0, -0.2);
+    P.arm_R.rotation.set(-0.75 - Math.sin(t * 14) * 0.1, 0, 0.2);
     P.head.rotation.x = 0.25;
   } else if (mode === 'bridge') {
     // 엉덩이 조이며 브릿지: lying on the back, lifting the hips and lowering them again
@@ -522,10 +522,12 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.arm_L.rotation.z = 0.9 * k;
     P.arm_R.rotation.z = -0.9 * k;
   } else if (mode === 'wash') {
-    P.arm_L.rotation.x = -1.25 + Math.sin(t * 14) * 0.08;
-    P.arm_R.rotation.x = -1.25 - Math.sin(t * 14) * 0.08;
-    P.arm_L.rotation.z = -0.25;
-    P.arm_R.rotation.z = 0.25;
+    // hands out over the basin, a little down into it, rubbing
+    P.arm_L.rotation.x = -1.05 + Math.sin(t * 14) * 0.08;
+    P.arm_R.rotation.x = -1.05 - Math.sin(t * 14) * 0.08;
+    P.arm_L.rotation.z = -0.3;
+    P.arm_R.rotation.z = 0.3;
+    P.torso.rotation.x = 0.12;
     P.head.rotation.x = 0.3;
   } else if (mode === 'jump') {
     P.arm_L.rotation.z = 1.2;

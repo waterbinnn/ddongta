@@ -1159,35 +1159,37 @@ const wishHits = []; // the golden poop statue: tapping it walks you up to it
 // what a stall is called: "공중화장실 3번 칸" or "프리미엄 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
 
-// A premium room's door: a teak door in the villa's front, louvres in its upper half, a brass number and handle,
-// a small light beside it (green free, red in use). Whoever is inside is in their own room, so nobody shows out here.
+// A premium room's door: dark timber in narrow vertical slats, a brass number and handle, a glowing transom over it
+// and a small light beside it (green free, red in use). Whoever is inside is in their own room, so nobody shows out here.
+const privateTransom = new THREE.MeshBasicMaterial({ color: '#f2d3a0' });
 function makePrivateDoor(i) {
   const L = LAYOUT[i];
   const g = new THREE.Group();
   g.position.set(toX(L.cx), 0, toZ(L.cy));
   const doorCanvas = canvas(48, 112, (c) => {
-    c.fillStyle = '#8a5a32'; // teak
+    c.fillStyle = '#3e2e22'; // dark timber
     c.fillRect(0, 0, 48, 112);
-    c.fillStyle = '#7a4e2a';
-    for (let y = 8; y < 52; y += 4) c.fillRect(5, y, 38, 2); // louvres in the upper half
-    c.fillStyle = '#9a6a3e'; // a raised panel below
-    c.fillRect(6, 62, 36, 42);
-    c.fillStyle = '#6e4626';
-    for (let y = 64; y < 104; y += 7) c.fillRect(8, y, 32, 1); // its grain
-    c.fillStyle = '#c9a15a'; // the brass number plate
-    c.fillRect(15, 54, 18, 7);
-    c.fillStyle = '#3a2a1c';
-    c.font = 'bold 7px -apple-system, sans-serif';
+    for (let x = 3; x < 46; x += 5) {
+      c.fillStyle = '#4e3a2a'; // narrow vertical slats
+      c.fillRect(x, 3, 4, 106);
+    }
+    c.fillStyle = '#c9a15a'; // the brass number
+    c.fillRect(17, 22, 14, 10);
+    c.fillStyle = '#2a1e14';
+    c.font = 'bold 9px Georgia, serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(String(L.no), 24, 58);
-    c.fillStyle = '#d8b46a'; // the handle
-    c.fillRect(38, 60, 3, 9);
+    c.fillText(String(L.no), 24, 27.5);
+    c.fillStyle = '#d8b46a'; // a long brass pull
+    c.fillRect(39, 48, 2, 22);
   });
   const doorTex = new THREE.CanvasTexture(doorCanvas);
   doorTex.colorSpace = THREE.SRGBColorSpace;
   const face = new THREE.MeshLambertMaterial({ map: doorTex }); // (lights up under the pointer)
-  const edge = mat('#5e3d22');
+  const edge = mat('#2e2219');
+  const transom = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.38), privateTransom); // a glowing glass transom above
+  transom.position.set(0.55, 2.42, 0.02);
+  g.add(transom);
   const hinge = new THREE.Group();
   hinge.position.set(0.12, 0, 0.03);
   const door = mesh(new THREE.BoxGeometry(0.86, 2.1, 0.05), [edge, edge, edge, edge, face, face], { cast: true });
@@ -1731,7 +1733,8 @@ function moveInRoom(dt) {
   roomWalk.z = z;
   // walked up to the door: out you go
   const door = room.door;
-  if (vx < 0 && x <= b.x0 + 0.05 && Math.abs(z - door.z) < door.half && !leavingRoom) {
+  const atDoor = door.side > 0 ? vx > 0 && x >= b.x1 - 0.05 : vx < 0 && x <= b.x0 + 0.05;
+  if (atDoor && Math.abs(z - door.z) < door.half && !leavingRoom) {
     leavingRoom = true;
     exitStall();
   }
@@ -1921,7 +1924,8 @@ function clearDist(fx, fz, yaw, pitch, dist) {
   const P = GROUNDS.public;
   const T = GROUNDS.private;
   const walls = [
-    { x0: T.x0 - 130, x1: T.x1 + 130, y0: T.y0 - 150, y1: T.y1 + 150, lo: GROUNDS.wallH * U - 0.85, h: GROUNDS.wallH * U + 2.0 }, // the pavilion's thatched roof, overhead
+    { x0: T.x0 - 80, x1: T.x1 + 80, y0: T.y0 - 70, y1: T.y1 + 180, lo: 2.8, h: 5.9 }, // the villa's roof, overhead
+    { ...T, h: 3.0 }, // and its walls
     { x0: P.x0, x1: P.x1, y0: P.y0, y1: P.doorLine }, // the stalls and the back wall
     { x0: P.x0 - 20, x1: P.x0 + 20, y0: P.y0, y1: P.y1 }, // the side walls
     { x0: P.x1 - 20, x1: P.x1 + 20, y0: P.y0, y1: P.y1 },
@@ -1943,9 +1947,11 @@ function updateCamera(dt) {
   if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
   if (inRoom && roomSeat >= 0) {
-    // resting on the stool or the sofa: the camera comes round in front of it
+    // resting on the stool or the sofa: the camera comes round in front of it, or behind it when it faces the window
     if (performance.now() - manualCamAt > 2500) {
-      const want = room.seats[roomSeat].turn;
+      const st = room.seats[roomSeat];
+      const want = st.turn + (st.behind ? Math.PI : 0);
+      if (st.behind) cam.tPitch = 0.12; // low, over the shoulder
       cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
     }
   } else if (inRoom && roomStanding && roomSeat < 0) {
@@ -1975,7 +1981,9 @@ function updateCamera(dt) {
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
   if (inRoom) {
     const seat = room.seats[roomSeat];
-    const aim = seat ? roomWorld(new THREE.Vector3(seat.at.x, 0, seat.at.z)) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim); // resting, walking about, or on the toilet
+    // resting facing the window, the camera looks past you at it; resting otherwise, at you; walking about, at you; on the toilet, at it
+    const out = seat?.behind ? 1.4 : 0;
+    const aim = seat ? roomWorld(new THREE.Vector3(seat.at.x + Math.sin(seat.turn) * out, 0, seat.at.z + Math.cos(seat.turn) * out)) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim);
     fx = aim.x;
     fz = aim.z;
   } else if (me.s !== -1) {
@@ -2251,7 +2259,7 @@ function syncRoom(t, dt) {
       setPantsDown(roomPerson, false);
       if (spot === 'wash') {
         g.position.copy(room.washSpot);
-        g.rotation.y = Math.PI / 2;
+        g.rotation.y = room.washTurn;
       } else if (spot === 'rest') {
         const seat = room.seats[roomSeat];
         roomLastSeat = roomSeat;
@@ -2264,7 +2272,7 @@ function syncRoom(t, dt) {
         Object.assign(roomWalk, { ...room.entry, walking: false }); // just come in through the door
       } else {
         const at = from === 'wash' ? room.washSpot : room.standSpot;
-        Object.assign(roomWalk, { x: at.x, z: at.z, turn: from === 'wash' ? Math.PI / 2 : 0, walking: false });
+        Object.assign(roomWalk, { x: at.x, z: at.z, turn: from === 'wash' ? room.washTurn : 0, walking: false });
       }
     }
   }
@@ -2676,18 +2684,18 @@ function onWash(m) {
     e.washPond = false;
     roomWashUntil = performance.now() + 2200;
     tap = roomWorld(room.tap);
-    hands = roomWorld(room.washSpot).lerp(tap, 0.5).setY(0.92);
+    hands = roomWorld(room.washSpot).lerp(tap, 0.55).setY(room.basinTop + 0.05);
     top = tap.y;
-    bottom = 0.86;
+    bottom = room.basinTop;
   } else {
     const sink = nearestSink(e.rx, e.ry);
-    tap = new THREE.Vector3(toX(sink.lookX), sink.pond ? 0.06 : 1.12, toZ(sink.lookY)); // the tap over that basin (or the pond's water)
+    tap = new THREE.Vector3(toX(sink.lookX), sink.pond ? 0.06 : 0.67, toZ(sink.lookY)); // the tap over that basin (or the pond's water)
     const ux = toX(e.rx);
     const uz = toZ(e.ry);
     const d = Math.hypot(tap.x - ux, tap.z - uz) || 1;
-    hands = new THREE.Vector3(ux + ((tap.x - ux) / d) * 0.35, sink.pond ? 0.35 : 0.95, uz + ((tap.z - uz) / d) * 0.35);
+    hands = new THREE.Vector3(ux + ((tap.x - ux) / d) * 0.35, sink.pond ? 0.12 : 0.56, uz + ((tap.z - uz) / d) * 0.35);
     top = tap.y;
-    bottom = sink.pond ? 0.04 : 0.9;
+    bottom = sink.pond ? 0.04 : 0.55;
     noStream = sink.pond; // at the pond you scoop the water, there's no tap
     e.washPond = sink.pond;
   }

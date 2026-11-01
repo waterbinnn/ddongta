@@ -247,35 +247,38 @@ export function buildGrounds(kit) {
     const cz = ((sc.y0 + sc.y1) / 2) * U;
     const cw = (sc.x1 - sc.x0) * U;
     const cd = (sc.y1 - sc.y0) * U;
-    block(cw, 0.82, cd, tile(cd, 0.82), cx, 0.41, cz);
-    block(cw + 0.08, 0.06, cd + 0.08, mat('#fbfbf8'), cx, 0.85, cz);
+    // a counter low enough for little hands (everyone here is about a metre tall)
+    block(cw, 0.46, cd, tile(cd, 0.46), cx, 0.23, cz);
+    block(cw + 0.08, 0.05, cd + 0.08, mat('#fbfbf8'), cx, 0.485, cz);
     const chrome = new THREE.MeshPhongMaterial({ color: '#d4dbe2', shininess: 110, specular: '#ffffff' });
     for (const s of L.sinks.filter((k) => !k.pond)) { // the pond's washing spots have no basin
       const z = s.y * U;
-      add(mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.03, 20), mat('#ffffff')), cx - 0.05, 0.88, z);
-      add(mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.28, 8), chrome), cx + 0.25, 1.02, z);
-      add(mesh(new THREE.BoxGeometry(0.26, 0.035, 0.035), chrome), cx + 0.13, 1.15, z);
+      // the basin near the front edge, where a hand can reach it; the tap behind it
+      const front = sc.x0 * U;
+      add(mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.08, 20), mat('#ffffff')), front + 0.27, 0.54, z);
+      add(mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.2, 8), chrome), front + 0.52, 0.6, z);
+      add(mesh(new THREE.BoxGeometry(0.24, 0.035, 0.035), chrome), front + 0.41, 0.69, z);
     }
     const mirror = new THREE.Mesh(new THREE.PlaneGeometry(cd - 0.1, 0.8), new THREE.MeshPhongMaterial({ color: '#d9ecf2', emissive: '#3d5560', shininess: 140 }));
     mirror.rotation.y = -Math.PI / 2;
-    add(mirror, x1 - 0.12, 1.55, cz);
+    add(mirror, x1 - 0.12, 1.15, cz);
   }
 
-  // ---------- the premium restroom: a resort villa. White lime walls on a dark lava-stone base, a teak door for each
-  // room, teak posts along the front holding up deep, steep thatched eaves (a woven lantern on each), a slate apron
-  // before the doors, tiki torches at the front corners and palms leaning over it all ----------
+  // ---------- the premium restroom: a villa in the manner of Aman's tropical pavilions. Long and low; cream lime walls
+  // on a honed stone base; a veranda of dark timber posts and a teak deck before the doors; a steep pitched roof of
+  // dark wooden shingles with timber-latticed gables and upswept finials; two long, still, dark reflecting pools with
+  // lilies and floating candles either side of a stepping-stone path; stone lanterns, frangipani and palms ----------
   {
     const p = L.private;
     const x0 = p.x0 * U;
     const x1 = p.x1 * U;
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
-    const WH = L.wallH * U;
     const cx = (x0 + x1) / 2;
     const cz = (z0 + z1) / 2;
     const W = x1 - x0;
     const D = z1 - z0;
-    const canvasMat = (w, h, draw, extra = {}) => {
+    const canvasMat = (w, h, draw, extra = {}, Mat = THREE.MeshLambertMaterial) => {
       const c = document.createElement('canvas');
       c.width = w;
       c.height = h;
@@ -283,119 +286,186 @@ export function buildGrounds(kit) {
       const t = new THREE.CanvasTexture(c);
       t.colorSpace = THREE.SRGBColorSpace;
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      return new THREE.MeshLambertMaterial({ map: t, ...extra });
+      return new Mat({ map: t, ...extra });
     };
-    const teak = canvasMat(64, 256, (g) => {
-      g.fillStyle = '#9a663a';
-      g.fillRect(0, 0, 64, 256);
-      for (let k = 0; k < 24; k++) {
-        g.fillStyle = k % 2 ? 'rgba(120, 72, 36, 0.35)' : 'rgba(190, 136, 84, 0.3)';
-        g.fillRect(rnd(k + 70) * 64, 0, 1 + rnd(k + 90) * 2, 256);
+    const darkWood = mat('#3e2e22');
+    const teakDeck = canvasMat(256, 64, (g) => {
+      g.fillStyle = '#9a6a40';
+      g.fillRect(0, 0, 256, 64);
+      for (let k = 0; k < 8; k++) {
+        g.fillStyle = k % 2 ? '#8e6038' : '#a5744a';
+        g.fillRect(0, k * 8, 256, 7);
+        g.fillStyle = 'rgba(60, 36, 18, 0.6)';
+        g.fillRect(0, k * 8 + 7, 256, 1);
+        g.fillRect(((k * 97) % 200) + 20, k * 8, 1, 7);
       }
     });
-    // the floor: dark slate in big tiles, a teak edge
-    const slate = canvasMat(256, 256, (g) => {
-      for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
-        const t = 0.9 + rnd(ty * 2 + tx + 400) * 0.15;
-        g.fillStyle = `rgb(${Math.round(70 * t)}, ${Math.round(76 * t)}, ${Math.round(78 * t)})`;
-        g.fillRect(tx * 128, ty * 128, 128, 128);
-        g.fillStyle = 'rgba(25, 28, 30, 0.9)';
-        g.fillRect(tx * 128, ty * 128, 128, 2);
-        g.fillRect(tx * 128, ty * 128, 2, 128);
-      }
-    });
-    slate.map.repeat.set((W + 1.2) / 1.2, 1);
-    block(W + 1.2, 0.04, 1.3, slate, cx, 0.02, z1 + 0.65, { receive: true }); // a slate apron before the doors
-    block(W + 1.3, 0.06, 0.08, teak, cx, 0.03, z1 + 1.3);
-    // the walls: white lime plaster on a dark lava-stone base, a teak band under the eaves
-    const WALL = WH - 0.4; // up to the eaves
-    block(W, WALL, D, mat('#efe7da'), cx, WALL / 2, cz);
-    block(W + 0.12, 0.45, D + 0.06, mat('#4a4846'), cx, 0.225, cz - 0.03); // the lava stone (flush at the front)
-    block(W + 0.06, 0.22, D + 0.06, teak, cx, WALL - 0.11, cz);
-    // the posts: square teak on stone footings, a carved collar near the top
+    teakDeck.map.repeat.set((W + 1.2) / 2, 1.3 / 0.5);
+    const WALL = 3.0;
+    // the walls: cream lime, a honed stone base, a dark timber band at the top
+    block(W, WALL, D, mat('#ece2cf'), cx, WALL / 2, cz);
+    block(W + 0.1, 0.3, D + 0.05, mat('#a9a196'), cx, 0.15, cz - 0.025);
+    block(W + 0.04, 0.16, D + 0.04, darkWood, cx, WALL - 0.08, cz);
+    // the veranda: a teak deck a step up, dark timber posts on stone footings along its edge
+    block(W + 1.2, 0.1, 1.3, teakDeck, cx, 0.05, z1 + 0.65, { receive: true });
+    block(W + 1.24, 0.04, 0.06, darkWood, cx, 0.08, z1 + 1.3);
     const posts = L.templeColumns.map((c) => [c.x * U, c.y * U]);
-    const POST_H = WH - 0.8;
+    const E = 3.1; // the eaves
     const m4 = new THREE.Matrix4();
-    const stone = mat('#7d7a72');
     for (const [geo, material, y] of [
-      [new THREE.BoxGeometry(0.34, 0.22, 0.34), stone, 0.11],
-      [new THREE.BoxGeometry(0.2, POST_H - 0.22, 0.2), teak, 0.22 + (POST_H - 0.22) / 2],
-      [new THREE.BoxGeometry(0.26, 0.12, 0.26), teak, POST_H - 0.4],
+      [new THREE.BoxGeometry(0.3, 0.16, 0.3), mat('#a9a196'), 0.18],
+      [new THREE.BoxGeometry(0.17, E - 0.26, 0.17), darkWood, 0.26 + (E - 0.26) / 2],
     ]) {
       const im = new THREE.InstancedMesh(geo, material, posts.length);
       posts.forEach(([x, z], k) => im.setMatrixAt(k, m4.makeTranslation(x, y, z)));
       im.castShadow = im.receiveShadow = true;
       root.add(im);
     }
-    // a beam along the post tops, the roof resting on it and the wall
-    const ow = W + 0.5;
-    const od = D + 0.82;
-    block(ow, 0.3, 0.22, teak, cx, POST_H + 0.15, cz + od / 2);
-    // a woven lantern on each post, glowing at night
+    block(W + 1.0, 0.22, 0.2, darkWood, cx, E - 0.11, posts[0][1]); // the beam across the post tops
+    // the veranda's ceiling: teak boards under the eaves
+    const ceil = mesh(new THREE.PlaneGeometry(W + 1.0, 1.25), teakDeck);
+    ceil.rotation.x = Math.PI / 2;
+    add(ceil, cx, E - 0.22, z1 + 0.62);
+    // a woven lantern hung from the beam over each post, glowing at night
     const lantern = new THREE.MeshLambertMaterial({ color: '#d6b07a', emissive: '#ffb860', emissiveIntensity: 0.05 });
-    const lanterns = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.1, 0.12, 0.26, 12), lantern, posts.length);
-    posts.forEach(([x, z], k) => lanterns.setMatrixAt(k, m4.makeTranslation(x, 2.25, z + 0.16)));
+    const lanterns = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.11, 0.13, 0.3, 14), lantern, posts.length);
+    posts.forEach(([x, z], k) => lanterns.setMatrixAt(k, m4.makeTranslation(x, E - 0.55, z - 0.35)));
     root.add(lanterns);
-    // a warm light hidden under the front beam, for the room spots at night
-    const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
-    block(ow - 0.2, 0.02, 0.04, strip, cx, POST_H - 0.01, cz + od / 2 - 0.02);
-    // the thatched roof: a steep hip, thick at the eaves, hanging well out over the posts
-    const thatch = canvasMat(128, 128, (g) => {
-      g.fillStyle = '#b8955c';
-      g.fillRect(0, 0, 128, 128);
-      for (let row = 0; row < 128; row += 8) {
-        for (let k = 0; k < 40; k++) {
-          g.strokeStyle = ['rgba(150, 118, 66, 0.7)', 'rgba(214, 186, 128, 0.6)', 'rgba(120, 92, 50, 0.6)'][k % 3];
-          g.lineWidth = 1;
-          const x = rnd(row * 50 + k) * 128;
-          g.beginPath();
-          g.moveTo(x, row);
-          g.lineTo(x + (rnd(row + k * 3) - 0.5) * 4, row + 10);
-          g.stroke();
+    // the roof: steep, pitched, the ridge along the building, dark shingles, the eaves reaching out over the deck
+    const shingle = canvasMat(128, 128, (g) => {
+      for (let row = 0; row < 8; row++) {
+        for (let k = 0; k < 8; k++) {
+          const t = 0.85 + rnd(row * 8 + k + 900) * 0.3;
+          g.fillStyle = `rgb(${Math.round(64 * t)}, ${Math.round(52 * t)}, ${Math.round(44 * t)})`;
+          g.fillRect(k * 16 + (row % 2) * 8, row * 16, 15, 15);
         }
-        g.fillStyle = 'rgba(90, 66, 34, 0.35)';
-        g.fillRect(0, row + 7, 128, 1);
+        g.fillStyle = 'rgba(20, 14, 10, 0.7)';
+        g.fillRect(0, row * 16 + 15, 128, 1);
       }
     }, { side: THREE.DoubleSide });
-    thatch.map.repeat.set(6, 3);
-    const ov = 1.0;
+    shingle.map.repeat.set(10, 4);
+    const zf = posts[0][1] + 0.55;
+    const zb = z0 - 0.6;
+    const ridgeZ = (zf + zb) / 2;
     const rise = 2.3;
-    const eave = POST_H + 0.42;
-    const [rx0, rx1, rz0, rz1] = [cx - ow / 2 - ov, cx + ow / 2 + ov, cz - od / 2 - ov, cz + od / 2 + ov];
-    const half = (rz1 - rz0) / 2;
-    const top = eave + rise;
-    const v = [[rx0, eave, rz1], [rx1, eave, rz1], [rx1 - half * 0.6, top, cz], [rx0 + half * 0.6, top, cz], [rx1, eave, rz0], [rx0, eave, rz0]];
-    const tris = [[0, 1, 2], [0, 2, 3], [4, 5, 3], [4, 3, 2], [1, 4, 2], [5, 0, 3]];
-    const uv = { 0: [0, 0], 1: [1, 0], 2: [0.8, 1], 3: [0.2, 1], 4: [0, 0], 5: [1, 0] };
+    const rx0 = x0 - 0.7;
+    const rx1 = x1 + 0.7;
+    const top = E + rise;
+    const v = [[rx0, E, zf], [rx1, E, zf], [rx1, top, ridgeZ], [rx0, top, ridgeZ], [rx1, E, zb], [rx0, E, zb]];
+    const slopes = [[0, 1, 2], [0, 2, 3], [4, 5, 3], [4, 3, 2]];
+    const uvs = [[0, 0], [1, 0], [1, 1], [0, 1], [1, 0], [0, 0]];
     const roofGeo = new THREE.BufferGeometry();
-    roofGeo.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat().flatMap((k) => v[k]), 3));
-    roofGeo.setAttribute('uv', new THREE.Float32BufferAttribute(tris.flat().flatMap((k) => uv[k]), 2));
+    roofGeo.setAttribute('position', new THREE.Float32BufferAttribute(slopes.flat().flatMap((k) => v[k]), 3));
+    roofGeo.setAttribute('uv', new THREE.Float32BufferAttribute(slopes.flat().flatMap((k) => uvs[k]), 2));
     roofGeo.computeVertexNormals();
-    root.add(mesh(roofGeo, thatch, { cast: true, receive: true }));
-    // the thick edge of the thatch all round the eaves, and a dark ridge along the top
-    const edge = mat('#8f6f3e');
-    for (const s of [-1, 1]) {
-      block(rx1 - rx0 + 0.1, 0.28, 0.3, edge, cx, eave - 0.1, s < 0 ? rz0 : rz1);
-      block(0.3, 0.28, rz1 - rz0 + 0.1, edge, s < 0 ? rx0 : rx1, eave - 0.1, cz);
+    root.add(mesh(roofGeo, shingle, { cast: true, receive: true }));
+    // the gables: a timber lattice in each triangle, set back a little under the roof's edge
+    const lattice = canvasMat(64, 64, (g) => {
+      g.fillStyle = '#4a3828';
+      g.fillRect(0, 0, 64, 64);
+      g.strokeStyle = '#7a5a3c';
+      g.lineWidth = 3;
+      for (let k = -64; k < 128; k += 12) {
+        g.beginPath();
+        g.moveTo(k, 0);
+        g.lineTo(k + 64, 64);
+        g.moveTo(k + 64, 0);
+        g.lineTo(k, 64);
+        g.stroke();
+      }
+    }, { side: THREE.DoubleSide });
+    lattice.map.repeat.set(4, 2);
+    for (const gx of [x0 - 0.05, x1 + 0.05]) {
+      const gv = [[gx, E, zf - 0.35], [gx, E, zb + 0.35], [gx, top - 0.25, ridgeZ]];
+      const gg = new THREE.BufferGeometry();
+      gg.setAttribute('position', new THREE.Float32BufferAttribute(gv.flat(), 3));
+      gg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
+      gg.computeVertexNormals();
+      root.add(mesh(gg, lattice));
     }
-    block(rx1 - rx0 - half * 1.2 + 0.2, 0.16, 0.22, mat('#5e4a2c'), cx, top + 0.04, cz);
-    // tiki torches at the front corners, burning at night
-    const fire = new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a1c', emissiveIntensity: 0.3 });
-    const bamboo = mat('#b8a06a');
-    for (const x of [x0 - 0.75, x1 + 0.75]) {
-      const z = z1 + 0.9;
-      add(mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.7, 8), bamboo), x, 0.85, z);
-      add(mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.2, 10), mat('#6b4a2c')), x, 1.75, z);
-      add(mesh(new THREE.ConeGeometry(0.08, 0.26, 10), fire, { cast: false }), x, 1.98, z);
-      const flame = new THREE.PointLight('#ff9a3c', 0, 5, 1.6);
-      flame.position.set(x, 2.1, z);
-      lamps.add(flame);
-      glows.push((dark) => (flame.intensity = 2 * dark));
+    // dark bargeboards up the gable edges, a ridge cap, and upswept finials at the ends of the ridge
+    const slope = Math.atan2(rise, zf - ridgeZ);
+    for (const gx of [rx0, rx1]) {
+      for (const [zEdge, s] of [[zf, 1], [zb, -1]]) {
+        const barge = mesh(new THREE.BoxGeometry(0.08, 0.2, Math.hypot(zEdge - ridgeZ, rise) + 0.1), darkWood, { cast: true });
+        barge.rotation.x = s * slope;
+        add(barge, gx, E + rise / 2 + 0.06, (zEdge + ridgeZ) / 2);
+      }
+      const finial = mesh(new THREE.ConeGeometry(0.07, 0.7, 8), darkWood, { cast: true });
+      finial.rotation.z = gx < cx ? 0.6 : -0.6;
+      add(finial, gx + (gx < cx ? -0.15 : 0.15), top + 0.3, ridgeZ);
+    }
+    block(rx1 - rx0 + 0.1, 0.16, 0.22, darkWood, cx, top + 0.02, ridgeZ);
+    block(rx1 - rx0, 0.16, 0.06, darkWood, cx, E - 0.02, zf); // the front fascia
+    // a warm light hidden under the beam, for the doors at night
+    const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
+    block(W + 0.8, 0.02, 0.04, strip, cx, E - 0.23, posts[0][1] - 0.12);
+    // the reflecting pools: dark, still water in a cream stone edge, lily pads and floating candles
+    const water = new THREE.MeshPhongMaterial({ color: '#1f3b3f', shininess: 140, specular: '#9fc7cf', emissive: '#0a1517' });
+    const coping = mat('#e2d8c4');
+    const flame = new THREE.MeshLambertMaterial({ color: '#ffd28a', emissive: '#ffb050', emissiveIntensity: 0.2 });
+    for (const pool of L.villaPools) {
+      const [px0, px1, pz0, pz1] = [pool.x0 * U, pool.x1 * U, pool.y0 * U, pool.y1 * U];
+      const pw = px1 - px0;
+      const pd = pz1 - pz0;
+      const pcx = (px0 + px1) / 2;
+      const pcz = (pz0 + pz1) / 2;
+      block(pw + 0.3, 0.12, pd + 0.3, coping, pcx, 0.06, pcz);
+      block(pw, 0.02, pd, water, pcx, 0.125, pcz, { receive: true });
+      for (let k = 0; k < 5; k++) {
+        const lily = mesh(new THREE.CircleGeometry(0.2, 14, 0.3, Math.PI * 1.8), mat('#4f7a44'));
+        lily.rotation.x = -Math.PI / 2;
+        add(lily, px0 + (0.1 + 0.8 * rnd(k + pcx * 10)) * pw, 0.14, pz0 + (0.2 + 0.6 * rnd(k + 33 + pcx)) * pd);
+      }
+      for (let k = 0; k < 3; k++) {
+        const x = px0 + ((k + 0.5) / 3) * pw;
+        add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.06, 12), mat('#f4efe4')), x, 0.16, pcz + (k % 2 ? 0.25 : -0.25));
+        add(mesh(new THREE.ConeGeometry(0.02, 0.06, 8), flame, { cast: false }), x, 0.22, pcz + (k % 2 ? 0.25 : -0.25));
+      }
+    }
+    // the path between the pools: big slate stepping stones in gravel
+    block(1.8, 0.02, (L.villaPools[0].y1 - L.villaPools[0].y0) * U + 0.3, mat('#cfc6b4'), cx, 0.01, (L.villaPools[0].y0 + L.villaPools[0].y1) / 2 * U);
+    for (let k = 0; k < 3; k++) block(1.1, 0.06, 0.42, mat('#5f6466'), cx, 0.04, z1 + 1.55 + k * 0.55);
+    // stone lanterns at the head of the path, glowing at night
+    const glowStone = new THREE.MeshLambertMaterial({ color: '#efe6d2', emissive: '#ffc070', emissiveIntensity: 0.05 });
+    for (const sx of [-1.2, 1.2]) {
+      const lx = cx + sx;
+      const lz = z1 + 3.1;
+      add(mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), mat('#a9a196')), lx, 0.25, lz);
+      add(mesh(new THREE.BoxGeometry(0.3, 0.26, 0.3), glowStone), lx, 0.63, lz);
+      add(mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), mat('#8f877c')), lx, 0.8, lz);
+    }
+    // two frangipani trees by the pools: a grey branching trunk, rosettes of long leaves, white flowers with yellow hearts
+    const bark = mat('#8b8378');
+    const leafMat = new THREE.MeshLambertMaterial({ color: '#4a7d3c', side: THREE.DoubleSide });
+    const petal = mat('#fbf7ee');
+    for (const [fx, fz] of [[x0 - 0.2, z1 + 3.4], [x1 + 0.2, z1 + 3.4]]) {
+      add(mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.4, 8), bark), fx, 0.7, fz);
+      for (let b = 0; b < 4; b++) {
+        const a = (b / 4) * Math.PI * 2 + 0.4;
+        const br = mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.0, 6), bark);
+        br.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6);
+        add(br, fx + Math.cos(a) * 0.28, 1.75, fz + Math.sin(a) * 0.28);
+        const tx = fx + Math.cos(a) * 0.58;
+        const tz = fz + Math.sin(a) * 0.58;
+        for (let l = 0; l < 6; l++) {
+          const la = (l / 6) * Math.PI * 2;
+          const leaf = mesh(new THREE.SphereGeometry(1, 10, 6), leafMat);
+          leaf.scale.set(0.32, 0.03, 0.09);
+          leaf.position.set(tx + Math.cos(la) * 0.26, 2.2, tz + Math.sin(la) * 0.26);
+          leaf.rotation.set(0, -la, 0.35);
+          root.add(leaf);
+        }
+        for (let f = 0; f < 4; f++) {
+          add(mesh(new THREE.SphereGeometry(0.05, 8, 6), petal, { cast: false }), tx + Math.cos(f * 1.6) * 0.09, 2.27, tz + Math.sin(f * 1.6) * 0.09);
+        }
+      }
     }
     glows.push((dark) => {
       strip.emissiveIntensity = 0.2 + 0.9 * dark;
-      fire.emissiveIntensity = 0.3 + 0.9 * dark;
       lantern.emissiveIntensity = 0.05 + 1.0 * dark;
+      flame.emissiveIntensity = 0.2 + 1.0 * dark;
+      glowStone.emissiveIntensity = 0.05 + 0.9 * dark;
     });
     // the palms: a ringed trunk curving up, a crown of drooping fronds, a few coconuts
     const trunkMat = mat('#8a7458');

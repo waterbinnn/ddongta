@@ -10,7 +10,8 @@ Colours are not set here: the page paints each part by name (skin, hair, shirt, 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
   hips (shorts) > torso (tee) > head (skin) > hair, ear_L / ear_R
                               > arm_L / arm_R (sleeves) > hand_L / hand_R
-                > leg_L / leg_R (bare legs) > shoe_L / shoe_R, cuff_L / cuff_R (shorts round the ankles, hidden by default)
+                > leg_L / leg_R (bare legs) > short_L / short_R (shorts legs), shoe_L / shoe_R,
+                                             cuff_L / cuff_R (shorts round the ankles, hidden by default)
 """
 import math
 import os
@@ -100,7 +101,7 @@ def bean_bm(center, radii, flare=0.12):
 
 
 # ---------- body ----------
-hips = ellipsoid('hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.035), (0.15, 0.128, 0.07))   # shorts
+hips = ellipsoid('hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.04), (0.135, 0.118, 0.065))   # the seat of the shorts
 torso = new_object('torso', bean_bm((0, 0, WAIST_Z + 0.1), (0.152, 0.128, 0.145), flare=0.05), Vector((0, 0, WAIST_Z)), hips)   # tee, round shoulders
 head = new_object('head', ellipsoid_bm(HEAD_C, (HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z), 40, 24), Vector((0, 0, NECK_Z)), torso)
 
@@ -118,6 +119,8 @@ for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they fac
     new_object(f'hand_{tag}', hand, sh, arm)
     hip = Vector((side * LEG_X, 0, HIP_Z))
     leg = ellipsoid(f'leg_{tag}', hip, hip + Vector((0, 0, -0.065)), (0.055, 0.058, 0.075), hips)   # bare legs under the shorts
+    # a short leg of the shorts round each thigh, so it reads as shorts, not a skirt
+    new_object(f'short_{tag}', capsule_bm(hip + Vector((-side * 0.004, 0, 0.02)), hip + Vector((side * 0.004, 0, -0.06)), 0.066, 0.065), hip, leg)
     ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.132)), (0.062, 0.082, 0.036), leg)
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.072, radius2=0.066, depth=0.05)
@@ -214,7 +217,7 @@ if PREVIEW:
         return m
 
     skin, hair, shirt, pants, shoe = mat('skin', (1, 0.9, 0.84)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
-    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'cuff': pants, 'shoe': shoe}
+    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'short': pants, 'cuff': pants, 'shoe': shoe}
     for o in scene.objects:
         if o.type == 'MESH':
             o.data.materials.append(next(v for k, v in paint.items() if o.name.startswith(k)))

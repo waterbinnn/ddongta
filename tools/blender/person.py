@@ -91,10 +91,13 @@ def around(p):
     return abs(math.atan2(p.x, -p.y))
 
 
+HAIRLINE = 0.07  # above the middle of the head; the eyes sit about 0.07 below the middle
+
+
 def keep_hair(p, _):
     a = around(p)
     if a < 1.0:
-        return p.z > 0.12  # the hairline; soft locks hang below it (see below)
+        return p.z > HAIRLINE  # the forehead is covered down to here; soft locks hang over the edge (see below)
     if a < 1.85:
         return p.z > 0.02  # above the ears
     return p.z > -0.17  # down to the nape
@@ -135,14 +138,18 @@ hair_bm = shell(keep_hair, 0.305)
 for v in hair_bm.verts:
     v.co.z += 0.012  # a little volume on top
 # soft locks along the hairline make a wavy fringe instead of a hard cut
-LOCKS = [(-0.75, 0.07, 0.95), (-0.42, 0.05, 1.05), (-0.12, 0.06, 1.0), (0.2, 0.045, 1.1), (0.5, 0.06, 0.95), (0.8, 0.075, 0.9)]
-for ang, drop, size in LOCKS:
+# Each lock sits on the head's surface right at the hairline, half tucked under the hair cap, so there is
+# no gap to see from above; their bottoms dip by different amounts.
+LOCKS = [(-0.78, 0.012), (-0.5, 0.03), (-0.2, 0.02), (0.1, 0.035), (0.4, 0.022), (0.7, 0.03), (0.95, 0.01)]
+rx, ry, rz = HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z
+for ang, dip in LOCKS:
     made = bmesh.ops.create_uvsphere(hair_bm, u_segments=14, v_segments=10, radius=1.0)
+    zc = HAIRLINE - dip
+    ring = math.sqrt(1 - (zc / rz) ** 2) + 0.03  # how far out the surface is at that height, plus the hair's thickness
+    spot = HEAD_C + Vector((math.sin(ang) * rx * ring, -math.cos(ang) * ry * ring, zc + 0.012))
     rot = Matrix.Rotation(-ang, 3, 'Z')
-    sx, sy, sz = HEAD_R * HEAD_SCALE.x + 0.012, HEAD_R * HEAD_SCALE.y + 0.012, HEAD_R * HEAD_SCALE.z
-    spot = HEAD_C + Vector((math.sin(ang) * sx, -math.cos(ang) * sy, 0.12 - drop + 0.012))
     for v in made['verts']:
-        local = Vector((v.co.x * 0.075 * size, v.co.y * 0.035, v.co.z * 0.085 * size))
+        local = Vector((v.co.x * 0.068, v.co.y * 0.03, v.co.z * 0.06))
         v.co = rot @ local + spot
 new_object('hair', hair_bm, Vector((0, 0, NECK_Z)), head)
 # one tuft on top, curling forward

@@ -356,13 +356,12 @@ export function buildGrounds(kit) {
     root.add(shrubMesh, cores, tuftMesh);
   }
 
-  // ---------- lanterns: low path lanterns lining the way in, taller garden lanterns round the courtyard. Each is a paper
-  // box in a wooden frame under a two-tier cap: cream by day; at night the paper glows, with a soft halo round it
-  // and a pool of warm light on the ground below ----------
+  // ---------- lamps: low black garden bollards lining the way in, tall old-fashioned park lamps round the courtyard.
+  // Frosted glass by day; at night it glows, with a soft halo round it and a pool of warm light on the ground ----------
   {
     const wood = mat('#4a3a2c');
     const stone = mat('#8d8a82');
-    const paper = new THREE.MeshLambertMaterial({ color: '#f3e7cc', emissive: '#ffb85c', emissiveIntensity: 0.05 });
+    const paper = new THREE.MeshLambertMaterial({ color: '#f6efdc', emissive: '#ffb85c', emissiveIntensity: 0.05 }); // frosted glass
     const glowTex = (inner, size = 128) => {
       const c = document.createElement('canvas');
       c.width = c.height = size;
@@ -384,25 +383,40 @@ export function buildGrounds(kit) {
       haloMat.opacity = dark * 0.9;
       poolMat.opacity = dark * 0.8;
     });
-    // [geometry, material, height] for each part, sized for a lantern whose paper box is s across, at height h
-    const design = (s, h, post) => [
-      [new THREE.BoxGeometry(s * 1.5, 0.1, s * 1.5), stone, 0.05], // stone footing
-      [new THREE.BoxGeometry(post, h - s * 0.75, post), wood, (h - s * 0.75) / 2 + 0.05], // the post
-      [new THREE.BoxGeometry(s * 1.25, 0.04, s * 1.25), wood, h - s * 0.68], // the tray
-      [new THREE.BoxGeometry(s, s * 1.3, s), paper, h], // the paper box
-      ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => [new THREE.BoxGeometry(0.022, s * 1.32, 0.022).translate((a * s) / 2, 0, (b * s) / 2), wood, h]), // corner posts
-      [new THREE.BoxGeometry(s * 1.04, 0.018, s * 1.04), wood, h], // a rail round the middle
-      [new THREE.BoxGeometry(s * 1.12, 0.03, s * 1.12), wood, h + s * 0.67], // top frame
-      [new THREE.ConeGeometry(s * 1.35, s * 0.28, 4).rotateY(Math.PI / 4), wood, h + s * 0.8], // wide lower eave
-      [new THREE.ConeGeometry(s * 0.75, s * 0.5, 4).rotateY(Math.PI / 4), wood, h + s * 1.08], // the peak
-      [new THREE.SphereGeometry(s * 0.12, 8, 6), wood, h + s * 1.36], // a knob
-    ];
+    const iron = new THREE.MeshPhongMaterial({ color: '#26272b', shininess: 60, specular: '#555555' }); // black cast iron
+    const cyl = (rt, rb, ht, segs = 16) => new THREE.CylinderGeometry(rt, rb, ht, segs);
+    // [geometry, material, height] for each part
+    const design = (low) =>
+      low
+        ? [
+            // a garden bollard: a short black post with a glass lamp on top under a little round cap
+            [cyl(0.075, 0.09, 0.08), iron, 0.04],
+            [cyl(0.05, 0.055, 0.42), iron, 0.29],
+            [cyl(0.075, 0.07, 0.03), iron, 0.515],
+            [cyl(0.065, 0.065, 0.13), paper, 0.6],
+            ...[0, 1, 2, 3].map((k) => [new THREE.BoxGeometry(0.012, 0.13, 0.012).translate(Math.cos((k * Math.PI) / 2) * 0.066, 0, Math.sin((k * Math.PI) / 2) * 0.066), iron, 0.6]),
+            [cyl(0.03, 0.1, 0.05), iron, 0.69],
+            [new THREE.SphereGeometry(0.022, 8, 6), iron, 0.73],
+          ]
+        : [
+            // an old park lamp: a stepped base, a slim fluted post, a collar, and a four-sided glass lantern with a cap
+            [cyl(0.13, 0.16, 0.12), iron, 0.06],
+            [cyl(0.075, 0.12, 0.25), iron, 0.245],
+            [cyl(0.045, 0.06, 2.0, 12), iron, 1.37],
+            [cyl(0.07, 0.07, 0.05), iron, 2.4],
+            [cyl(0.03, 0.06, 0.08), iron, 2.46],
+            [cyl(0.14, 0.135, 0.34, 4).rotateY(Math.PI / 4), paper, 2.67], // the glass
+            ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => [new THREE.BoxGeometry(0.018, 0.36, 0.018).translate(a * 0.096, 0, b * 0.096), iron, 2.67]), // the frame's corners
+            [new THREE.BoxGeometry(0.27, 0.03, 0.27), iron, 2.855],
+            [cyl(0.02, 0.2, 0.14, 4).rotateY(Math.PI / 4), iron, 2.94],
+            [cyl(0.012, 0.012, 0.08, 6), iron, 3.04],
+            [new THREE.SphereGeometry(0.03, 8, 6), iron, 3.09],
+          ];
     const m4 = new THREE.Matrix4();
     for (const [low, list] of [[false, L.lampPosts.filter((l) => !l.low)], [true, L.lampPosts.filter((l) => l.low)]]) {
       if (!list.length) continue;
-      const s = low ? 0.2 : 0.28; // the paper box
-      const h = low ? 0.55 : 1.55; // its middle, above the ground
-      for (const [geo, material, y] of design(s, h, low ? 0.07 : 0.1)) {
+      const h = low ? 0.6 : 2.67; // the middle of the glass, above the ground
+      for (const [geo, material, y] of design(low)) {
         const im = new THREE.InstancedMesh(geo, material, list.length);
         list.forEach((l, k) => {
           const [x, z] = P(l);

@@ -163,7 +163,7 @@ const EX_FOR_SIGNAL = 3;
 // 변비 and the drinks that cure it (PLAN.md 4장, 6장)
 const JOIN_CHANCE = Number(process.env.NPC_JOIN) || 0.35; // how often an animal comes to squat beside someone pushing
 const STUCK_CHANCE = Number(process.env.STUCK_CHANCE) || 0.1; // about one poop in ten gets stuck
-const POCKET_MAX = 1; // one drink, held in your hand
+const POCKET_MAX = 3; // up to three drinks kept (one in your hand, the rest put by)
 const DRINKS = ['banana', 'latte', 'americano', 'yogurt', 'prune'];
 const KICK_DROP = 0.3; // about one kick in three drops a drink
 const GOLD_CAN = 0.01;

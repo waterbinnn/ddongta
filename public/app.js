@@ -32,6 +32,7 @@ console.log(
 const STALL_W = 110;
 const ENTER_RANGE = 75;
 const SPEED = 300;
+const POCKET_MAX = 3; // drinks you can keep (keep in sync with server.js)
 
 // the room layout arrives from the server on welcome (stalls in a U around a plaza)
 let LAYOUT = [];
@@ -2223,7 +2224,7 @@ function placeWalkers(dt, t) {
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = onAMat(e.rx, e.ry) ? benchFacing(e.rx, e.ry) : e.turn;
     else if (move === 'drink') want = cam.yaw;
-    else if (e.kickT > 0 || (mine && nearVendingHere() && !e.walking && !(u.pk || []).length)) {
+    else if (e.kickT > 0 || (mine && nearVendingHere() && !e.walking && (u.pk || []).length < POCKET_MAX)) {
       // at a vending machine: face it, so the kick lands on it
       const v = GROUNDS.terrace.vendings.reduce((a, b) => (Math.hypot(b.x - e.rx, b.y - e.ry) < Math.hypot(a.x - e.rx, a.y - e.ry) ? b : a));
       want = Math.atan2(v.x - e.rx, v.y - e.ry);
@@ -3267,6 +3268,7 @@ function renderActions() {
     // a round button like 앉기 and 눕기, always out (never folded behind the +)
     const b = miniBtn('drink', '쾌변음료', drinkNow);
     b.classList.add('pose');
+    if (me.pk.length > 1) b.insertAdjacentHTML('beforeend', `<span class="count">${me.pk.length}</span>`); // how many you have
     if (me.cn) b.classList.add('urge'); // stuck: this is the way out
     rail.append(b);
   }
@@ -3436,7 +3438,7 @@ function onKick(m) {
   if (at) pop(at.clone().add(new THREE.Vector3(0, 0.6, 0)), DRINK[m.drink].name);
   if (byMe) {
     plop(0.6);
-    toast(m.kept ? `${withJosa(DRINK[m.drink].name, '이', '가')} 나왔어요!` : '음료가 나왔는데 손에 이미 하나 들고 있어요');
+    toast(m.kept ? `${withJosa(DRINK[m.drink].name, '이', '가')} 나왔어요!` : `음료가 나왔는데 이미 ${POCKET_MAX}개를 들고 있어요`);
     if (m.drink === 'gold') playDing();
   }
 }

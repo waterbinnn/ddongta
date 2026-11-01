@@ -273,6 +273,7 @@ body:not(.wish-near) .chat { display: none; }
 .rail .act.pose { position: relative; flex-direction: column; justify-content: center; gap: 2px; width: 54px; height: 54px; padding: 0; border-radius: 50%; font-size: 11px; }
 .rail .act.pose img { width: 22px; height: auto; }
 .rail .act.pose kbd { position: absolute; top: -4px; right: -4px; }
+.rail .act.pose .count { position: absolute; top: -5px; left: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: var(--shadow-sm); } /* how many drinks */
 
 /* the side rail: a column of small buttons in the bottom right corner, just above the main bar and out of the way
    of the scene (on a phone, level with the stick on the other side), growing upward as buttons come */

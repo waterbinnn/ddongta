@@ -128,8 +128,40 @@ try:
             o.data.materials.append(mat('#f2c14e', rough=0.25))
 except Exception as err:  # the sign still reads without the poop
     print('golden poop not loaded', err)
-box((-2.2, -3.2, 0.25), (1.8, 0.5, 0.12), '#c8915c', rot=0.4)  # a couple of benches
-box((2.4, -3.0, 0.25), (1.8, 0.5, 0.12), '#c8915c', rot=-0.4)
+# ---------- café terrace on the plaza: round tables, chairs, parasols, string lights, a coffee cart ----------
+def chair(x, y, face):
+    dx, dy = math.sin(face), -math.cos(face)  # unit vector the sitter faces
+    box((x, y, 0.42), (0.42, 0.42, 0.06), '#fbf6ea', rot=face)
+    box((x - dx * 0.2, y - dy * 0.2, 0.68), (0.42, 0.05, 0.5), '#fbf6ea', rot=face)
+    for ox, oy in ((-0.17, -0.17), (0.17, -0.17), (-0.17, 0.17), (0.17, 0.17)):
+        c, s_ = math.cos(face), math.sin(face)
+        cyl((x + ox * c - oy * s_, y + ox * s_ + oy * c, 0.2), 0.02, 0.4, '#3b3a36')
+
+
+TABLES = [(-2.4, -2.6, '#9fd8c7'), (0.4, -3.6, '#ffc2a8'), (2.9, -1.9, '#ffe28a')]
+for tx, ty, shade in TABLES:
+    cyl((tx, ty, 0.72), 0.42, 0.04, '#fffaf0')                   # table top
+    cyl((tx, ty, 0.36), 0.04, 0.72, '#3b3a36')                    # stem
+    cyl((tx, ty, 0.02), 0.2, 0.04, '#3b3a36')                     # foot
+    cyl((tx, ty, 1.35), 0.025, 1.3, '#f4efe4')                    # parasol pole
+    cyl((tx, ty, 2.05), 1.15, 0.45, shade, r2=0.05, verts=12)     # parasol
+    cyl((tx + 0.12, ty + 0.05, 0.79), 0.05, 0.1, '#ffffff')       # a cup
+    for k, a in enumerate((0.4, 0.4 + math.pi)):
+        chair(tx + math.sin(a) * 0.75, ty - math.cos(a) * 0.75, a + math.pi)
+for i in range(2):                                                # string lights between two posts
+    px = -4.2 if i == 0 else 4.4
+    cyl((px, -4.6, 1.3), 0.04, 2.6, '#5b4636')
+for k in range(17):
+    t = k / 16
+    x = -4.2 + 8.6 * t
+    z = 2.55 - 0.55 * math.sin(math.pi * t)
+    ball((x, -4.6, z), 0.06, '#fff1c2', emit=6.0)
+box((-4.0, -1.0, 0.55), (1.3, 0.8, 1.1), '#7cc6b2')               # coffee cart
+box((-4.0, -1.0, 1.65), (1.5, 1.0, 0.08), '#ffffff')              # its awning
+for side in (-1, 1):
+    cyl((-4.0 + side * 0.6, -1.4, 1.35), 0.025, 0.6, '#f4efe4')
+cyl((-4.5, -1.35, 0.15), 0.15, 0.06, '#3b3a36', rot=(math.pi / 2, 0, 0))   # wheels
+cyl((-3.5, -1.35, 0.15), 0.15, 0.06, '#3b3a36', rot=(math.pi / 2, 0, 0))
 
 # ---------- campfire rest area, east ----------
 FX, FY = 10.5, 0
@@ -189,7 +221,7 @@ for k in range(14):                                                      # lamps
 PAINT = {'head': '#ffd8bf', 'ear': '#ffd8bf', 'hand': '#ffd8bf', 'leg': '#ffd8bf', 'torso': '#ffe28a', 'arm': '#ffe28a',
          'shorts': '#8db6ea', 'shoe': '#fbf8f2', 'cuff': '#8db6ea', 'briefs': '#ffc9d6'}
 HAIRS = ['#6b4630', '#2b2226', '#8a4b2a', '#d9814a', '#e8c26a']
-SPOTS = [(-1.2, -0.8, 0.6), (0.9, -1.6, 2.6), (1.8, 0.8, 3.6), (-0.4, 1.6, 0.2), (3.2, 1.6, 2.4),
+SPOTS = [(-1.2, -0.8, 0.6), (1.6, -2.6, 2.6), (1.8, 0.8, 3.6), (-0.4, 1.6, 0.2), (3.6, -0.6, 2.4),
          (FX - 2.1, FY - 0.2, -1.57), (FX + 0.4, FY - 2.1, 0.0), (FX + 1.6, FY + 1.4, 2.3), (0.3, 7.6, 3.14), (-6.9, -1.5, -1.3),
          (6.0, -12.6, 0.4), (-11.6, -11.3, 2.6)]
 for i, (x, y, face) in enumerate(SPOTS):
@@ -257,6 +289,7 @@ def shoot(name, loc, target, lens):
 
 
 shoot('overview', (20, -27, 22), (0, 0, 0), 30)
+shoot('terrace', (3.2, -10.5, 3.4), (0.0, -2.2, 0.8), 30)
 # dusk at the campfire: dimmer sky and sun so the fire glows
 bg.inputs['Color'].default_value = hexcol('#8fa3c9')
 bg.inputs['Strength'].default_value = 0.55

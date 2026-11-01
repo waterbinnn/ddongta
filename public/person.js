@@ -45,11 +45,12 @@ function matOf(color) {
 
 // ---------- faces: drawn once per expression, shared by everyone ----------
 
-const INK = '#2a1f2b';
+// Plain dot eyes and round blush, no mouth (like 사우나 고요); the face only changes while pooping and so on.
+const INK = '#6b4a3a'; // soft brown, not black
 const FW = 256;
 const FH = 200;
-const EYE_Y = 116; // low-set, wide-apart eyes read as cute
-const EYE_DX = 52;
+const EYE_Y = 130; // below the fringe
+const EYE_DX = 50;
 
 function drawFace(expr) {
   const c = document.createElement('canvas');
@@ -62,120 +63,66 @@ function drawFace(expr) {
   g.fillStyle = INK;
   g.lineWidth = 6;
   const cx = FW / 2;
+  const eyes = (draw) => [-1, 1].forEach((s) => draw(cx + s * EYE_DX, s));
   const line = (pts) => {
     g.beginPath();
     pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
     g.stroke();
   };
-  // big glossy eyes: a tall dark oval with one large and one small highlight
-  const dotEyes = (big = 1) => {
-    for (const s of [-1, 1]) {
-      const x = cx + s * EYE_DX;
-      g.fillStyle = INK;
+  const dots = (r = 8.5) =>
+    eyes((x) => {
       g.beginPath();
-      g.ellipse(x, EYE_Y, 12 * big, 17 * big, 0, 0, Math.PI * 2);
+      g.arc(x, EYE_Y, r, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = '#ffffff';
-      g.beginPath();
-      g.arc(x - 4 * big, EYE_Y - 7 * big, 5 * big, 0, Math.PI * 2);
-      g.fill();
-      g.beginPath();
-      g.arc(x + 4 * big, EYE_Y + 7 * big, 2.2 * big, 0, Math.PI * 2);
-      g.fill();
-    }
-  };
-  // soft round blush that fades at the edges
-  const cheeks = () => {
-    for (const s of [-1, 1]) {
-      const x = cx + s * 84;
-      const y = EYE_Y + 30;
-      const grad = g.createRadialGradient(x, y, 0, x, y, 24);
-      grad.addColorStop(0, 'rgba(255, 140, 155, 0.6)');
-      grad.addColorStop(1, 'rgba(255, 140, 155, 0)');
-      g.fillStyle = grad;
-      g.fillRect(x - 26, y - 26, 52, 52);
-    }
-  };
-  const smile = (w = 10, d = 5) => {
-    g.beginPath();
-    g.moveTo(cx - w, 148);
-    g.quadraticCurveTo(cx, 148 + d * 2, cx + w, 148);
-    g.stroke();
-  };
+    });
   const sweat = () => {
-    g.fillStyle = '#7cc6ff';
+    g.fillStyle = '#9fd3f5';
     g.beginPath();
-    g.moveTo(222, 46);
-    g.quadraticCurveTo(236, 70, 222, 78);
-    g.quadraticCurveTo(208, 70, 222, 46);
+    g.moveTo(214, 52);
+    g.quadraticCurveTo(226, 72, 214, 80);
+    g.quadraticCurveTo(202, 72, 214, 52);
     g.fill();
+    g.fillStyle = INK;
   };
-  cheeks();
-  if (expr === 'idle' || expr === 'ok') {
-    dotEyes();
-    smile(expr === 'ok' ? 14 : 9, expr === 'ok' ? 8 : 5);
-  } else if (expr === 'neutral') {
-    dotEyes();
-    line([[cx - 14, 150], [cx + 14, 150]]);
-  } else if (expr === 'urgent') {
-    dotEyes();
-    line([[cx - 18, 152], [cx - 8, 146], [cx, 152], [cx + 8, 146], [cx + 18, 152]]);
+  // flat round blush
+  g.fillStyle = 'rgba(240, 160, 165, 0.5)';
+  eyes((x, s) => {
+    g.beginPath();
+    g.arc(x + s * 30, EYE_Y + 26, 16, 0, Math.PI * 2);
+    g.fill();
+  });
+  g.fillStyle = INK;
+
+  if (expr === 'strain') {
+    // > <  squeezing hard
+    eyes((x, s) => line([[x + s * 9, EYE_Y - 9], [x - s * 7, EYE_Y], [x + s * 9, EYE_Y + 9]]));
     sweat();
-  } else if (expr === 'strain') {
-    for (const s of [-1, 1]) line([[cx + s * (EYE_DX + 12), EYE_Y - 12], [cx + s * (EYE_DX - 10), EYE_Y], [cx + s * (EYE_DX + 12), EYE_Y + 12]]);
-    line([[cx - 20, 150], [cx - 10, 144], [cx, 152], [cx + 10, 144], [cx + 20, 150]]);
+  } else if (expr === 'urgent') {
+    dots();
     sweat();
   } else if (expr === 'bliss') {
-    for (const s of [-1, 1]) {
+    // ^ ^  done, ahh
+    eyes((x) => {
       g.beginPath();
-      g.arc(cx + s * EYE_DX, EYE_Y + 6, 13, Math.PI * 1.1, Math.PI * 1.9);
+      g.arc(x, EYE_Y + 5, 10, Math.PI * 1.15, Math.PI * 1.85);
       g.stroke();
-    }
-    g.fillStyle = INK;
-    g.beginPath();
-    g.moveTo(cx - 20, 142);
-    g.quadraticCurveTo(cx, 178, cx + 20, 142);
-    g.closePath();
-    g.fill();
-    g.fillStyle = '#ff6b81';
-    g.beginPath();
-    g.ellipse(cx, 156, 9, 6, 0, 0, Math.PI * 2);
-    g.fill();
+    });
   } else if (expr === 'relaxed') {
-    for (const s of [-1, 1]) {
-      g.beginPath();
-      g.arc(cx + s * EYE_DX, EYE_Y - 4, 12, Math.PI * 0.15, Math.PI * 0.85);
-      g.stroke();
-    }
-    g.beginPath();
-    g.ellipse(cx, 150, 6, 5, 0, 0, Math.PI * 2);
-    g.stroke();
+    // - -  calm
+    eyes((x) => line([[x - 9, EYE_Y], [x + 9, EYE_Y]]));
   } else if (expr === 'dizzy') {
-    for (const s of [-1, 1]) {
-      const x = cx + s * EYE_DX;
-      line([[x - 11, EYE_Y - 11], [x + 11, EYE_Y + 11]]);
-      line([[x + 11, EYE_Y - 11], [x - 11, EYE_Y + 11]]);
-    }
-    line([[cx - 20, 150], [cx - 10, 144], [cx, 150], [cx + 10, 144], [cx + 20, 150]]);
+    eyes((x) => {
+      line([[x - 8, EYE_Y - 8], [x + 8, EYE_Y + 8]]);
+      line([[x + 8, EYE_Y - 8], [x - 8, EYE_Y + 8]]);
+    });
   } else if (expr === 'shock') {
-    for (const s of [-1, 1]) {
-      g.fillStyle = '#ffffff';
-      g.beginPath();
-      g.ellipse(cx + s * EYE_DX, EYE_Y, 16, 18, 0, 0, Math.PI * 2);
-      g.fill();
-      g.stroke();
-      g.fillStyle = INK;
-      g.beginPath();
-      g.arc(cx + s * EYE_DX, EYE_Y + 2, 6, 0, Math.PI * 2);
-      g.fill();
-    }
+    dots(11);
     g.beginPath();
-    g.ellipse(cx, 154, 10, 13, 0, 0, Math.PI * 2);
+    g.ellipse(cx, EYE_Y + 30, 6, 8, 0, 0, Math.PI * 2);
     g.fill();
     sweat();
   } else {
-    dotEyes();
-    smile();
+    dots(); // idle, ok, neutral: just the dots
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

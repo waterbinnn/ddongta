@@ -43,9 +43,9 @@ html, body {
 
 button { font: inherit; color: inherit; cursor: pointer; }
 
-/* the 3D scene is rendered small and scaled up, so keep it pixelated */
+/* the 3D scene */
 .scene { position: fixed; inset: 0; touch-action: none; }
-.scene canvas { display: block; image-rendering: pixelated; cursor: grab; }
+.scene canvas { display: block; cursor: grab; }
 .scene canvas.grabbing { cursor: grabbing; }
 
 /* pixel icons at exactly 2x */

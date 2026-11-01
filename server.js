@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { createWish } = require('./lib/wish');
+const { createNpcs } = require('./lib/npcs');
 const { LAYOUT: GROUNDS, settle, inBush, nearBean, nearVending, nearWish, onLawn } = require('./lib/layout');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -143,6 +144,7 @@ function openRoom(theme) {
     stalls: Array(MAX_STALLS).fill(null),
     meta: Array.from({ length: MAX_STALLS }, newMeta),
     users: new Set(),
+    npcs: new Set(), // the animals wandering about (not visitors: they don't count toward who's here)
     drops: [], // poops left on the ground in the bushes, for anyone to pick up for a while
     dirty: false,
     emptySince: Date.now(),
@@ -191,7 +193,7 @@ function poopNow(room, u) {
   u.progress = 0;
   u.checked = false;
   u.count++;
-  countPoop();
+  if (!u.npc) countPoop(); // the animals' poops aren't counted in today's total
   const gold = Math.random() < GOLD_CHANCE;
   // the first one each time you sit down stays under you (in the bowl, or on the ground in the bushes);
   // every one after that goes on top of your head, and stays there until you give it to the beanstalk
@@ -280,15 +282,17 @@ function snapshot(room) {
     drops: room.drops.map(({ i, x, y, k, g }) => ({ i, x, y, k, g })),
     stalls: room.stalls.map((u) => (u ? u.id : 0)),
     hp: room.meta.map((m) => Math.round(m.hp)),
-    users: [...room.users].map((u) => ({
+    users: [...room.users, ...room.npcs].map((u) => ({
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
       r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
       q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile, un: u.under ? 1 : 0,
-      pk: u.pocket, cn: u.stuck ? 1 : 0, k: u.kind,
+      pk: u.pocket, cn: u.stuck ? 1 : 0, k: u.kind, ...(u.npc && { npc: 1 }),
     })),
   });
 }
+
+const npcs = createNpcs({ GROUNDS, settle, inBush, broadcast, dropPoop, EX_MOVES, EX_MS });
 
 setInterval(() => {
   const d = kstDate();
@@ -311,7 +315,8 @@ setInterval(() => {
       room.drops = fresh;
       room.dirty = true;
     }
-    for (const u of room.users) {
+    npcs.update(room, now, TICK_MS / 1000);
+    for (const u of [...room.users, ...room.npcs]) {
       if (u.roll) {
         const t = Math.min(1, (now - u.roll.t0) / ROLL_MS);
         const e = 1 - (1 - t) * (1 - t);
@@ -390,9 +395,10 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 2048 });
 let nextId = 1;
 
-// who you come as, picked at random each time: a person three times in ten, otherwise one of the six animals
-const ANIMALS = ['elephant', 'dog', 'cat', 'rabbit', 'giraffe', 'wombat'];
-const pickKind = (asked) => (asked === 'person' || ANIMALS.includes(asked) ? asked : Math.random() < 0.3 ? 'person' : pick(ANIMALS)); // ?as= is for trying one out
+// everyone comes as a person; the animals are the ones wandering about on their own (lib/npcs.js).
+// ?as=<animal> is only for trying an animal out
+const ANIMALS = ['elephant', 'dog', 'cat', 'giraffe', 'wombat'];
+const pickKind = (asked) => (ANIMALS.includes(asked) ? asked : 'person');
 
 wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://localhost').searchParams;

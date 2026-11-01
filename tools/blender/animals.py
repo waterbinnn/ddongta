@@ -1,4 +1,4 @@
-"""Builds the six animal characters and exports them to public/models/animal-<kind>.glb.
+"""Builds the five animals that wander about the place and exports them to public/models/animal-<kind>.glb.
 
 Run from the repo root (Blender does not need to be open):
   /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/blender/animals.py -- [preview.png]
@@ -33,10 +33,10 @@ OUT_DIR = os.path.join(ROOT, 'public', 'models')
 PERSON = os.path.join(OUT_DIR, 'person.glb')
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 PREVIEW = args[0] if args else None
-KINDS = ['elephant', 'dog', 'cat', 'rabbit', 'giraffe', 'wombat']
+KINDS = ['elephant', 'dog', 'cat', 'giraffe', 'wombat']
 # the small ones are smaller: the whole animal is scaled at the hips, which are lowered to match so the feet stay on
 # the ground (the hips joint then sits at HIP_Z * size)
-SIZE = dict(dog=0.8, cat=0.75, rabbit=0.72, wombat=0.8)
+SIZE = dict(dog=0.8, cat=0.75, wombat=0.8)
 
 HIP_Z = 0.21     # hip joints, the same as the person
 WAIST_Z = 0.26   # the torso's pivot, the same as the person
@@ -323,7 +323,7 @@ def spots_field(centres, r_of):
     return field
 
 
-# ---------- the six ----------
+# ---------- the five ----------
 
 BASE = dict(
     torso_c=(0, 0, 0.35), torso_r=(0.135, 0.115, 0.19), flare=0.15,
@@ -467,38 +467,6 @@ def cat():
     return B
 
 
-def rabbit():
-    # standing 0.99 m to the crown of the head (head 0.74 ± 0.25), the ears' tips at about 1.38 m
-    s = spec(fur='#f3ece2', torso_r=(0.13, 0.115, 0.19), head_c=(0, 0, 0.74), head_r=(0.285, 0.265, 0.25),
-             arm_r=0.04, paw_r=0.045, leg_r=0.048, foot_r=(0.058, 0.1, 0.04), foot_fwd=0.04)
-    B = Body(s)
-    head = B.head()
-    white, pink = mat('cream', '#fffaf4'), mat('ear_inner', '#f1b5ba')
-    B.limbs()
-    B.belly(white, cx=0.08)
-    for side, tag in ((1, 'L'), (-1, 'R')):
-        # long ears standing up, leaning apart, pink inside
-        base = B.HC + Vector((side * 0.09, 0.03, 0.22))
-        R = Matrix.Rotation(side * math.radians(11), 3, 'Y') @ Matrix.Rotation(math.radians(-6), 3, 'X')
-        c = base + R @ Vector((0, 0, 0.2))
-        ear = new_object(f'ear_{tag}', ellipsoid_bm(c, (0.062, 0.034, 0.23), 24, 16, rot=R, taper=0.1), base, head, B.fur)
-        new_object(f'ear_inner_{tag}', ellipsoid_bm(c + R @ Vector((0, -0.026, 0.0)), (0.036, 0.012, 0.17), 20, 12, rot=R), base, ear, pink)
-    pads = None
-    for side in (1, -1):
-        pads = ellipsoid_bm(B.face(0.62, side * 0.12, -0.12), (0.055, 0.045, 0.045), 20, 12, bm=pads)
-    m = B.face(0.62, 0, -0.1)
-    muzzle = new_object('muzzle', pads, m, head, white)
-    n = B.face(0.52, 0, 0.02)
-    new_object('nose', ellipsoid_bm(n, (0.026, 0.018, 0.02), 16, 10, rot=(180, 0, 0), taper=0.4), n, muzzle, mat('nose', '#e3919a'))
-    teeth = None
-    for side in (1, -1):
-        p = B.face(0.78, side * 0.035, -0.02)
-        teeth = ellipsoid_bm(p, (0.016, 0.008, 0.024), 12, 8, bm=teeth)
-    new_object('teeth', teeth, m, muzzle, mat('teeth', '#ffffff'))
-    B.tail([(0, 0.1, 0.25), (0, 0.13, 0.25)], lambda t: 0.05, white)  # a round cotton tail
-    return B
-
-
 def line_tube(a, b, ra, rb, n=16, segs=24):
     """A straight round-ended tube from a to b, made of many rings (so patches can be cut along it)."""
     a, b = Vector(a), Vector(b)
@@ -624,7 +592,7 @@ def wombat():
     return B
 
 
-BUILDERS = dict(elephant=elephant, dog=dog, cat=cat, rabbit=rabbit, giraffe=giraffe, wombat=wombat)
+BUILDERS = dict(elephant=elephant, dog=dog, cat=cat, giraffe=giraffe, wombat=wombat)
 
 
 def export(kind):
@@ -667,7 +635,7 @@ for k in KINDS:
     export(k)
 
 
-# ---------- optional preview: the person and the six in a row ----------
+# ---------- optional preview: the person and the five in a row ----------
 if PREVIEW:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene

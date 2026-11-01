@@ -9,7 +9,7 @@ import { clone as cloneRigged } from '/vendor/jsm/utils/SkeletonUtils.js';
 export const HIP_Y = 0.21; // hip joints above the feet (matches the Blender script)
 export const HEIGHT = 1.04;
 
-export const ANIMALS = ['elephant', 'dog', 'cat', 'rabbit', 'giraffe', 'wombat'];
+export const ANIMALS = ['elephant', 'dog', 'cat', 'giraffe', 'wombat']; // the animals wandering about the place
 const templates = {};
 const loadModel = (kind, url) =>
   new Promise((resolve) => {
@@ -244,7 +244,7 @@ export function makeAnimal(kind) {
 }
 
 // The top of someone as they are posed right now, in world height: the crown of the head, plus what stands up
-// above it (hair, a rabbit's ears). Name tags and pops go here, so they come down with an animal on all fours.
+// above it (hair, a cat's ears). Name tags and pops go here, so they come down with an animal on all fours.
 const crownV = new THREE.Vector3();
 function crownY(p) {
   const h = p.parts.head;
@@ -260,10 +260,10 @@ function withCrown(p) {
 }
 export const crownOf = (p) => (p.parts.head ? crownY(p) : p.group.position.y + p.height);
 
-// On all fours: the body stretches out long (more for the cat and the rabbit, whose chibi bodies are stubby) and
+// On all fours: the body stretches out long (most for the cat, whose chibi body is stubby) and
 // tips forward at the waist, just far enough that the front legs (made like the hind legs) stand on the ground.
 // If they still fall short, they stretch a little (the foot keeps its shape and just moves down).
-const BODY = { cat: 1.7, rabbit: 1.6, dog: 1.4, wombat: 1.25, elephant: 1.15, giraffe: 1.2 };
+const BODY = { cat: 1.7, dog: 1.4, wombat: 1.25, elephant: 1.15, giraffe: 1.2 };
 function fourLegs(P, long) {
   for (const n of ['arm_L', 'hand_L']) P[n].geometry.computeBoundingBox();
   const armReach = -P.arm_L.geometry.boundingBox.min.y; // shoulder to the end of the arm

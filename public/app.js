@@ -137,10 +137,9 @@ const PROPS = {
 };
 
 // every kind does its own poop: a person the usual swirl, an elephant a big heap of it, dogs and cats little ones,
-// a rabbit a handful of pellets, a giraffe a long log and a wombat (as real wombats do) a cube
+// a giraffe a long log and a wombat (as real wombats do) a cube
 const POOP_ROWS = {
   swirl: ['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'],
-  pellets: ['........', '.hp.....', '.pP..hp.', '.....pP.', '..hp....', '..pP.hp.', '.....pP.', '........'],
   log: ['........', '........', '........', '.hhppp..', 'hpppppPP', 'pppppPPP', '.PPPPPP.', '........'],
   cube: ['........', '.hhhhhh.', '.hppppP.', '.hppppP.', '.hppppP.', '.hppppP.', '.PPPPPP.', '........'],
 };
@@ -153,7 +152,7 @@ const POOPS = Object.fromEntries(
 // [shape, size of the one left under you]
 const POOP_OF = {
   person: ['swirl', 1], elephant: ['swirl', 1.9], dog: ['swirl', 0.65], cat: ['swirl', 0.6],
-  rabbit: ['pellets', 0.8], giraffe: ['log', 1.2], wombat: ['cube', 0.9],
+  giraffe: ['log', 1.2], wombat: ['cube', 0.9],
 };
 const kindOf = (id) => (id === meId ? me.k : users.get(id)?.data.k) || 'person';
 const artFor = (kind, gold = false) => POOPS[(POOP_OF[kind] || POOP_OF.person)[0]][gold ? 1 : 0];
@@ -1431,7 +1430,7 @@ function handle(m) {
 let lastFlushed = -1;
 function applyState(st) {
   // everyone in this restroom, and how many stalls are in use right now
-  $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
+  $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.filter((u) => !u.npc).length}<span class="unit">명</span>`; // people only, not the animals; units hide on phones
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
   if (st.beanY !== undefined) beanYesterday = st.beanY;
   syncDrops(st.drops);
@@ -2717,7 +2716,7 @@ const tagAt = new THREE.Vector3();
 function placeNameTags() {
   for (const [id, e] of users) {
     const seat = e.data.s;
-    const hide = inRoom || OG || (seat !== -1 && LAYOUT[seat]?.type === 'private');
+    const hide = inRoom || OG || e.data.npc || (seat !== -1 && LAYOUT[seat]?.type === 'private'); // the animals have no names
     const h = hide ? null : headOf(id, 0);
     if (!h || h.distanceTo(camera.position) > 24) {
       e.tag.hidden = true;

@@ -239,7 +239,7 @@ function followLegs(p) {
 }
 
 // mode: 'stand' | 'walk' | 'sit' | 'wash' | 'pondwash' | 'roll' | 'jump' | 'squat' (in the bushes)
-//       and the 쾌변 체조 moves: 'bridge' | 'boat' | 'wind' (knees to the chest) | 'escape' (the toilet squat) | 'bow'
+//       and the 쾌변 체조 moves: 'bridge' | 'boat' | 'twist' | 'bow'
 export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed = 0 }) {
   const { parts: P, rest } = p;
   if (!P.hips) return;
@@ -325,24 +325,13 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.leg_R.rotation.set(-2.0 - w, 0, -0.08);
     P.arm_L.rotation.set(-1.5, 0, -0.1);
     P.arm_R.rotation.set(-1.5, 0, 0.1);
-  } else if (mode === 'wind') {
-    // 바람 빼는 자세: lying on the back hugging the knees to the chest, rocking side to side
-    p.spin.rotation.set(-Math.PI / 2, 0, Math.sin(t * 2.2) * 0.22);
-    p.spin.position.set(0, 0.14, 0.45);
-    P.leg_L.rotation.set(-2.3, 0, 0.1);
-    P.leg_R.rotation.set(-2.3, 0, -0.1);
-    P.arm_L.rotation.set(-1.5, 0, -0.35);
-    P.arm_R.rotation.set(-1.5, 0, 0.35);
-    P.head.rotation.x = 0.3;
-  } else if (mode === 'escape') {
-    // 변비 탈출 자세: knees up high, leaning forward, elbows on the knees, breathing slowly
-    P.hips.position.y -= 0.12;
-    P.leg_L.rotation.set(-1.65, 0, 0.3);
-    P.leg_R.rotation.set(-1.65, 0, -0.3);
-    P.torso.rotation.x = 0.55 + Math.sin(t * 1.4) * 0.04;
-    P.arm_L.rotation.set(-0.7, 0, -0.15);
-    P.arm_R.rotation.set(-0.7, 0, 0.15);
-    P.head.rotation.x = -0.2; // looking ahead
+  } else if (mode === 'twist') {
+    // 허리 비틀기: arms out to the sides, twisting at the waist
+    const w = Math.sin(t * 3.4);
+    P.torso.rotation.y = w * 0.65;
+    P.arm_L.rotation.z = 1.35;
+    P.arm_R.rotation.z = -1.35;
+    P.head.rotation.y = -w * 0.3;
   } else if (mode === 'bow') {
     // 활 자세: on the belly, reaching back for the ankles, chest and legs up, rocking
     p.spin.rotation.x = Math.PI / 2 + Math.sin(t * 2.5) * 0.15;

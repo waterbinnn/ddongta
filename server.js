@@ -136,7 +136,7 @@ function openRoom(theme) {
 for (const theme of OPEN_THEMES) for (let k = 0; k < SERVERS_PER_THEME; k++) openRoom(theme);
 const isFull = (room) => room.users.size >= ROOM_CAP;
 // 쾌변 체조: free moves on the exercise lawn; a few of them and 「신호가 왔다!」
-const EX_MOVES = ['bridge', 'boat', 'wind', 'escape', 'bow'];
+const EX_MOVES = ['bridge', 'bow', 'twist', 'boat'];
 const EX_MS = 2600;
 const EX_FOR_SIGNAL = 3;
 

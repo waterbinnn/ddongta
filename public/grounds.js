@@ -4,6 +4,7 @@
 // The stalls themselves are built by app.js (makeStall); this file builds everything around them.
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
+import { leafTexture, grassTuftTexture, stoneTexture, cardsGeometry, stoneGeometry } from './nature.js';
 
 const U = 0.01; // centimetres to metres
 const rnd = (k) => {
@@ -217,8 +218,8 @@ export function buildGrounds(kit) {
     const WH = L.wallH * U; // walls well over head height, so the building towers over you
     block(x1 - x0 + 0.4, WH, 0.2, tile(x1 - x0, WH), (x0 + x1) / 2, WH / 2, z0 - 0.1);    // back wall
     for (const x of [x0, x1]) block(0.2, WH, z1 - z0, tile(z1 - z0, WH), x, WH / 2, (z0 + z1) / 2); // side walls
-    for (const x of [x0, x1]) block(0.34, 0.16, z1 - z0 + 0.1, mat('#e8f3fa'), x, WH + 0.08, (z0 + z1) / 2); // copings
-    block(x1 - x0 + 0.5, 0.16, 0.34, mat('#e8f3fa'), (x0 + x1) / 2, WH + 0.08, z0 - 0.1);
+    for (const x of [x0, x1]) block(0.34, 0.16, z1 - z0 + 0.1, mat('#bfb7a8'), x, WH + 0.08, (z0 + z1) / 2); // stone copings
+    block(x1 - x0 + 0.5, 0.16, 0.34, mat('#bfb7a8'), (x0 + x1) / 2, WH + 0.08, z0 - 0.1);
     // the sink counter along the east wall, with a long mirror above it
     const sc = L.sinkCounter;
     const cx = ((sc.x0 + sc.x1) / 2) * U;
@@ -248,19 +249,23 @@ export function buildGrounds(kit) {
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
     const WH = L.wallH * U;
-    const wall = new THREE.MeshLambertMaterial({ map: tiled(tex.brick, (x1 - x0) / 0.8, WH / 0.4), color: '#ffe9d6' });
+    const wall = new THREE.MeshLambertMaterial({ map: tiled(tex.plaster, (x1 - x0) / 1.6, WH / 0.8) });
     block(x1 - x0, WH, z1 - z0, wall, (x0 + x1) / 2, WH / 2, (z0 + z1) / 2);
     // a pitched roof, like a cottage: a long triangular prism, eaves hanging over the walls
     const depth = z1 - z0 + 0.9;
-    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), mat('#c4694a'), { cast: true, receive: true });
+    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), mat('#4b4f52'), { cast: true, receive: true }); // dark grey roof tiles
     roof.rotation.set(-Math.PI / 2, 0, Math.PI / 2); // lying along the building, one flat face down, the ridge up
     roof.scale.set(1, 1, 0.7);
     add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
-    block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1);                  // a wooden fascia over the doors
+    const timber = mat('#4a3a2e');
+    block(x1 - x0 + 0.3, 0.32, 0.2, timber, (x0 + x1) / 2, 2.6, z1 + 0.1);                  // a dark timber beam over the doors
+    // timber posts between the doors and at the corners, like a bathhouse front
+    for (let k = 0; k <= 8; k++) block(0.14, 2.6, 0.16, timber, x0 + 0.2 + k * L.stallW * U - 0.01, 1.3, z1 + 0.08);
+    block(x1 - x0 + 0.3, 0.12, 0.22, timber, (x0 + x1) / 2, 0.06, z1 + 0.1); // and a sill along the bottom
     // little warm lamps between the doors
     const glow = new THREE.MeshBasicMaterial({ color: '#ffe3a6' });
     for (let k = 0; k <= 8; k++) {
-      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.3, z1 + 0.08);
+      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.3, z1 + 0.18);
     }
     planter(x0 - 0.5, z1 + 0.5, 1.1, 5);
     planter(x1 + 0.5, z1 + 0.5, 1.1, 6);
@@ -270,7 +275,7 @@ export function buildGrounds(kit) {
   {
     const [x, z] = P(L.exercise);
     const r = L.exercise.r * U;
-    disc(r, new THREE.MeshLambertMaterial({ color: '#8ea66c' }), x, z, 0.008, 64);
+    disc(r, new THREE.MeshLambertMaterial({ color: '#a7bd83' }), x, z, 0.008, 64);
     const matColors = ['#c9b9a0', '#a7b49c', '#c4a58c', '#b6ae9f', '#9fae9b', '#cdbfa6']; // natural cotton and linen
     L.mats.forEach((m, k) => {
       block(m.w * U, 0.03, m.d * U, mat(matColors[k % matColors.length]), m.x * U, 0.02, m.y * U, { receive: true });
@@ -285,30 +290,38 @@ export function buildGrounds(kit) {
   {
     const [bx, bz] = P(L.bush);
     const r = L.bush.r * U;
-    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#7d975b' }), bx, bz, 0.004, 48);
-    const n = 80;
-    const balls = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshLambertMaterial({ color: '#ffffff' }), n); // soft round shrubs
-    const colors = ['#55704a', '#4b6542', '#617a52'];
+    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#8fa86c' }), bx, bz, 0.004, 48);
+    // leafy shrubs: crossed cards of painted leaves round a dark core, about waist high
+    const n = 90;
+    const leafy = new THREE.MeshLambertMaterial({ map: leafTexture(), alphaTest: 0.5, side: THREE.DoubleSide });
+    const shrubs = new THREE.InstancedMesh(cardsGeometry(3, true), leafy, n);
+    const cores = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#4a6338'), n); // the shade inside, same as between the leaves
+    const tints = ['#ffffff', '#e8eedc', '#f4f0dc'];
     const m4 = new THREE.Matrix4();
     for (let k = 0; k < n; k++) {
       const a = rnd(k + 400) * Math.PI * 2;
       const d = 2.6 + Math.sqrt(rnd(k + 500)) * (r - 3.0); // a clearing in the middle, where people squat
-      let s = 0.45 + rnd(k + 600) * 0.6;
+      const s = 0.55 + rnd(k + 600) * 0.55;
       const x = bx + Math.cos(a) * d;
       const z = bz + Math.sin(a) * d;
-      m4.compose(new THREE.Vector3(x, s * 0.2, z), new THREE.Quaternion(), new THREE.Vector3(s * 0.65, s * 0.45, s * 0.65)); // about waist high: you hide in it, but still show
-      balls.setMatrixAt(k, m4);
-      balls.setColorAt(k, new THREE.Color(colors[k % 3]));
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd(k + 650) * Math.PI, 0));
+      shrubs.setMatrixAt(k, m4.compose(new THREE.Vector3(x, -0.05, z), q, new THREE.Vector3(s * 1.2, s * 0.85, s * 1.2)));
+      shrubs.setColorAt(k, new THREE.Color(tints[k % 3]));
+      cores.setMatrixAt(k, m4.compose(new THREE.Vector3(x, s * 0.25, z), q, new THREE.Vector3(s * 0.35, s * 0.25, s * 0.35)));
     }
-    balls.castShadow = true;
-    root.add(balls);
-    const blades = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.5, 5), new THREE.MeshLambertMaterial({ color: '#6b8a50' }), 160);
-    for (let k = 0; k < 160; k++) {
+    shrubs.castShadow = true;
+    root.add(shrubs, cores);
+    // tall grass all through the thicket
+    const tuft = new THREE.MeshLambertMaterial({ map: grassTuftTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
+    const tufts = new THREE.InstancedMesh(cardsGeometry(2, false), tuft, 220);
+    for (let k = 0; k < 220; k++) {
       const a = rnd(k + 700) * Math.PI * 2;
       const d = Math.sqrt(rnd(k + 800)) * r;
-      blades.setMatrixAt(k, new THREE.Matrix4().makeTranslation(bx + Math.cos(a) * d, 0.25, bz + Math.sin(a) * d));
+      const s = 0.45 + rnd(k + 900) * 0.35;
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd(k + 950) * Math.PI, 0));
+      tufts.setMatrixAt(k, m4.compose(new THREE.Vector3(bx + Math.cos(a) * d, 0, bz + Math.sin(a) * d), q, new THREE.Vector3(s, s, s)));
     }
-    root.add(blades);
+    root.add(tufts);
   }
 
   // ---------- lamps along the path, trees round the outside ----------
@@ -340,12 +353,15 @@ export function buildGrounds(kit) {
   const round = treeSpots.filter((t) => !t.cedar);
   const cedars = treeSpots.filter((t) => t.cedar);
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.2, 1, 8), mat('#5b4636'), treeSpots.length);
-  const crowns = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: '#ffffff' }), round.length * 3);
+  const crownLeaves = leafTexture(true);
+  crownLeaves.repeat.set(3, 2);
+  const crowns = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: '#ffffff', map: crownLeaves }), round.length * 3);
   const tiers = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 12), new THREE.MeshLambertMaterial({ color: '#ffffff' }), cedars.length * 3);
   const crownColors = ['#56724a', '#4d6943', '#5f7b51', '#506c46'];
   const cedarColors = ['#3e5a40', '#36503a'];
   const m4 = new THREE.Matrix4();
   const q0 = new THREE.Quaternion();
+  const stoneTex = stoneTexture();
   const v = (x, y, z) => new THREE.Vector3(x, y, z);
   treeSpots.forEach((t, i) => {
     const trunkH = (t.cedar ? 0.8 : 1.1) * t.s;
@@ -381,6 +397,39 @@ export function buildGrounds(kit) {
     flowerPatch(L.bean.x * U + Math.cos(a) * 1.25, L.bean.y * U + Math.sin(a) * 1.25, 0.3, 6, 50 + k);
   }
 
+  // ---------- stones and grass tufts here and there, out of everyone's way ----------
+  {
+    const rocks = [];
+    for (let k = 0; k < 60 && rocks.length < 26; k++) {
+      const a = rnd(k + 1200) * Math.PI * 2;
+      const d = (6 + rnd(k + 1300) * 14) ;
+      const x = C + Math.cos(a) * d;
+      const z = C + Math.sin(a) * d;
+      const cm = { x: x / U, y: z / U };
+      const clear = L.obstacles.every((o) => cm.x < o.x0 - 80 || cm.x > o.x1 + 80 || cm.y < o.y0 - 80 || cm.y > o.y1 + 80);
+      const offLawn = Math.hypot(cm.x - L.exercise.x, cm.y - L.exercise.y) > L.exercise.r + 60;
+      if (clear && offLawn) rocks.push([x, z, k]);
+    }
+    const rockMesh = new THREE.InstancedMesh(stoneGeometry(2), new THREE.MeshLambertMaterial({ map: stoneTex }), rocks.length);
+    rocks.forEach(([x, z, k], i) => {
+      const sz = 0.12 + rnd(k + 1400) * 0.3;
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd(k + 1500) * Math.PI * 2, 0));
+      rockMesh.setMatrixAt(i, m4.compose(v(x, sz * 0.25, z), q, v(sz * 1.2, sz, sz)));
+    });
+    rockMesh.castShadow = rockMesh.receiveShadow = true;
+    root.add(rockMesh);
+    const tuft = new THREE.MeshLambertMaterial({ map: grassTuftTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
+    const tufts = new THREE.InstancedMesh(cardsGeometry(2, false), tuft, rocks.length * 3);
+    rocks.forEach(([x, z, k], i) => {
+      for (let n = 0; n < 3; n++) {
+        const a = rnd(k + n * 7 + 1600) * Math.PI * 2;
+        const s = 0.3 + rnd(k + n + 1700) * 0.25;
+        tufts.setMatrixAt(i * 3 + n, m4.compose(v(x + Math.cos(a) * 0.4, 0, z + Math.sin(a) * 0.4), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, a, 0)), v(s, s, s)));
+      }
+    });
+    root.add(tufts);
+  }
+
   // ---------- the garden between the two restrooms ----------
   flowerPatch(L.garden.x * U, L.garden.y * U, 2.0, 46, 20);
   for (const [px, pz] of [[L.private.x0, L.private.y1], [L.private.x1, L.private.y1], [L.public.x0, L.public.y1], [L.public.x1, L.public.y1]]) {
@@ -393,7 +442,7 @@ export function buildGrounds(kit) {
     const r = L.pond.r * U;
     disc(r + 0.35, mat('#a39a86'), x, z, 0.009, 48); // a rim of grey stones
     disc(r, new THREE.MeshPhongMaterial({ color: '#4f7f80', shininess: 90, specular: '#cfe3e0', emissive: '#10292c', emissiveIntensity: 0.3 }), x, z, 0.02, 48);
-    const pebbles = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#8f8a80'), 14);
+    const pebbles = new THREE.InstancedMesh(stoneGeometry(1), new THREE.MeshLambertMaterial({ map: stoneTex }), 14);
     for (let k = 0; k < 14; k++) {
       const a = (k / 14) * Math.PI * 2 + rnd(k + 70) * 0.3;
       const sz = 0.14 + rnd(k + 80) * 0.14;

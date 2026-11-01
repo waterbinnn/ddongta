@@ -36,12 +36,12 @@ const INK = '#2a1f2b';
 const OG = new URLSearchParams(location.search).has('og'); // ?og renders the link-preview frame
 
 const PAL = {
-  // sky blue and yellow: sky-blue tiled walls and doors, ivory stall partitions, a yellow-and-cream checked floor, white bowls
+  // calm natural materials, like a bathhouse: warm grey stone tiles, wooden doors, linen-white partitions, white bowls
   sky: '#f2d98a', band: '#4aa6dc', bandGlow: '#000000',
-  tileA: '#bfe3f7', tileLine: '#a6d5f0',
-  floorA: '#ffe7a3', floorB: '#fffaf0', floorLine: '#f2dfae',
-  door: '#5bb4e5', doorDark: '#3f98cc', doorLight: '#7cc6ee', number: '#ffffff',
-  part: '#f6f1e4', partTop: '#ffffff', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000', porcelain: '#fbfbfb',
+  tileA: '#d8d2c6', tileLine: '#c2bbad',
+  floorA: '#cfc8ba', floorB: '#d8d2c6', floorLine: '#bcb4a5',
+  door: '#a88866', doorDark: '#86684b', doorLight: '#bb9d7a', number: '#f6efe2',
+  part: '#ebe6dc', partTop: '#f3efe7', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000', porcelain: '#fbfbfb',
   hemi: ['#fffaf0', '#d8dde6', 1.3], moon: ['#fff6e6', 1.25],
   lamps: ['#fff3dc'], lampPower: 3.5,
   water: ['#8fd0ec', '#1d4a5e'], bench: '#c9965e', stone: '#ffffff',
@@ -131,7 +131,6 @@ const PROPS = {
   sparkle: sprite(['..Y..', '..Y..', 'YYWYY', '..Y..', '..Y..'], { Y: '#ffd84a', W: '#ffffff' }, null, null),
   note: sprite(['..NNN', '..N.N', '..N.N', '..N..', 'NNN..', 'NNN..'], { N: '#ffd84a' }),
   marker: sprite(['MMMMM', '.MMM.', '..M..'], { M: '#ffd84a' }),
-  halo: sprite(['.AAAAAAAA.', 'A........A', '.AAAAAAAA.'], { A: '#ffe066' }, null, null),
   bubble: sprite(['.bbb.', 'bWccb', 'bcccb', 'bcccb', '.bbb.'], { b: '#bfe8ff', W: '#ffffff', c: '#eaf7ff' }, null, null),
   drop: sprite(['.d.', 'ddd', '.d.'], { d: '#8fd6ff' }, null, null),
 };
@@ -281,49 +280,60 @@ const floorCanvas = canvas(32, 32, (g) => {
   g.fillRect(15, 0, 1, 32);
   g.fillRect(31, 0, 1, 32);
 });
-// outside the building: brick walls, a grass world that curves away like a small planet, trees, hills and sky
-const brickCanvas = canvas(16, 8, (g) => {
-  g.fillStyle = '#d6b39a';
-  g.fillRect(0, 0, 16, 8);
-  const bricks = ['#b5523b', '#a9492f', '#bd5c44'];
-  for (let y = 0; y < 2; y++) {
-    for (let x = -1; x < 3; x++) {
-      g.fillStyle = bricks[(x + y * 2 + 3) % 3];
-      g.fillRect(x * 8 + (y % 2) * 4, y * 4, 7, 3);
-    }
+// the private restroom's walls: smooth lime plaster, faintly mottled
+const plasterCanvas = canvas(64, 32, (g) => {
+  g.fillStyle = '#e7e0d2';
+  g.fillRect(0, 0, 64, 32);
+  let seed = 3;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 260; k++) {
+    const v = rand() < 0.5 ? 'rgba(200, 190, 170, 0.35)' : 'rgba(245, 240, 230, 0.4)';
+    g.fillStyle = v;
+    g.fillRect(rand() * 64, rand() * 32, 1 + rand() * 3, 1 + rand() * 2);
   }
 });
-// natural grass: soft mottled greens and fine blades, drawn smooth (not pixel blocks); 1.6 m per tile
-const grassCanvas = canvas(256, 256, (g) => {
-  g.fillStyle = '#7a9558';
-  g.fillRect(0, 0, 256, 256);
+// natural lawn: a fresh, even green with fine blades and a little clover, drawn smooth; 1.6 m per tile
+const grassCanvas = canvas(512, 512, (g) => {
+  g.fillStyle = '#9db776';
+  g.fillRect(0, 0, 512, 512);
   let seed = 7;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  // big soft patches of lighter and darker green, wrapping round the edges so the tiles don't show
-  for (let k = 0; k < 40; k++) {
-    const x = rand() * 256;
-    const y = rand() * 256;
-    const r = 20 + rand() * 50;
+  // very faint patches, wrapping round the edges so the tiles don't show
+  for (let k = 0; k < 30; k++) {
+    const x = rand() * 512;
+    const y = rand() * 512;
+    const r = 40 + rand() * 90;
     const light = rand() < 0.5;
-    for (const [ox, oy] of [[0, 0], [256, 0], [-256, 0], [0, 256], [0, -256]]) {
+    for (const [ox, oy] of [[0, 0], [512, 0], [-512, 0], [0, 512], [0, -512]]) {
       const grad = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-      grad.addColorStop(0, light ? 'rgba(150, 170, 105, 0.35)' : 'rgba(80, 100, 60, 0.3)');
+      grad.addColorStop(0, light ? 'rgba(185, 200, 140, 0.18)' : 'rgba(110, 140, 85, 0.14)');
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       g.fillStyle = grad;
       g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
     }
   }
-  // fine blades
-  for (let k = 0; k < 2200; k++) {
-    const x = rand() * 256;
-    const y = rand() * 256;
+  // fine blades, mostly a shade lighter or darker than the ground
+  for (let k = 0; k < 9000; k++) {
+    const x = rand() * 512;
+    const y = rand() * 512;
     const shade = rand();
-    g.strokeStyle = shade < 0.5 ? 'rgba(95, 120, 70, 0.55)' : shade < 0.85 ? 'rgba(140, 160, 100, 0.5)' : 'rgba(170, 180, 125, 0.45)';
-    g.lineWidth = 1;
+    g.strokeStyle = shade < 0.45 ? 'rgba(125, 152, 92, 0.5)' : shade < 0.9 ? 'rgba(178, 198, 132, 0.5)' : 'rgba(205, 214, 160, 0.5)';
+    g.lineWidth = 1.2;
     g.beginPath();
     g.moveTo(x, y);
-    g.lineTo(x + (rand() - 0.5) * 3, y - 2 - rand() * 4);
+    g.lineTo(x + (rand() - 0.5) * 3, y - 3 - rand() * 5);
     g.stroke();
+  }
+  // a little clover here and there
+  for (let k = 0; k < 60; k++) {
+    const x = rand() * 512;
+    const y = rand() * 512;
+    g.fillStyle = 'rgba(120, 150, 85, 0.6)';
+    for (let l = 0; l < 3; l++) {
+      g.beginPath();
+      g.arc(x + Math.cos(l * 2.1) * 2.5, y + Math.sin(l * 2.1) * 2.5, 2.2, 0, Math.PI * 2);
+      g.fill();
+    }
   }
 });
 
@@ -427,7 +437,7 @@ function buildRoom() {
   lamps.clear();
   const { ground } = buildGrounds({
     L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, pixelTex, M, wishHits, vendingMachine, planter,
-    tex: { grass: grassCanvas, floor: floorCanvas, tile: TILE, brick: brickCanvas },
+    tex: { grass: grassCanvas, floor: floorCanvas, tile: TILE, plaster: plasterCanvas },
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
   floorMesh = ground;
@@ -1022,8 +1032,6 @@ function makePrivateDoor(i) {
   const marker = pixelSprite(PROPS.marker);
   marker.position.set(0.55, 2.55, 0.3);
   marker.visible = false;
-  const halo = pixelSprite(PROPS.halo);
-  halo.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.visible = false;
   const hit = new THREE.Mesh(G.hit, M.hit);
@@ -1034,7 +1042,7 @@ function makePrivateDoor(i) {
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet, marker, halo,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet, marker,
     open: 1, shake: 0, gone: 0, regrow: 1, private: true,
   };
 }
@@ -1091,9 +1099,6 @@ function makeStall(i) {
   const marker = pixelSprite(PROPS.marker);
   marker.position.set(STALL_M / 2, 1.6, SEAT_Z);
   marker.visible = false;
-  const halo = pixelSprite(PROPS.halo);
-  halo.position.set(STALL_M / 2, SEAT_TOP - HIP_Y + HEIGHT + 0.08, SEAT_Z);
-  halo.visible = false;
 
 
   const hit = new THREE.Mesh(G.hit, M.hit);
@@ -1101,7 +1106,7 @@ function makeStall(i) {
   hit.userData.stall = i;
 
 
-  g.add(part, cap, post, hinge, toilet, seatSpot, feet, marker, halo, hit);
+  g.add(part, cap, post, hinge, toilet, seatSpot, feet, marker, hit);
 
   // the last stall in a bank has no neighbour closing its right side, so give it its own wall
   const endX = L.cx + Math.cos(L.rot) * STALL_W;
@@ -1119,7 +1124,7 @@ function makeStall(i) {
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot, person: null, personFor: '', feet, marker, halo,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot, person: null, personFor: '', feet, marker,
     open: 1, shake: 0, gone: 0, regrow: 1,
   };
 }
@@ -1157,14 +1162,12 @@ function makeWalker(u) {
   blob.position.y = 0.01;
   const marker = pixelSprite(PROPS.marker);
   marker.visible = false;
-  const halo = pixelSprite(PROPS.halo);
-  halo.visible = false;
-  charRoot.add(p.group, blob, marker, halo);
-  return { data: u, p, blob, marker, halo, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
+  charRoot.add(p.group, blob, marker);
+  return { data: u, p, blob, marker, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
 }
 
 function removeWalker(e) {
-  charRoot.remove(e.p.group, e.blob, e.marker, e.halo);
+  charRoot.remove(e.p.group, e.blob, e.marker);
   disposePerson(e.p);
 }
 
@@ -1783,7 +1786,6 @@ function placeWalkers(dt, t) {
     e.blob.visible = !inStall;
     e.marker.visible = mine && !inStall;
     if (inStall) {
-      e.halo.visible = false;
       continue;
     }
     const dx = e.rx - px;
@@ -1818,7 +1820,7 @@ function placeWalkers(dt, t) {
       const sink = nearestSink(e.rx, e.ry);
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = benchFacing(e.rx, e.ry);
-    else if (move) want = LYING.has(move) ? cam.yaw + Math.PI / 2 : cam.yaw; // exercising: face the camera (lying down: side on), so the moves show
+    else if (move) want = cam.yaw + Math.PI / 2; // exercising: side on to the camera, so the moves show
     else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
@@ -1835,7 +1837,6 @@ function placeWalkers(dt, t) {
     if (benched) {
       pose(p, { mode: 'sit', t: sec, seed: id });
       p.group.position.set(X, BENCH_TOP - HIP_Y + lift, Z);
-      e.halo.visible = false;
       overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob);
       continue;
     }
@@ -1847,8 +1848,6 @@ function placeWalkers(dt, t) {
     pose(p, { mode, phase: e.phase, t: move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h) });
     if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
-    e.halo.visible = face === 'bliss' && !rolling;
-    overHead(e.halo, X, lift, Z, HEIGHT + 0.08);
     overHead(e.marker, X, lift, Z, HEIGHT + 0.22 + bob);
   }
 }
@@ -1958,11 +1957,8 @@ function animateStalls(dt, t) {
         setFace(s.person, face);
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
-        s.halo.visible = face === 'bliss';
       }
       s.marker.position.y = (s.private ? 2.55 : 1.6) + (Math.floor(t / 300) % 2) * 0.04;
-    } else {
-      s.halo.visible = false;
     }
   });
 }
@@ -2676,8 +2672,7 @@ function renderActions() {
 
 // ---------- the bushes and the 쾌변 체조 lawn ----------
 
-const LYING = new Set(['bridge', 'wind', 'bow']); // moves done lying down
-const EX_MOVES = [['bridge', '엉덩이 브릿지'], ['boat', '보트 자세'], ['wind', '바람 빼기'], ['escape', '변비 탈출'], ['bow', '활 자세']];
+const EX_MOVES = [['bridge', '엉덩이 브릿지'], ['bow', '활 자세'], ['twist', '허리 비틀기'], ['boat', '보트 자세']];
 const inBushHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.bush.x, me.y - GROUNDS.bush.y) <= GROUNDS.bush.r;
 const onLawnHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.exercise.x, me.y - GROUNDS.exercise.y) <= GROUNDS.exercise.r;
 function doExercise(move) {

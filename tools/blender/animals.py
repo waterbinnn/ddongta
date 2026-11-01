@@ -36,7 +36,7 @@ PREVIEW = args[0] if args else None
 KINDS = ['elephant', 'dog', 'cat', 'rabbit', 'giraffe', 'wombat']
 # the small ones are smaller: the whole animal is scaled at the hips, which are lowered to match so the feet stay on
 # the ground (the hips joint then sits at HIP_Z * size)
-SIZE = dict(dog=0.8, cat=0.75, wombat=0.8)
+SIZE = dict(dog=0.8, cat=0.75, rabbit=0.72, wombat=0.8)
 
 HIP_Z = 0.21     # hip joints, the same as the person
 WAIST_Z = 0.26   # the torso's pivot, the same as the person

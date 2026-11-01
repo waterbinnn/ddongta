@@ -4,8 +4,8 @@
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
 
-export const HIP_Y = 0.17; // hip joints above the feet (matches the Blender script)
-export const HEIGHT = 1.0;
+export const HIP_Y = 0.21; // hip joints above the feet (matches the Blender script)
+export const HEIGHT = 1.04;
 
 let template = null;
 export const peopleReady = new Promise((resolve) => {

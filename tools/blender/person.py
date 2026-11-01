@@ -29,14 +29,14 @@ PREVIEW = args[0] if args else None
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 
-# ---------- proportions (metres): a big round head on a small bean of a body, about 1 m tall ----------
-HIP_Z = 0.17          # hip joints
-WAIST_Z = 0.22
-NECK_Z = 0.46
+# ---------- proportions (metres): a big round head on a small bean of a body, about 1.04 m tall ----------
+HIP_Z = 0.21          # hip joints
+WAIST_Z = 0.26
+NECK_Z = 0.50
 HEAD_C = Vector((0, 0, NECK_Z + 0.26))   # middle of the head
 HEAD_R = 0.29
 HEAD_SCALE = Vector((1.06, 1.0, 0.92))   # wider than tall, like a mochi
-SHOULDER = Vector((0.112, 0, 0.405))   # tucked into the top of the body, so the arm grows out of it
+SHOULDER = Vector((0.112, 0, 0.445))   # tucked into the top of the body, so the arm grows out of it
 LEG_X = 0.068
 
 
@@ -101,7 +101,11 @@ def bean_bm(center, radii, flare=0.12):
 
 
 # ---------- body ----------
-hips = ellipsoid('hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.04), (0.135, 0.118, 0.065))   # the seat of the shorts
+# the seat of the shorts: sits up at the waist, flat underneath, no bulge between the legs
+seat = ellipsoid_bm((0, 0, HIP_Z + 0.05), (0.134, 0.108, 0.06), 24, 14)
+for v in seat.verts:
+    v.co.z = max(v.co.z, HIP_Z + 0.008)
+hips = new_object('hips', seat, Vector((0, 0, HIP_Z)))
 torso = new_object('torso', bean_bm((0, 0, WAIST_Z + 0.1), (0.152, 0.128, 0.145), flare=0.05), Vector((0, 0, WAIST_Z)), hips)   # tee, round shoulders
 head = new_object('head', ellipsoid_bm(HEAD_C, (HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z), 40, 24), Vector((0, 0, NECK_Z)), torso)
 
@@ -118,14 +122,14 @@ for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they fac
         v.co += wrist + Vector((side * 0.004, -0.004, -0.018))
     new_object(f'hand_{tag}', hand, sh, arm)
     hip = Vector((side * LEG_X, 0, HIP_Z))
-    leg = ellipsoid(f'leg_{tag}', hip, hip + Vector((0, 0, -0.065)), (0.055, 0.058, 0.075), hips)   # bare legs under the shorts
+    leg = ellipsoid(f'leg_{tag}', hip, hip + Vector((0, 0, -0.085)), (0.052, 0.055, 0.095), hips)   # bare legs under the shorts
     # a short leg of the shorts round each thigh, so it reads as shorts, not a skirt
-    new_object(f'short_{tag}', capsule_bm(hip + Vector((-side * 0.004, 0, 0.02)), hip + Vector((side * 0.004, 0, -0.06)), 0.066, 0.065), hip, leg)
-    ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.132)), (0.062, 0.082, 0.036), leg)
+    new_object(f'short_{tag}', capsule_bm(hip + Vector((-side * 0.006, 0, 0.035)), hip + Vector((side * 0.004, 0, -0.03)), 0.064, 0.062), hip, leg)   # ends well above the knee
+    ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.172)), (0.062, 0.082, 0.036), leg)
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.072, radius2=0.066, depth=0.05)
     for v in bm.verts:
-        v.co += hip + Vector((0, 0, -0.1))
+        v.co += hip + Vector((0, 0, -0.14))
     new_object(f'cuff_{tag}', bm, hip, leg)   # the shorts round the ankles, shown when they are pulled down
 
 # ---------- hair: close to the head, a spiky fringe, pointed sideburns in front of the ears ----------

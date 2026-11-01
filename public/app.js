@@ -211,6 +211,7 @@ let roomFor = -1;
 let roomPerson = null;
 let roomPersonFor = '';
 let roomShake = 0;
+let kicksToday = 0; // the vending machines' kick count today (all rooms)
 let roomWashUntil = 0; // washing at the room's sink until then
 let roomStanding = false; // up off the toilet, standing in the room
 let roomSpot = ''; // where I am in the room: 'seat', 'stand' or 'wash'
@@ -395,6 +396,14 @@ function mesh(geo, material, { cast = false, receive = false } = {}) {
 }
 
 // a pixel sprite planted in the world, sized by its pixel count
+// the arrow over my head: drawn last and never hidden (not by my own poop tower either)
+function frontMarker() {
+  const m = pixelSprite(PROPS.marker);
+  m.material.depthTest = false;
+  m.renderOrder = 10;
+  return m;
+}
+
 function pixelSprite(c, density = PX_M) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(c), transparent: true, alphaTest: 0.5 }));
   s.center.set(0.5, 0);
@@ -800,36 +809,162 @@ function poster(k, x, z, rotY) {
 }
 
 // a drink vending machine: a coloured body, a lit window of cans, buttons, and the slot at the bottom
-function vendingMachine(x, z, rotY, color, seed) {
-  const front = canvas(24, 48, (g) => {
+// a Korean particle that fits the word: 이/가, 은/는, 을/를 (by whether the last syllable has a final consonant)
+function withJosa(word, withFinal, without) {
+  const c = word.charCodeAt(word.length - 1) - 0xac00;
+  const hasFinal = c >= 0 && c <= 11171 && c % 28 !== 0;
+  return word + (hasFinal ? withFinal : without);
+}
+
+// the drinks, as the vending machine and the pocket show them
+const DRINK = {
+  banana: { name: '바나나우유', sip: '쪼옥', color: '#f6d64a', cap: '#f7f3e6', shape: 'bottle' },
+  latte: { name: '연유라떼', sip: '후루룩', color: '#c49a6c', cap: '#f3ece0', shape: 'cup' },
+  americano: { name: '아이스 아메리카노', sip: '꿀꺽', color: '#3b2a20', cap: '#f3ece0', shape: 'cup' },
+  yogurt: { name: '요구르트', sip: '쭈욱', color: '#f4efe6', cap: '#e5484d', shape: 'small' },
+  prune: { name: '푸룬주스', sip: '꿀꺽꿀꺽', color: '#6b3d6e', cap: '#d9c8f0', shape: 'can' },
+  gold: { name: '황금 캔', sip: '꿀꺽!', color: '#e8b64a', cap: '#fff1b8', shape: 'can' },
+};
+// one drink drawn small: a bottle, a cup with a lid, a little yogurt bottle or a can
+function drawDrink(g, kind, x, y, s) {
+  const d = DRINK[kind];
+  g.save();
+  g.translate(x, y);
+  g.scale(s, s);
+  g.fillStyle = d.color;
+  g.strokeStyle = 'rgba(40, 30, 20, 0.5)';
+  g.lineWidth = 0.6;
+  if (d.shape === 'bottle') {
+    g.beginPath();
+    g.ellipse(0, 4, 5, 6, 0, 0, Math.PI * 2); // round banana-milk bottle
+    g.fill();
+    g.stroke();
+    g.fillRect(-2, -5, 4, 4);
+    g.fillStyle = d.cap;
+    g.fillRect(-2.5, -7, 5, 2.5);
+  } else if (d.shape === 'cup') {
+    g.beginPath();
+    g.moveTo(-4.5, -4);
+    g.lineTo(4.5, -4);
+    g.lineTo(3.5, 9);
+    g.lineTo(-3.5, 9);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.fillStyle = d.cap;
+    g.fillRect(-5, -6.5, 10, 2.5);
+    g.fillStyle = '#7a5a3c';
+    g.fillRect(-4, 1, 8, 3); // the sleeve
+  } else if (d.shape === 'small') {
+    g.beginPath();
+    g.ellipse(0, 4, 3.5, 5, 0, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.fillStyle = d.cap;
+    g.fillRect(-2.5, -3.5, 5, 2.5);
+  } else {
+    g.fillRect(-4, -6, 8, 15);
+    g.strokeRect(-4, -6, 8, 15);
+    g.fillStyle = d.cap;
+    g.fillRect(-4, -6, 8, 2);
+  }
+  g.restore();
+}
+const drinkIcons = {};
+const drinkIcon = (kind) => (drinkIcons[kind] ??= canvas(32, 32, (g) => drawDrink(g, kind, 16, 15, 1.5)).toDataURL());
+
+// the vending machine on the terrace: a lit window of drinks, a little screen counting today's kicks, a pick-up slot.
+// Kicked, it shakes.
+let vending = null;
+function vendingMachine(x, z, rotY, color) {
+  const front = canvas(256, 512, (g) => {
     g.fillStyle = color;
-    g.fillRect(0, 0, 24, 48);
-    g.fillStyle = '#eef7fb'; // the lit window
-    g.fillRect(2, 3, 20, 24);
-    const cans = ['#e5484d', '#4aa6dc', '#46a758', '#ffd23f', '#f08a2a', '#8e6bd8', '#ffffff'];
-    for (let r = 0; r < 4; r++) {
-      for (let k = 0; k < 5; k++) {
-        g.fillStyle = cans[(r * 5 + k + seed * 3) % cans.length];
-        g.fillRect(3 + k * 4, 5 + r * 6, 2, 4);
-      }
-      g.fillStyle = '#c9d6dd'; // the shelf under each row
-      g.fillRect(2, 9 + r * 6, 20, 1);
+    g.fillRect(0, 0, 256, 512);
+    g.fillStyle = '#f3ece0'; // the header
+    g.fillRect(12, 12, 232, 44);
+    g.fillStyle = color;
+    g.font = 'bold 26px -apple-system, "Apple SD Gothic Neo", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('똥타 음료', 128, 35);
+    // the lit window, four shelves of drinks with little price tags
+    const glass = g.createLinearGradient(0, 66, 0, 330);
+    glass.addColorStop(0, '#f7fbfc');
+    glass.addColorStop(1, '#dfe9ec');
+    g.fillStyle = glass;
+    g.fillRect(16, 66, 224, 264);
+    const rows = [['banana', 'banana', 'banana', 'yogurt', 'yogurt'], ['latte', 'latte', 'americano', 'americano', 'americano'], ['prune', 'prune', 'yogurt', 'banana', 'latte'], ['americano', 'banana', 'prune', 'latte', 'yogurt']];
+    rows.forEach((row, r) => {
+      row.forEach((kind, k) => drawDrink(g, kind, 40 + k * 44, 100 + r * 64, 2.2));
+      g.fillStyle = '#b9c4c7';
+      g.fillRect(16, 128 + r * 64, 224, 4); // the shelf
+      g.fillStyle = '#4a4a4a';
+      g.font = '11px -apple-system, sans-serif';
+      row.forEach((_, k) => g.fillText('1,200', 40 + k * 44, 140 + r * 64));
+    });
+    g.fillStyle = 'rgba(255, 255, 255, 0.18)'; // a sheen on the glass
+    g.beginPath();
+    g.moveTo(16, 66);
+    g.lineTo(110, 66);
+    g.lineTo(40, 330);
+    g.lineTo(16, 330);
+    g.fill();
+    g.fillStyle = '#2b2a2e'; // buttons, coin slot, pick-up slot
+    for (let k = 0; k < 5; k++) {
+      g.beginPath();
+      g.arc(40 + k * 44, 350, 7, 0, Math.PI * 2);
+      g.fill();
     }
-    g.fillStyle = '#2b2a2e'; // a row of buttons, coin slot and the pick-up slot
-    for (let k = 0; k < 5; k++) g.fillRect(3 + k * 4, 29, 2, 1);
-    g.fillRect(18, 33, 3, 4);
-    g.fillStyle = '#e5484d';
-    g.fillRect(19, 34, 1, 1);
-    g.fillStyle = '#2b2a2e';
-    g.fillRect(3, 40, 18, 5);
+    g.fillRect(200, 382, 26, 40);
+    g.fillStyle = '#c9c4bb';
+    g.fillRect(210, 390, 6, 22);
+    g.fillStyle = '#1d1c1f';
+    g.fillRect(30, 440, 196, 50);
+    g.fillStyle = '#3a393d';
+    g.fillRect(36, 446, 184, 10);
   });
-  const t = pixelTex(front);
-  const body = mat(color);
-  const face = new THREE.MeshLambertMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.25 });
-  const m = mesh(new THREE.BoxGeometry(0.95, 1.85, 0.8), [body, body, body, body, face, body], { cast: true, receive: true });
-  m.position.set(x, 0.925, z);
-  m.rotation.y = rotY;
-  worldRoot.add(m);
+  const t = new THREE.CanvasTexture(front);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  const body = new THREE.MeshPhongMaterial({ color, shininess: 40 });
+  const faceMat = new THREE.MeshLambertMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.18 });
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.rotation.y = rotY;
+  const box = mesh(new THREE.BoxGeometry(0.95, 1.9, 0.8), [body, body, body, body, faceMat, body], { cast: true, receive: true });
+  box.position.y = 0.95;
+  group.add(box);
+  // the screen: today's kicks, in green letters
+  const screen = canvas(160, 48, () => {});
+  const screenTex = new THREE.CanvasTexture(screen);
+  screenTex.colorSpace = THREE.SRGBColorSpace;
+  const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.12), new THREE.MeshBasicMaterial({ map: screenTex }));
+  screenMesh.position.set(-0.12, 1.08, 0.405);
+  group.add(screenMesh);
+  worldRoot.add(group);
+  let shown = -1;
+  vending = {
+    group,
+    shake: 0,
+    setKicks(n) {
+      if (n === shown) return;
+      shown = n;
+      const g = screen.getContext('2d');
+      g.fillStyle = '#10140f';
+      g.fillRect(0, 0, 160, 48);
+      g.fillStyle = '#8ef08a';
+      g.font = 'bold 15px -apple-system, "Apple SD Gothic Neo", sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`오늘 ${n.toLocaleString('ko-KR')}번 맞았어요`, 80, 24);
+      screenTex.needsUpdate = true;
+    },
+    // where a dropped drink shows (world)
+    slot() {
+      return group.localToWorld(new THREE.Vector3(0, 0.45, 0.45));
+    },
+  };
+  vending.setKicks(kicksToday);
 }
 
 // chunky low-poly leaves for the trees outside
@@ -997,7 +1132,7 @@ function makePrivateDoor(i) {
   const lock = mesh(G.lock, M.lockGreen);
   lock.position.set(0.74, 1.35, 0.03);
   hinge.add(door, lock);
-  const marker = pixelSprite(PROPS.marker);
+  const marker = frontMarker();
   marker.position.set(0.55, 2.55, 0.3);
   marker.visible = false;
   const feet = pixelSprite(PROPS.poop);
@@ -1066,7 +1201,7 @@ function makeStall(i) {
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
-  const marker = pixelSprite(PROPS.marker);
+  const marker = frontMarker();
   marker.position.set(STALL_M / 2, 1.6, SEAT_Z);
   marker.visible = false;
 
@@ -1130,7 +1265,7 @@ function makeWalker(u) {
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
-  const marker = pixelSprite(PROPS.marker);
+  const marker = frontMarker();
   marker.visible = false;
   charRoot.add(p.group, blob, marker);
   return { data: u, p, blob, marker, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
@@ -1138,6 +1273,7 @@ function makeWalker(u) {
 
 function removeWalker(e) {
   charRoot.remove(e.p.group, e.blob, e.marker);
+  if (e.cup) charRoot.remove(e.cup);
   disposePerson(e.p);
 }
 
@@ -1148,6 +1284,7 @@ function exprOf(u, seat) {
   if (seat === -1 && u.q) return u.h ? 'strain' : 'idle';
   if (seat === -1 && u.ex) return 'bliss';
   if (seat === -1) return u.n && !u.sg ? 'relaxed' : 'urgent'; // 「신호가 왔다!」 shows on the face too
+  if (u.cn) return 'strain'; // 변비: red-faced and going nowhere
   if (u.p === 0) return u.h ? 'strain' : 'idle';
   if (u.p < 34) return 'strain';
   if (u.p < 67) return 'neutral';
@@ -1217,6 +1354,29 @@ function handle(m) {
     onPoop(m);
   } else if (m.t === 'signal') {
     onSignal(m);
+  } else if (m.t === 'rub') {
+    const at = wishHits[0]?.getWorldPosition(new THREE.Vector3());
+    if (at) {
+      pop(at.clone().add(new THREE.Vector3(0, 0.9, 0)), '문질문질');
+      sparkle(at.clone().add(new THREE.Vector3(0, 0.4, 0)));
+    }
+    if (m.id === meId && m.n) toast(`오늘 ${m.n.toLocaleString('ko-KR')}번째로 문질렀어요`);
+  } else if (m.t === 'pray') {
+    const h = headOf(m.id);
+    if (h) pop(h.clone(), '합장');
+  } else if (m.t === 'wished') {
+    // the wish rises up from the golden poop for everyone here to see
+    const at = wishHits[0]?.getWorldPosition(new THREE.Vector3());
+    if (at) floatWish(at.clone().add(new THREE.Vector3(0, 1.0, 0)), m.text);
+    if (m.id === meId) toast('소원을 빌었어요');
+  } else if (m.t === 'kick') {
+    onKick(m);
+  } else if (m.t === 'order') {
+    onOrder(m);
+  } else if (m.t === 'drink') {
+    onDrink(m);
+  } else if (m.t === 'stuck') {
+    onStuck(m);
   } else if (m.t === 'knock') {
     onKnock(m);
   } else if (m.t === 'break') {
@@ -1240,6 +1400,10 @@ function applyState(st) {
   // everyone in this restroom, and how many stalls are in use right now
   $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
+  if (st.kicks !== undefined && st.kicks !== kicksToday) {
+    kicksToday = st.kicks;
+    vending?.setKicks(kicksToday);
+  }
   if (st.bean !== undefined && performance.now() > beanHoldUntil && st.bean !== beanTotal) {
     beanTotal = st.bean;
     bean?.setTotal(beanTotal);
@@ -1286,6 +1450,11 @@ function applyState(st) {
       me.b = Boolean(u.b);
       me.q = Boolean(u.q);
       me.pl = u.pl || 0;
+      me.cn = Boolean(u.cn);
+      if (JSON.stringify(u.pk || []) !== JSON.stringify(me.pk || [])) {
+        me.pk = u.pk || [];
+        renderPocket();
+      }
       if (u.r) {
         me.x = u.x;
         me.y = u.y;
@@ -1756,6 +1925,7 @@ function placeWalkers(dt, t) {
     e.blob.visible = !inStall;
     e.marker.visible = mine && !inStall;
     if (inStall) {
+      if (e.cup) e.cup.visible = false;
       continue;
     }
     const dx = e.rx - px;
@@ -1790,6 +1960,7 @@ function placeWalkers(dt, t) {
       const sink = nearestSink(e.rx, e.ry);
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = benchFacing(e.rx, e.ry);
+    else if (move === 'rub' || move === 'pray') want = Math.atan2(GROUNDS.wish.x - e.rx, GROUNDS.wish.y - e.ry); // facing the golden poop
     else if (move) want = cam.yaw + Math.PI / 2; // exercising: side on to the camera, so the moves show
     else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
@@ -1804,21 +1975,26 @@ function placeWalkers(dt, t) {
     p.group.rotation.y = e.turn;
     e.blob.position.set(X, 0.01, Z);
     const bob = (Math.floor(t / 300) % 2) * 0.04;
+    placeCup(e, u, X, Z);
     if (benched) {
       pose(p, { mode: 'sit', t: sec, seed: id });
       p.group.position.set(X, BENCH_TOP - HIP_Y + lift, Z);
-      overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob);
+      overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob + towerHeight(u.pl));
       continue;
     }
-    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? (e.washPond ? 'pondwash' : 'wash') : squatting ? 'squat' : move || (e.walking ? 'walk' : 'stand');
+    if (e.kickT > 0) {
+      e.kickT += dt;
+      if (e.kickT > 0.45) e.kickT = 0;
+    }
+    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? (e.washPond ? 'pondwash' : 'wash') : squatting ? 'squat' : e.kickT > 0 ? 'kick' : move || (e.walking ? 'walk' : 'stand');
     if (move !== e.exMove) {
       e.exMove = move; // each move starts from its beginning
       e.exStart = sec;
     }
-    pose(p, { mode, phase: e.phase, t: move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h) });
+    pose(p, { mode, phase: e.phase, t: mode === 'kick' ? e.kickT : move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h) });
     if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
-    overHead(e.marker, X, lift, Z, HEIGHT + 0.22 + bob);
+    overHead(e.marker, X, lift, Z, HEIGHT + 0.22 + bob + towerHeight(u.pl));
   }
 }
 
@@ -1935,7 +2111,7 @@ function animateStalls(dt, t) {
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
       }
-      s.marker.position.y = (s.private ? 2.55 : 1.6) + (Math.floor(t / 300) % 2) * 0.04;
+      s.marker.position.y = (s.private ? 2.55 : 1.6 + towerHeight(occ.data.pl)) + (Math.floor(t / 300) % 2) * 0.04;
     }
   });
 }
@@ -2436,7 +2612,7 @@ function headOf(id) {
   return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, HEIGHT + 0.15 + tower); // screen-up, like the markers
 }
 
-// a crisp link pinned under the golden poop on the back wall (text drawn in the 3D room would blur)
+// a crisp label pinned under the golden poop statue (text drawn in 3D would blur)
 const wishAt = new THREE.Vector3();
 function placeWishLink() {
   const link = $('#wishLink');
@@ -2528,6 +2704,15 @@ function feedChat(id, text, kind = '') {
   setTimeout(() => row.remove(), 10800);
 }
 
+function floatWish(anchor, text) {
+  if (document.hidden) return;
+  const el = document.createElement('div');
+  el.className = 'pop wish-pop';
+  el.textContent = text;
+  $('#labels').append(el);
+  floats.push({ id: 0, el, anchor, age: 0, life: 4.5, rise: 1.4 });
+}
+
 function pop(anchor, text, inside = false) {
   if (document.hidden) return;
   const el = document.createElement('div');
@@ -2554,6 +2739,7 @@ function updatePush(t) {
   b.style.setProperty('--p', `${p}%`);
   let text;
   if (t < flashUntil) text = '퐁당~ 아 시원하다';
+  else if (me.cn) text = holding ? '끄으으응… 안 나와' : '변비에 걸렸어요';
   else text = holding ? '끄응…' : '꾹 눌러서 힘주기';
   const span = b.querySelector('.label');
   if (span.textContent !== text) span.textContent = text;
@@ -2579,10 +2765,15 @@ function frame(t) {
   updateCamera(dt);
   clouds.rotation.y += dt * 0.004; // clouds drift slowly round
   bean?.update(dt);
+  if (vending) {
+    vending.shake = Math.max(0, vending.shake - dt);
+    vending.group.rotation.z = vending.shake > 0 ? Math.sin(t / 25) * 0.04 * (vending.shake / 0.35) : 0;
+  }
   renderer.render(scene, camera);
   updateLabels(dt);
   placeBeanLabel();
   renderActions();
+  updateWishBox();
   updatePush(t);
   requestAnimationFrame(frame);
 }
@@ -2597,10 +2788,11 @@ function renderActions() {
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
   const anyFree = stalls.some((_, i) => freeFor(i));
-  const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean' : nearSink() ? 'sink'
+  const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
+    : nearVendingHere() ? 'vend' : nearCartHere() ? 'cafe' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -2622,6 +2814,7 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
+    if (me.cn && (me.pk || []).length) bar.append(mainBtn('wash', `${DRINK[me.pk[0]].name} 마시기`, () => drinkNow(0), 'drink'));
     if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
     else {
       if (inRoom) bar.append(miniBtn('bench', '일어나기', () => { setHold(false); roomStanding = true; }));
@@ -2645,6 +2838,13 @@ function renderActions() {
     bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
     bar.append(mainBtn('bench', '의자에 앉기', () => goSitOnBench(bench)));
+  } else if (mode === 'wish') {
+    // at the golden poop: rub it, put your palms together, and write a wish in the box below
+    bar.append(mainBtn('find', '문지르기', () => send({ t: 'rub' })), miniBtn(null, '합장하기', () => send({ t: 'pray' })));
+  } else if (mode === 'vend') {
+    bar.append(mainBtn('knock', '자판기 차기', () => send({ t: 'kick' })));
+  } else if (mode === 'cafe') {
+    bar.append(mainBtn('wash', '커피 주문', () => send({ t: 'order' })));
   } else if (mode === 'bean') {
     bar.append(mainBtn('sprout', `비료로 뿌리기 · ${me.pl}개`, fertilize));
   } else if (mode === 'bush') {
@@ -2675,10 +2875,103 @@ function renderActions() {
   else setMoveMenu(false);
 }
 
+// ---------- the vending machine, the café, the pocket and 변비 ----------
+
+const nearWishHere = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.wish.x, me.y - GROUNDS.wish.y) <= GROUNDS.wishRange;
+const nearVendingHere = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.terrace.vending.x, me.y - GROUNDS.terrace.vending.y) <= GROUNDS.vendRange;
+const nearCartHere = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.terrace.cart.x, me.y - GROUNDS.terrace.cart.y) <= GROUNDS.cartRange;
+
+// the drinks I carry, in the top bar: tap one to drink it
+function renderPocket() {
+  const el = $('#pocket');
+  const pk = me.pk || [];
+  el.hidden = !pk.length;
+  document.querySelector('.pocket-sep').hidden = !pk.length;
+  el.innerHTML = '';
+  pk.forEach((kind, k) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.title = `${DRINK[kind].name} 마시기`;
+    b.innerHTML = `<img src="${drinkIcon(kind)}" alt="${DRINK[kind].name}">`;
+    b.addEventListener('click', () => drinkNow(k));
+    el.append(b);
+  });
+}
+function drinkNow(k) {
+  if (!(me.pk || []).length) {
+    toast('주머니에 음료가 없어요. 자판기에 다녀올까요?');
+    return;
+  }
+  send({ t: 'drink', k });
+}
+
+function onKick(m) {
+  const e = users.get(m.id);
+  if (e) e.kickT = 0.001;
+  if (vending) vending.shake = 0.35;
+  const at = vending ? vending.slot() : null;
+  const byMe = m.id === meId;
+  if (at) pop(at.clone().add(new THREE.Vector3(0, 1.3, 0)), m.drink ? '덜컹… 툭!' : '쾅!');
+  if (byMe) playKnock(0.6, 2);
+  if (!m.drink) return;
+  if (at) pop(at.clone().add(new THREE.Vector3(0, 0.6, 0)), DRINK[m.drink].name);
+  if (byMe) {
+    plop(0.6);
+    toast(m.kept ? `${withJosa(DRINK[m.drink].name, '이', '가')} 나왔어요! 주머니에 넣었어요` : '음료가 나왔는데 주머니가 꽉 찼어요 (3개까지)');
+    if (m.drink === 'gold') playDing();
+  }
+}
+
+function onOrder(m) {
+  const h = headOf(m.id);
+  if (h) pop(h.clone(), `${DRINK[m.drink].name} 한 잔`);
+  if (m.id === meId) toast(`${DRINK[m.drink].name} 나왔습니다. 주머니에 넣었어요`);
+}
+
+function onDrink(m) {
+  const h = headOf(m.id);
+  const inside = m.id === meId && inRoom;
+  if (h) pop(h.clone(), DRINK[m.drink].sip, inside);
+  if (m.cure) setTimeout(() => {
+    const h2 = headOf(m.id);
+    if (h2) pop(h2.clone(), '꾸르륵…', inside);
+  }, 700);
+  if (m.id === meId) {
+    tone('sine', 520, 380, 0.25, 0.25);
+    if (!m.cure && !me.cn) toast(`${DRINK[m.drink].name}, 시원하다`);
+  }
+}
+
+function onStuck(m) {
+  const h = headOf(m.id);
+  if (m.id === meId) {
+    buzz([60, 40, 60]);
+    toast((me.pk || []).length ? '변비에 걸렸어요! 음료를 마셔 볼까요?' : '변비에 걸렸어요! 주머니에 음료가 없어요. 자판기에 다녀올까요?');
+  } else if (h) pop(h.clone(), '끄으응…');
+}
+
+// a cup on the table in front of you when you sit at the terrace with a drink in your pocket
+function placeCup(e, u, X, Z) {
+  const want = u.b && (u.pk || []).length ? u.pk[0] : '';
+  if (!want) {
+    if (e.cup) e.cup.visible = false;
+    return;
+  }
+  if (!e.cup || e.cupKind !== want) {
+    if (e.cup) charRoot.remove(e.cup);
+    e.cup = mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.12, 14), mat(DRINK[want].color), { cast: true });
+    e.cupKind = want;
+    charRoot.add(e.cup);
+  }
+  const t = GROUNDS.terrace.tables.reduce((a, b) => (Math.hypot(b.x - e.rx, b.y - e.ry) < Math.hypot(a.x - e.rx, a.y - e.ry) ? b : a));
+  e.cup.visible = true;
+  e.cup.position.set(lerp(X, toX(t.x), 0.55), 0.82, lerp(Z, toZ(t.y), 0.55));
+}
+
 // ---------- the bushes and the 쾌변 체조 lawn ----------
 
 const EX_MOVES = [['bridge', '엉덩이 브릿지'], ['bow', '활 자세'], ['twist', '허리 비틀기'], ['boat', '보트 자세']];
-const inBushHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.bush.x, me.y - GROUNDS.bush.y) <= GROUNDS.bush.r;
+const inBushHere = () => Boolean(GROUNDS) && GROUNDS.bushes.some((b) => Math.hypot(me.x - b.x, me.y - b.y) <= b.r);
 const onLawnHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.exercise.x, me.y - GROUNDS.exercise.y) <= GROUNDS.exercise.r;
 function doExercise(move) {
   target = null;
@@ -2706,7 +2999,7 @@ function placeAt(x, y) {
   if (near(L.terrace, L.terraceR + 40)) return '카페 테라스';
   if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
   if (near(L.pond, L.pond.r + 160)) return '연못';
-  if (near(L.bush, L.bush.r)) return '풀숲';
+  if (L.bushes.some((b) => near(b, b.r))) return '풀숲';
   if (near(L.gate, 420)) return '똥타'; // coming in: the name of the place itself
   return '';
 }
@@ -2847,9 +3140,18 @@ document.addEventListener('contextmenu', (e) => {
 chatBox.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
-  if (text) send({ t: 'chat', text });
+  if (text) send({ t: wishing ? 'wish' : 'chat', text });
   chatInput.value = '';
 });
+// in front of the golden poop, the chat box asks for a wish instead
+let wishing = false;
+function updateWishBox() {
+  const now = nearWishHere();
+  if (now === wishing) return;
+  wishing = now;
+  chatInput.placeholder = wishing ? '황금똥에게 소원 빌기…' : '주변에 한마디…';
+  chatBox.classList.toggle('wishing', wishing);
+}
 
 // ---------- toast (one line, only things about me) ----------
 
@@ -3410,8 +3712,12 @@ function pick(clientX, clientY) {
 // two quick taps close together mean "run there"
 let lastTap = { t: 0, x: 0, y: 0 };
 function handleTap(x, y) {
-  if (pick(x, y)?.object.userData.wish) {
-    location.href = '/wish';
+  if (pick(x, y)?.object.userData.wish && me.ready && me.s === -1 && !me.rolling) {
+    // walk up to the golden poop (wishing happens right here, not on another page)
+    const w = GROUNDS.wish;
+    const a = Math.atan2(me.x - w.x, me.y - w.y);
+    target = settleLocal({ x: w.x + Math.sin(a) * 120, y: w.y + Math.cos(a) * 120 });
+    pendingEnter = -1;
     return;
   }
   if (!me.ready || me.s !== -1 || me.rolling) return;

@@ -167,41 +167,116 @@ export function buildGrounds(kit) {
     bulbs.setMatrixAt(k, new THREE.Matrix4().makeTranslation(lx0 + (lx1 - lx0) * t, 2.6 - 0.6 * Math.sin(Math.PI * t), lz));
   }
   root.add(bulbs);
-  // the coffee cart
+  // the café: a little wooden kiosk facing the terrace, with a striped awning, a counter, a menu board and an espresso machine
   {
     const [x, z] = P(L.terrace.cart);
-    block(1.3, 1.0, 0.8, mat('#8a6b4c'), x, 0.6, z); // a wooden cart
-    block(1.5, 0.06, 1.0, white, x, 1.75, z);
-    for (const sx of [-0.6, 0.6]) add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.65, 6), white), x + sx, 1.42, z + 0.4);
-    for (const sx of [-0.45, 0.45]) {
-      const w = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.06, 16), metal);
-      w.rotation.x = Math.PI / 2;
-      add(w, x + sx, 0.16, z + 0.42);
+    const [tx, tz] = P(L.terrace);
+    const k = new THREE.Group();
+    k.position.set(x, 0, z);
+    k.rotation.y = Math.atan2(tx - x, tz - z); // its counter (+z) toward the tables
+    const wood = mat('#c4a07a'); // light oak boards
+    const darkWood = mat('#6b5038');
+    const part = (w, h, d, material, px, py, pz) => {
+      const m = mesh(new THREE.BoxGeometry(w, h, d), material, { cast: true, receive: true });
+      m.position.set(px, py, pz);
+      k.add(m);
+      return m;
+    };
+    part(2.1, 1.05, 0.7, wood, 0, 0.525, 0.2);             // the counter
+    part(2.2, 0.06, 0.8, darkWood, 0, 1.08, 0.22);          // its top
+    part(2.1, 2.5, 0.12, wood, 0, 1.25, -0.55);            // the back wall
+    for (const sx of [-1.02, 1.02]) part(0.1, 2.5, 1.2, wood, sx, 1.25, -0.05); // side walls
+    part(2.4, 0.08, 1.5, darkWood, 0, 2.54, 0.05);          // the roof
+    // a striped canvas awning sloping out over the counter
+    const stripes = document.createElement('canvas');
+    stripes.width = 256;
+    stripes.height = 64;
+    const sg = stripes.getContext('2d');
+    for (let i = 0; i < 8; i++) {
+      sg.fillStyle = i % 2 ? '#f3ecdc' : '#8fae8c';
+      sg.fillRect(i * 32, 0, 32, 64);
     }
-    sign('COFFEE', x, 1.2, z + 0.41, 0, [0.9, 0.24], { bg: '#ffffff', ink: '#3f8f7c', font: 72 });
+    const awnTex = new THREE.CanvasTexture(stripes);
+    awnTex.colorSpace = THREE.SRGBColorSpace;
+    const awning = mesh(new THREE.PlaneGeometry(2.4, 0.8), new THREE.MeshLambertMaterial({ map: awnTex, side: THREE.DoubleSide }), { cast: true });
+    awning.position.set(0, 2.3, 0.85);
+    awning.rotation.x = -Math.PI / 2 + 0.55;
+    k.add(awning);
+    // the menu board on the back wall
+    const menu = document.createElement('canvas');
+    menu.width = 256;
+    menu.height = 160;
+    const mg = menu.getContext('2d');
+    mg.fillStyle = '#2f3330';
+    mg.fillRect(0, 0, 256, 160);
+    mg.strokeStyle = '#a98a68';
+    mg.lineWidth = 8;
+    mg.strokeRect(4, 4, 248, 152);
+    mg.fillStyle = '#f2ede2';
+    mg.font = 'bold 26px -apple-system, "Apple SD Gothic Neo", sans-serif';
+    mg.textAlign = 'center';
+    mg.fillText('똥타 커피', 128, 38);
+    mg.font = '18px -apple-system, "Apple SD Gothic Neo", sans-serif';
+    mg.textAlign = 'left';
+    ['아이스 아메리카노', '연유라떼', '바나나우유'].forEach((t, i) => mg.fillText(`· ${t}`, 30, 74 + i * 28));
+    const menuTex = new THREE.CanvasTexture(menu);
+    menuTex.colorSpace = THREE.SRGBColorSpace;
+    const board = mesh(new THREE.PlaneGeometry(1.1, 0.7), new THREE.MeshLambertMaterial({ map: menuTex }));
+    board.position.set(0, 1.85, -0.48);
+    k.add(board);
+    // an espresso machine, a stack of cups, a little plant
+    part(0.5, 0.36, 0.34, new THREE.MeshPhongMaterial({ color: '#c9ced3', shininess: 90 }), -0.55, 1.29, -0.05);
+    part(0.42, 0.06, 0.3, metal, -0.55, 1.14, 0.05);
+    for (let i = 0; i < 4; i++) {
+      const cup = mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.1, 12), white);
+      cup.position.set(0.35, 1.16 + i * 0.09, 0.15);
+      k.add(cup);
+    }
+    const pot = mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.16, 12), mat('#b9886a'));
+    pot.position.set(0.8, 1.19, 0.3);
+    k.add(pot);
+    const leaves = mesh(new THREE.SphereGeometry(0.14, 12, 10), mat('#5f9a4a'));
+    leaves.position.set(0.8, 1.36, 0.3);
+    k.add(leaves);
+    // a small hanging sign under the awning
+    const cs = sign('COFFEE', 0, 0, 0, 0, [0.9, 0.24], { bg: '#f3ecdc', ink: '#4a3a2e', font: 72 });
+    root.remove(cs);
+    cs.position.set(0, 2.62, 0.82);
+    k.add(cs);
+    root.add(k);
   }
   // the vending machine, facing the middle of the terrace
   {
     const [x, z] = P(L.terrace.vending);
     const [tx, tz] = P(L.terrace);
-    vendingMachine(x, z, Math.atan2(tx - x, tz - z), '#e85d5d', 2);
+    vendingMachine(x, z, Math.atan2(tx - x, tz - z), '#b8463e', 2);
   }
-  // the golden-poop sign: tap it to go and make a wish
+  // the golden poop: a statue on a stone plinth, like the ones in a park. Tap it to go and make a wish
   {
     const [x, z] = P(L.wish);
-    add(mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.25, 10), mat('#8a5a34'), { cast: true }), x, 0.62, z);
-    const hit = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 0.7), M.hit);
-    hit.position.set(x, 1.55, z);
+    const stone = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), 1, 1), color: '#d8d2c6' }); // pale granite
+    const base = mesh(new THREE.BoxGeometry(1.1, 0.2, 1.1), stone, { cast: true, receive: true });
+    base.position.set(x, 0.1, z);
+    const plinth = mesh(new THREE.BoxGeometry(0.85, 0.85, 0.85), stone, { cast: true, receive: true });
+    plinth.position.set(x, 0.62, z);
+    const cap = mesh(new THREE.BoxGeometry(1.0, 0.1, 1.0), stone, { cast: true, receive: true });
+    cap.position.set(x, 1.1, z);
+    root.add(base, plinth, cap);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 1.2), M.hit);
+    hit.position.set(x, 1.6, z);
     hit.userData.wish = true;
     root.add(hit);
     wishHits.push(hit);
     new GLTFLoader().load('/models/golden-poop.glb', (gltf) => {
       const poop = gltf.scene;
       poop.traverse((o) => {
-        if (o.isMesh) o.material = new THREE.MeshStandardMaterial({ color: '#f0bf55', metalness: 0.75, roughness: 0.3, emissive: '#5a3d08', emissiveIntensity: 0.4 });
+        if (o.isMesh) {
+          o.material = new THREE.MeshStandardMaterial({ color: '#f0bf55', metalness: 0.75, roughness: 0.3, emissive: '#5a3d08', emissiveIntensity: 0.4 });
+          o.castShadow = true;
+        }
       });
-      poop.scale.setScalar(0.28);
-      poop.position.set(x, 1.27, z);
+      poop.scale.setScalar(0.8);
+      poop.position.set(x, 1.15, z);
       root.add(poop);
       kit.onSignPoop?.(poop);
     });
@@ -288,43 +363,56 @@ export function buildGrounds(kit) {
     flowerPatch(x - r * 0.2, z + r + 0.6, 1.6, 26, 12);
   }
 
-  // ---------- the bushes: a thicket out west where the forest starts, where animals (and anyone without a stall) go ----------
+  // ---------- the bushes: a big thicket out west where the forest starts, and smaller patches here and there.
+  // Animals (and anyone without a stall) go in any of them ----------
   {
-    const [bx, bz] = P(L.bush);
-    const r = L.bush.r * U;
-    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#86b062' }), bx, bz, 0.004, 48);
-    // leafy shrubs: crossed cards of painted leaves round a dark core, about waist high
-    const n = 150;
     const leafy = new THREE.MeshLambertMaterial({ map: leafTexture(), alphaTest: 0.5, side: THREE.DoubleSide });
-    const shrubs = new THREE.InstancedMesh(cardsGeometry(3, true), leafy, n);
-    const cores = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#466c34'), n); // the shade inside, same as between the leaves
+    const tuft = new THREE.MeshLambertMaterial({ map: grassTuftTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
+    const ground = new THREE.MeshLambertMaterial({ color: '#86b062' });
     const tints = ['#ffffff', '#e8eedc', '#f4f0dc'];
     const m4 = new THREE.Matrix4();
-    for (let k = 0; k < n; k++) {
-      const a = rnd(k + 400) * Math.PI * 2;
-      const d = 2.6 + Math.sqrt(rnd(k + 500)) * (r - 3.0); // a clearing in the middle, where people squat
-      const s = 0.55 + rnd(k + 600) * 0.55;
-      const x = bx + Math.cos(a) * d;
-      const z = bz + Math.sin(a) * d;
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd(k + 650) * Math.PI, 0));
-      shrubs.setMatrixAt(k, m4.compose(new THREE.Vector3(x, -0.05, z), q, new THREE.Vector3(s * 1.2, s * 0.85, s * 1.2)));
-      shrubs.setColorAt(k, new THREE.Color(tints[k % 3]));
+    const spots = []; // [x, z, shrub size] for every shrub
+    const blades = []; // [x, z, size, turn] for every tuft of grass
+    L.bushes.forEach((b, n) => {
+      const bx = b.x * U;
+      const bz = b.y * U;
+      const r = b.r * U;
+      const big = n === 0;
+      disc(r + 0.4, ground, bx, bz, 0.004, 40);
+      const area = r * r;
+      const shrubs = Math.round(area * (big ? 2.6 : 1.3));
+      for (let k = 0; k < shrubs; k++) {
+        const seed = n * 1000 + k;
+        const a = rnd(seed + 400) * Math.PI * 2;
+        // the big thicket keeps a clearing in the middle, where people squat; small patches are dense right through
+        const d = big ? 2.6 + Math.sqrt(rnd(seed + 500)) * (r - 3.0) : 0.6 + Math.sqrt(rnd(seed + 500)) * (r - 0.6);
+        spots.push([bx + Math.cos(a) * d, bz + Math.sin(a) * d, 0.55 + rnd(seed + 600) * 0.55, rnd(seed + 650) * Math.PI]);
+      }
+      const tufts = Math.round(area * 20);
+      for (let k = 0; k < tufts; k++) {
+        const seed = n * 5000 + k;
+        const a = rnd(seed + 700) * Math.PI * 2;
+        const d = Math.sqrt(rnd(seed * 1.37 + 800)) * (r + 0.6);
+        blades.push([bx + Math.cos(a) * d, bz + Math.sin(a) * d, 0.5 + rnd(seed + 900) * 0.45, rnd(seed + 950) * Math.PI]);
+      }
+    });
+    // leafy shrubs: crossed cards of painted leaves round a shaded core, about waist high
+    const shrubMesh = new THREE.InstancedMesh(cardsGeometry(3, true), leafy, spots.length);
+    const cores = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#466c34'), spots.length); // the shade inside
+    spots.forEach(([x, z, s, turn], k) => {
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, turn, 0));
+      shrubMesh.setMatrixAt(k, m4.compose(new THREE.Vector3(x, -0.05, z), q, new THREE.Vector3(s * 1.2, s * 0.85, s * 1.2)));
+      shrubMesh.setColorAt(k, new THREE.Color(tints[k % 3]));
       cores.setMatrixAt(k, m4.compose(new THREE.Vector3(x, s * 0.25, z), q, new THREE.Vector3(s * 0.35, s * 0.25, s * 0.35)));
-    }
-    shrubs.castShadow = true;
-    root.add(shrubs, cores);
-    // tall grass all through the thicket
-    const tuft = new THREE.MeshLambertMaterial({ map: grassTuftTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
-    const TUFTS = 1100; // thick with grass: a real thicket
-    const tufts = new THREE.InstancedMesh(cardsGeometry(2, false), tuft, TUFTS);
-    for (let k = 0; k < TUFTS; k++) {
-      const a = rnd(k + 700) * Math.PI * 2;
-      const d = Math.sqrt(rnd(k * 1.37 + 800)) * (r + 0.6);
-      const s = 0.5 + rnd(k + 900) * 0.45;
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd(k + 950) * Math.PI, 0));
-      tufts.setMatrixAt(k, m4.compose(new THREE.Vector3(bx + Math.cos(a) * d, 0, bz + Math.sin(a) * d), q, new THREE.Vector3(s, s, s)));
-    }
-    root.add(tufts);
+    });
+    shrubMesh.castShadow = true;
+    // tall grass all through
+    const tuftMesh = new THREE.InstancedMesh(cardsGeometry(2, false), tuft, blades.length);
+    blades.forEach(([x, z, s, turn], k) => {
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, turn, 0));
+      tuftMesh.setMatrixAt(k, m4.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s, s)));
+    });
+    root.add(shrubMesh, cores, tuftMesh);
   }
 
   // ---------- lamps along the path, trees round the outside ----------
@@ -442,7 +530,7 @@ export function buildGrounds(kit) {
     const [x, z] = P(L.pond);
     const r = L.pond.r * U;
     disc(r + 0.35, mat('#a39a86'), x, z, 0.009, 48); // a rim of grey stones
-    disc(r, new THREE.MeshPhongMaterial({ color: '#4f8f98', shininess: 90, specular: '#d8ecea', emissive: '#10292c', emissiveIntensity: 0.3 }), x, z, 0.02, 48);
+    disc(r, new THREE.MeshPhongMaterial({ color: '#86cfd8', shininess: 100, specular: '#ffffff', emissive: '#2d6670', emissiveIntensity: 0.25 }), x, z, 0.02, 48); // clear, bright water
     const pebbles = new THREE.InstancedMesh(stoneGeometry(1), new THREE.MeshLambertMaterial({ map: stoneTex }), 14);
     for (let k = 0; k < 14; k++) {
       const a = (k / 14) * Math.PI * 2 + rnd(k + 70) * 0.3;

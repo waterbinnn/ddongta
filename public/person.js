@@ -342,6 +342,28 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.leg_R.rotation.set(1.5, 0, -0.1);
     P.arm_L.rotation.set(2.5, 0, -0.15);
     P.arm_R.rotation.set(2.5, 0, 0.15);
+  } else if (mode === 'rub') {
+    // rubbing the golden poop: both hands out in front, going round and round
+    const a = t * 9;
+    P.arm_L.rotation.set(-1.35 + Math.sin(a) * 0.15, 0, -0.15 + Math.cos(a) * 0.12);
+    P.arm_R.rotation.set(-1.35 - Math.sin(a) * 0.15, 0, 0.15 - Math.cos(a) * 0.12);
+    P.torso.rotation.x = 0.12;
+    P.head.rotation.x = -0.15; // looking up at it
+  } else if (mode === 'pray') {
+    // 합장: palms together at the chest, a slow bow
+    const bow = Math.sin(Math.PI * Math.min(1, t / 2.4)) * 0.35;
+    P.arm_L.rotation.set(-1.1, 0, -0.65);
+    P.arm_R.rotation.set(-1.1, 0, 0.65);
+    P.torso.rotation.x = bow;
+    P.head.rotation.x = 0.15 + bow * 0.5;
+  } else if (mode === 'kick') {
+    // a kick at the vending machine: the right leg swings forward hard, arms out for balance
+    const k = Math.sin(Math.PI * Math.min(1, t / 0.45));
+    P.leg_R.rotation.x = -1.5 * k;
+    P.leg_L.rotation.x = 0.2 * k;
+    P.torso.rotation.x = -0.2 * k;
+    P.arm_L.rotation.z = 0.9 * k;
+    P.arm_R.rotation.z = -0.9 * k;
   } else if (mode === 'wash') {
     P.arm_L.rotation.x = -1.25 + Math.sin(t * 14) * 0.08;
     P.arm_R.rotation.x = -1.25 - Math.sin(t * 14) * 0.08;

@@ -8,9 +8,9 @@ its pivot at its joint, so the page can swing legs and arms and turn the head in
 Colours are not set here: the page paints each part by name (skin, hair, shirt, pants, shoes), and draws the face.
 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
-  hips (shorts) > torso (shirt) > head (skin) > hair
-                                > arm_L / arm_R (sleeves) > hand_L / hand_R
-                > leg_L / leg_R (pants) > shoe_L / shoe_R, cuff_L / cuff_R (pants round the ankles, hidden by default)
+  hips (shorts) > torso (tee) > head (skin) > hair, tuft, ear_L / ear_R
+                              > arm_L / arm_R (sleeves) > hand_L / hand_R
+                > leg_L / leg_R (bare legs) > shoe_L / shoe_R, cuff_L / cuff_R (shorts round the ankles, hidden by default)
 """
 import math
 import os
@@ -28,15 +28,15 @@ PREVIEW = args[0] if args else None
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 
-# ---------- proportions (metres): a big head on a small body, about 1.08 m tall ----------
-HIP_Z = 0.30          # hip joints
-WAIST_Z = 0.34
-NECK_Z = 0.60
-HEAD_C = Vector((0, 0, NECK_Z + 0.24))   # middle of the head
-HEAD_R = 0.25
-HEAD_SCALE = Vector((1.04, 1.0, 0.95))   # a little wider than tall
-SHOULDER = Vector((0.15, 0, 0.56))
-LEG_X = 0.075
+# ---------- proportions (metres): a big round head on a small bean of a body, about 1 m tall ----------
+HIP_Z = 0.17          # hip joints
+WAIST_Z = 0.22
+NECK_Z = 0.46
+HEAD_C = Vector((0, 0, NECK_Z + 0.26))   # middle of the head
+HEAD_R = 0.29
+HEAD_SCALE = Vector((1.06, 1.0, 0.92))   # wider than tall, like a mochi
+SHOULDER = Vector((0.125, 0, 0.42))
+LEG_X = 0.068
 
 
 def new_object(name, bm, pivot, parent=None):
@@ -86,43 +86,74 @@ def shell(keep, radius, scale=HEAD_SCALE, fringe=False):
 
 
 # Cuts follow the sphere's own rows and columns (height and angle round the head), so the edges come out clean.
-FRINGE = 0.07  # where the fringe ends above the middle of the head
-
-
 def around(p):
     """Angle round the head from the middle of the face (0) to the back (pi)."""
     return abs(math.atan2(p.x, -p.y))
 
 
-def keep_short(p, _):
+def keep_hair(p, _):
     a = around(p)
-    if a < 0.95:
-        return p.z > FRINGE  # the fringe across the forehead
-    if a < 1.9:
-        return p.z > -0.04  # over the ears
-    return p.z > -0.14  # down to the nape
+    if a < 1.0:
+        return p.z > 0.12  # the hairline; soft locks hang below it (see below)
+    if a < 1.85:
+        return p.z > 0.02  # above the ears
+    return p.z > -0.17  # down to the nape
+
+
+def bean_bm(center, radii, flare=0.12):
+    """An ellipsoid a little wider at the bottom, like a bean."""
+    bm = ellipsoid_bm((0, 0, 0), radii, 24, 14)
+    for v in bm.verts:
+        k = 1 + flare * (-v.co.z / radii[2])
+        v.co.x *= k
+        v.co.y *= k
+        v.co += Vector(center)
+    return bm
 
 
 # ---------- body ----------
-hips = ellipsoid('hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.03), (0.15, 0.115, 0.085))
-torso = ellipsoid('torso', (0, 0, WAIST_Z), (0, 0, WAIST_Z + 0.13), (0.15, 0.115, 0.155), hips)
-head = new_object('head', ellipsoid_bm(HEAD_C, (HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z), 32, 20), Vector((0, 0, NECK_Z)), torso)
+hips = ellipsoid('hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.035), (0.15, 0.128, 0.07))   # shorts
+torso = new_object('torso', bean_bm((0, 0, WAIST_Z + 0.1), (0.15, 0.128, 0.14)), Vector((0, 0, WAIST_Z)), hips)   # tee
+head = new_object('head', ellipsoid_bm(HEAD_C, (HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z), 40, 24), Vector((0, 0, NECK_Z)), torso)
 
 for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they face -y
+    ellipsoid(f'ear_{tag}', (0, 0, NECK_Z), HEAD_C + Vector((side * 0.3, 0.01, -0.03)), (0.04, 0.034, 0.055), head)
     sh = Vector((side * SHOULDER.x, 0, SHOULDER.z))
-    arm = ellipsoid(f'arm_{tag}', sh, sh + Vector((side * 0.035, 0, -0.085)), (0.048, 0.052, 0.105), torso)
-    ellipsoid(f'hand_{tag}', sh + Vector((side * 0.045, 0, -0.19)), sh + Vector((side * 0.045, 0, -0.19)), (0.05, 0.05, 0.05), arm)
+    arm = ellipsoid(f'arm_{tag}', sh, sh + Vector((side * 0.035, 0, -0.05)), (0.05, 0.052, 0.07), torso)   # short sleeve
+    ellipsoid(f'hand_{tag}', sh, sh + Vector((side * 0.06, 0, -0.125)), (0.046, 0.046, 0.05), arm)
     hip = Vector((side * LEG_X, 0, HIP_Z))
-    leg = ellipsoid(f'leg_{tag}', hip, hip + Vector((0, 0, -0.12)), (0.07, 0.072, 0.14), hips)
-    ellipsoid(f'shoe_{tag}', hip + Vector((0, 0, -0.255)), hip + Vector((0, -0.025, -0.255)), (0.072, 0.098, 0.05), leg)
+    leg = ellipsoid(f'leg_{tag}', hip, hip + Vector((0, 0, -0.065)), (0.055, 0.058, 0.075), hips)   # bare legs under the shorts
+    ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.132)), (0.062, 0.082, 0.036), leg)
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.085, radius2=0.078, depth=0.07)
+    bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.072, radius2=0.066, depth=0.05)
     for v in bm.verts:
-        v.co += hip + Vector((0, 0, -0.2))
-    new_object(f'cuff_{tag}', bm, hip + Vector((0, 0, -0.2)), leg)
+        v.co += hip + Vector((0, 0, -0.1))
+    new_object(f'cuff_{tag}', bm, hip, leg)   # the shorts round the ankles, shown when they are pulled down
 
-# ---------- hair: a short cut with a straight fringe ----------
-new_object('hair', shell(keep_short, 0.262), Vector((0, 0, NECK_Z)), head)
+# ---------- hair: soft and round, a side-parted fringe, one tuft sticking up ----------
+hair_bm = shell(keep_hair, 0.305)
+for v in hair_bm.verts:
+    v.co.z += 0.012  # a little volume on top
+# soft locks along the hairline make a wavy fringe instead of a hard cut
+LOCKS = [(-0.75, 0.07, 0.95), (-0.42, 0.05, 1.05), (-0.12, 0.06, 1.0), (0.2, 0.045, 1.1), (0.5, 0.06, 0.95), (0.8, 0.075, 0.9)]
+for ang, drop, size in LOCKS:
+    made = bmesh.ops.create_uvsphere(hair_bm, u_segments=14, v_segments=10, radius=1.0)
+    rot = Matrix.Rotation(-ang, 3, 'Z')
+    sx, sy, sz = HEAD_R * HEAD_SCALE.x + 0.012, HEAD_R * HEAD_SCALE.y + 0.012, HEAD_R * HEAD_SCALE.z
+    spot = HEAD_C + Vector((math.sin(ang) * sx, -math.cos(ang) * sy, 0.12 - drop + 0.012))
+    for v in made['verts']:
+        local = Vector((v.co.x * 0.075 * size, v.co.y * 0.035, v.co.z * 0.085 * size))
+        v.co = rot @ local + spot
+new_object('hair', hair_bm, Vector((0, 0, NECK_Z)), head)
+# one tuft on top, curling forward
+bm = bmesh.new()
+bmesh.ops.create_cone(bm, cap_ends=True, segments=14, radius1=0.045, radius2=0.006, depth=0.17)
+for v in bm.verts:
+    t = (v.co.z + 0.085) / 0.17  # 0 at the root, 1 at the tip
+    v.co.y -= 0.11 * t * t       # curls forward
+    v.co.z -= 0.03 * t * t
+    v.co += HEAD_C + Vector((0.03, 0.05, HEAD_R * HEAD_SCALE.z + 0.075))
+new_object('tuft', bm, Vector((0, 0, NECK_Z)), head)
 
 # ---------- export ----------
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
@@ -150,8 +181,8 @@ if PREVIEW:
         b.inputs['Roughness'].default_value = 0.75
         return m
 
-    skin, hair, shirt, pants, shoe = mat('skin', (1, 0.72, 0.55)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
-    paint = {'head': skin, 'hand': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'leg': pants, 'cuff': pants, 'shoe': shoe}
+    skin, hair, shirt, pants, shoe = mat('skin', (1, 0.9, 0.84)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
+    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'tuft': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'cuff': pants, 'shoe': shoe}
     for o in scene.objects:
         if o.type == 'MESH':
             o.data.materials.append(next(v for k, v in paint.items() if o.name.startswith(k)))

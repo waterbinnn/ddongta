@@ -4,8 +4,8 @@
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
 
-export const HIP_Y = 0.3; // hip joints above the feet (matches the Blender script)
-export const HEIGHT = 1.08;
+export const HIP_Y = 0.17; // hip joints above the feet (matches the Blender script)
+export const HEIGHT = 1.0;
 
 let template = null;
 export const peopleReady = new Promise((resolve) => {
@@ -23,14 +23,21 @@ export const peopleReady = new Promise((resolve) => {
   );
 });
 
-// the one look: short brown hair, a 똥타-yellow tee, navy shorts
-const LOOK = { skin: '#ffd9b8', hair: '#3b2a20', shirt: '#ffcf3f', pants: '#2f4a7a', shoes: '#2c2630', undies: '#f7f4ee' };
+// the one look: fair skin, soft brown hair, a butter-yellow tee, sky-blue shorts, white sneakers
+export const LOOK = { skin: '#fff1e8', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffffff' };
 
+// soft cartoon shading: three flat tones instead of a smooth gradient
+const toonRamp = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255, 210, 210, 210, 255, 255, 255, 255, 255]), 3, 1);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
 const mats = new Map();
 function matOf(color) {
   let m = mats.get(color);
   if (!m) {
-    m = new THREE.MeshLambertMaterial({ color });
+    m = new THREE.MeshToonMaterial({ color, gradientMap: toonRamp });
     mats.set(color, m);
   }
   return m;
@@ -41,8 +48,8 @@ function matOf(color) {
 const INK = '#2a1f2b';
 const FW = 256;
 const FH = 200;
-const EYE_Y = 112; // low-set eyes, like the pixel faces
-const EYE_DX = 46;
+const EYE_Y = 116; // low-set, wide-apart eyes read as cute
+const EYE_DX = 52;
 
 function drawFace(expr) {
   const c = document.createElement('canvas');
@@ -53,37 +60,46 @@ function drawFace(expr) {
   g.lineJoin = 'round';
   g.strokeStyle = INK;
   g.fillStyle = INK;
-  g.lineWidth = 7;
+  g.lineWidth = 6;
   const cx = FW / 2;
   const line = (pts) => {
     g.beginPath();
     pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
     g.stroke();
   };
+  // big glossy eyes: a tall dark oval with one large and one small highlight
   const dotEyes = (big = 1) => {
     for (const s of [-1, 1]) {
+      const x = cx + s * EYE_DX;
       g.fillStyle = INK;
       g.beginPath();
-      g.ellipse(cx + s * EYE_DX, EYE_Y, 11 * big, 14 * big, 0, 0, Math.PI * 2);
+      g.ellipse(x, EYE_Y, 12 * big, 17 * big, 0, 0, Math.PI * 2);
       g.fill();
       g.fillStyle = '#ffffff';
       g.beginPath();
-      g.arc(cx + s * EYE_DX - 3 * big, EYE_Y - 5 * big, 4 * big, 0, Math.PI * 2);
+      g.arc(x - 4 * big, EYE_Y - 7 * big, 5 * big, 0, Math.PI * 2);
       g.fill();
-    }
-  };
-  const cheeks = () => {
-    g.fillStyle = 'rgba(255, 140, 160, 0.55)';
-    for (const s of [-1, 1]) {
       g.beginPath();
-      g.ellipse(cx + s * 80, EYE_Y + 28, 17, 10, 0, 0, Math.PI * 2);
+      g.arc(x + 4 * big, EYE_Y + 7 * big, 2.2 * big, 0, Math.PI * 2);
       g.fill();
     }
   };
-  const smile = (w = 16, d = 8) => {
+  // soft round blush that fades at the edges
+  const cheeks = () => {
+    for (const s of [-1, 1]) {
+      const x = cx + s * 84;
+      const y = EYE_Y + 30;
+      const grad = g.createRadialGradient(x, y, 0, x, y, 24);
+      grad.addColorStop(0, 'rgba(255, 140, 155, 0.6)');
+      grad.addColorStop(1, 'rgba(255, 140, 155, 0)');
+      g.fillStyle = grad;
+      g.fillRect(x - 26, y - 26, 52, 52);
+    }
+  };
+  const smile = (w = 10, d = 5) => {
     g.beginPath();
-    g.moveTo(cx - w, 146);
-    g.quadraticCurveTo(cx, 146 + d * 2, cx + w, 146);
+    g.moveTo(cx - w, 148);
+    g.quadraticCurveTo(cx, 148 + d * 2, cx + w, 148);
     g.stroke();
   };
   const sweat = () => {
@@ -97,7 +113,7 @@ function drawFace(expr) {
   cheeks();
   if (expr === 'idle' || expr === 'ok') {
     dotEyes();
-    smile(expr === 'ok' ? 20 : 15, expr === 'ok' ? 11 : 7);
+    smile(expr === 'ok' ? 14 : 9, expr === 'ok' ? 8 : 5);
   } else if (expr === 'neutral') {
     dotEyes();
     line([[cx - 14, 150], [cx + 14, 150]]);
@@ -189,7 +205,7 @@ function faceGeometry(head) {
 
 // ---------- one person ----------
 
-export function makePerson() {
+export function makePerson(hair = LOOK.hair) {
   const root = template ? template.clone(true) : new THREE.Group();
   const parts = {};
   root.traverse((o) => {
@@ -197,10 +213,10 @@ export function makePerson() {
     if (o.isMesh) o.frustumCulled = true;
   });
   const paint = (names, color) => names.forEach((n) => parts[n] && (parts[n].material = matOf(color)));
-  paint(['head', 'hand_L', 'hand_R'], LOOK.skin);
-  paint(['hair'], LOOK.hair);
+  paint(['head', 'ear_L', 'ear_R', 'hand_L', 'hand_R', 'leg_L', 'leg_R'], LOOK.skin);
+  paint(['hair', 'tuft'], hair);
   paint(['torso', 'arm_L', 'arm_R'], LOOK.shirt);
-  paint(['hips', 'leg_L', 'leg_R', 'cuff_L', 'cuff_R'], LOOK.pants);
+  paint(['hips', 'cuff_L', 'cuff_R'], LOOK.pants);
   paint(['shoe_L', 'shoe_R'], LOOK.shoes);
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = false;
 
@@ -234,7 +250,6 @@ export function setPantsDown(p, down) {
   if (p.down === down) return;
   p.down = down;
   const { parts } = p;
-  for (const n of ['leg_L', 'leg_R']) if (parts[n]) parts[n].material = matOf(down ? LOOK.skin : LOOK.pants);
   if (parts.hips) parts.hips.material = matOf(down ? LOOK.undies : LOOK.pants);
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = down;
 }

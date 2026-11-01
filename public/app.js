@@ -1,6 +1,7 @@
 // 똥타 — a roomy three.js restroom rendered at low resolution, with hand-drawn pixel sprites standing in it.
 import * as THREE from '/vendor/three.module.js';
 import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
+import { buildGrounds } from './grounds.js';
 
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
@@ -9,9 +10,7 @@ const SPEED = 300;
 
 // the room layout arrives from the server on welcome (stalls in a U around a plaza)
 let LAYOUT = [];
-let ROOM_W = 2200;
-let ROOM_D = 2300;
-let BASIN = { x: 1100, y: 1050, w: 100, d: 420 }; // the wash island (sent by the server)
+let GROUNDS = null; // the grounds' layout (two restrooms, plaza, exercise ground, bushes), sent by the server
 
 // server units (cm) -> meters
 const U = 0.01;
@@ -26,7 +25,7 @@ const PART_BOT = 0.3;
 const PART_TOP = 1.75;
 const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at -1.1)
 const SEAT_TOP = 0.46; // where the sitter's hips rest: perched on the seat, face clear of the door
-const BENCH_TOP = 0.41;
+const BENCH_TOP = 0.45; // terrace chairs
 const PX_M = 0.05; // meters per sprite pixel
 const PILE_MAX = 10;
 
@@ -63,7 +62,6 @@ let meId = null;
 let stalls = [];
 let piles = [];
 let hp = [];
-let held = [];
 const users = new Map();
 const me = { x: 100, y: 300, s: -1, p: 0, ready: false, rolling: false, pd: false, q: 0, b: false };
 let pendingBench = false;
@@ -197,7 +195,7 @@ const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
 const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // the sun by day, the moon at night
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
-Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 10, bottom: -10, near: 1, far: 40 });
+Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 16, bottom: -16, near: 1, far: 48 }); // follows the camera (updateCamera)
 sun.shadow.bias = -0.001;
 scene.add(hemi, sun, sun.target);
 const lamps = new THREE.Group(); // the lights over the plaza (no visible fixtures)
@@ -302,23 +300,6 @@ const mirrorCanvas = canvas(12, 16, (g) => {
   g.fillRect(2, 2, 1, 4);
   g.fillRect(3, 2, 1, 2);
 });
-// the entrance: a welcome mat and a wet-floor sign
-const matCanvas = () => canvas(56, 22, (g) => {
-  g.fillStyle = '#a9d9a0'; // a soft pastel green mat
-  g.fillRect(0, 0, 56, 22);
-  g.fillStyle = '#c8ebc0';
-  g.fillRect(2, 2, 52, 18);
-  g.font = '9px Galmuri9';
-  g.textBaseline = 'middle';
-  g.textAlign = 'center';
-  g.fillStyle = '#4f8a4a';
-  g.fillText('WELCOME', 28, 11);
-});
-const wetSign = () => sprite([
-  '...yyyy...', '..yYYYYy..', '..YYkkYY..', '..YYkkYY..', '.yYYkkYYy.', '.YYYkkYYY.',
-  '.YYYYYYYY.', 'yYYYkkYYYy', 'YYYYkkYYYY', 'YYYYYYYYYY', 'k........k', 'k........k',
-], { Y: '#ffd23f', y: '#e0a91c', k: '#2a1f2b' });
-
 // a door texture per stall: number on top, cracks as it gets knocked
 function drawDoorCanvas(c, n, crack) {
   const g = c.getContext('2d');
@@ -398,345 +379,52 @@ function pixelSprite(c, density = PX_M) {
   return s;
 }
 
-// ---------- the room ----------
+// ---------- the grounds ----------
 
 let floorMesh = null;
 let builtFor = 0;
-const benchSpots = []; // the middle of each bench, in server units
-const benchSeats = []; // three seats along each bench, so people sit side by side
+const benchSpots = []; // terrace tables, in server units (sitting reuses the old bench logic)
+const benchSeats = []; // the chairs round each table
 
 function buildRoom() {
   worldRoot.clear();
   lamps.clear();
-  const rw = toX(ROOM_W);
-  const rd = toZ(ROOM_D);
-  const wallH = 5;
-  const back = -STALL_D;
-
-  // floor: the checked tiles stop at the walls and the open front
-  const ft = pixelTex(floorCanvas, true);
-  const fw = rw + 2 * STALL_D;
-  const fd = rd + STALL_D;
-  ft.repeat.set(fw / 1.2, fd / 1.2); // 60 cm tiles
-  floorMesh = mesh(new THREE.PlaneGeometry(fw, fd), new THREE.MeshPhongMaterial({ map: ft, shininess: 28, specular: '#3a3428' }), { receive: true }); // a soft sheen
-  floorMesh.rotation.x = -Math.PI / 2;
-  floorMesh.position.set(rw / 2, 0, (rd + back) / 2);
-  worldRoot.add(floorMesh);
-  buildOutside(rw, rd, back);
-
-  const T = 0.3; // wall thickness
-  const bricks = (w, h) => {
-    const t = pixelTex(brickCanvas, true);
-    t.repeat.set(w / 0.8, h / 0.4);
-    return new THREE.MeshLambertMaterial({ map: t });
-  };
-  const band = (w, x, z, rotY) => {
-    const m = mesh(new THREE.PlaneGeometry(w, 0.12), mat(PAL.band, { emissive: PAL.bandGlow }));
-    m.position.set(x, 2.05, z);
-    m.rotation.y = rotY;
-    m.translateZ(0.01);
-    worldRoot.add(m);
-  };
-  // three walls with real window openings: tiled inside, brick outside, glazed and framed.
-  // Each wall is built flat (x along the wall, y up, inside facing +z) and then turned into place.
-  const winW = 1.3;
-  const winH = 1.6;
-  const winY = 3.25;
-  const frameMat = mat('#fffaf0');
-  const glassMat = new THREE.MeshBasicMaterial({ color: '#d6eef8', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
-  const glareMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
-  const inner = new THREE.MeshLambertMaterial({ map: pixelTex(TILE, true) });
-  inner.map.repeat.set(1 / 1.2, 1 / 1.2); // 60 cm tiles, like the floor (shape UVs are in metres)
-  const outer = new THREE.MeshLambertMaterial({ map: pixelTex(brickCanvas, true), side: THREE.BackSide });
-  outer.map.repeat.set(1 / 0.8, 1 / 0.4);
-  const windowWall = (len, wins, x, z, rotY) => {
-    const g = new THREE.Group();
-    const shape = new THREE.Shape();
-    shape.moveTo(-len / 2, 0);
-    shape.lineTo(len / 2, 0);
-    shape.lineTo(len / 2, wallH);
-    shape.lineTo(-len / 2, wallH);
-    shape.closePath();
-    for (const wx of wins) {
-      const hole = new THREE.Path();
-      hole.moveTo(wx - winW / 2, winY - winH / 2);
-      hole.lineTo(wx - winW / 2, winY + winH / 2);
-      hole.lineTo(wx + winW / 2, winY + winH / 2);
-      hole.lineTo(wx + winW / 2, winY - winH / 2);
-      hole.closePath();
-      shape.holes.push(hole);
-    }
-    const slab = new THREE.ShapeGeometry(shape);
-    const wallIn = mesh(slab, inner, { receive: true });
-    const wallOut = mesh(slab, outer, { cast: true, receive: true });
-    wallOut.position.z = -T;
-    const top = mesh(new THREE.BoxGeometry(len, 0.06, T), bricks(len, T));
-    top.position.set(0, wallH, -T / 2);
-    g.add(wallIn, wallOut, top);
-    for (const wx of wins) {
-      // reveals: the four inner sides of the opening
-      for (const [w, h, dx, dy] of [[winW, 0.05, 0, -winH / 2], [winW, 0.05, 0, winH / 2], [0.05, winH, -winW / 2, 0], [0.05, winH, winW / 2, 0]]) {
-        const r = mesh(new THREE.BoxGeometry(w + 0.05, h, T), frameMat, { receive: true });
-        r.position.set(wx + dx, winY + dy, -T / 2);
-        g.add(r);
-      }
-      // mullions: a cross of white bars
-      const v = mesh(new THREE.BoxGeometry(0.06, winH, 0.06), frameMat);
-      v.position.set(wx, winY, -T / 2);
-      const hz = mesh(new THREE.BoxGeometry(winW, 0.06, 0.06), frameMat);
-      hz.position.set(wx, winY + 0.12, -T / 2);
-      // glass, with two pale glare strips
-      const glass = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), glassMat);
-      glass.position.set(wx, winY, -T / 2);
-      const g1 = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.7), glareMat);
-      g1.position.set(wx - 0.32, winY + 0.25, -T / 2 + 0.01);
-      g1.rotation.z = -0.5;
-      const g2 = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.45), glareMat);
-      g2.position.set(wx - 0.18, winY + 0.32, -T / 2 + 0.01);
-      g2.rotation.z = -0.5;
-      // a sill on the inside
-      const sill = mesh(new THREE.BoxGeometry(winW + 0.2, 0.06, 0.16), frameMat, { cast: true });
-      sill.position.set(wx, winY - winH / 2 - 0.03, 0.08);
-      g.add(v, hz, glass, g1, g2, sill);
-    }
-    g.position.set(x, 0, z);
-    g.rotation.y = rotY;
-    worldRoot.add(g);
-  };
-  // the side walls run from the back wall to the open front; windows sit above the stalls, between the paintings
-  const sideLen = rd + STALL_D;
-  const sideZ = (rd + back) / 2;
-  const sideWins = [2.6, 11.3, 19.9];
-  windowWall(sideLen, sideWins.map((z) => sideZ - z), back, sideZ, Math.PI / 2); // left: along the wall is -z
-  windowWall(sideLen, sideWins.map((z) => z - sideZ), rw - back, sideZ, -Math.PI / 2); // right: along the wall is +z
-  for (const x of [back - T / 2, rw - back + T / 2]) { // brick ends at the open front
-    const end = mesh(new THREE.BoxGeometry(T, wallH, 0.02), bricks(T, wallH));
-    end.position.set(x, wallH / 2, rd + 0.01);
-    worldRoot.add(end);
-  }
-  band(sideLen, back, sideZ, Math.PI / 2);
-  band(sideLen, rw - back, sideZ, -Math.PI / 2);
-
-  // the back wall spans the whole width, past the side walls' ends; the middle is left for the emblem
-  const bw = fw + 2 * T;
-  windowWall(bw, [2.2, 6.6, rw - 6.6, rw - 2.2].map((x) => x - rw / 2), rw / 2, back, 0);
-  band(fw, rw / 2, back, 0);
-
-  // paintings between the back windows and along both side walls
-  poster(0, 4.4, back + 0.02, 0);
-  poster(1, rw - 4.4, back + 0.02, 0);
-  poster(2, back + 0.02, rd * 0.3, Math.PI / 2);
-  poster(3, back + 0.02, rd * 0.68, Math.PI / 2);
-  poster(4, rw - back - 0.02, rd * 0.3, -Math.PI / 2);
-  poster(5, rw - back - 0.02, rd * 0.68, -Math.PI / 2);
-
-  // the golden poop, big and glowing softly, in the middle of the back wall
-  const halo = new THREE.Mesh(new THREE.CircleGeometry(0.85, 32), new THREE.MeshBasicMaterial({ map: pixelTex(canvas(32, 32, (g) => {
-    const glow = g.createRadialGradient(16, 16, 2, 16, 16, 16);
-    glow.addColorStop(0, 'rgba(255, 226, 120, 0.85)');
-    glow.addColorStop(1, 'rgba(255, 226, 120, 0)');
-    g.fillStyle = glow;
-    g.fillRect(0, 0, 32, 32);
-  })), transparent: true, depthWrite: false }));
-  halo.position.set(rw / 2, 3.6, back + 0.03);
-  const emblem = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: pixelTex(PROPS.goldPoop), transparent: true, alphaTest: 0.5 }));
-  emblem.position.set(rw / 2, 3.6, back + 0.05);
-  emblem.userData.wish = true;
-  wishHits.push(emblem);
-  worldRoot.add(halo, emblem);
-  buildEntrance(rw / 2, rd + 0.2);
-
-  // the middle of the room: a long wash island with sinks along both sides and a mirrored divider,
-  // straight wooden benches either side, plants at the ends; the floor stays one check
-  const bx = toX(BASIN.x);
-  const bz = toZ(BASIN.y);
-  const iw = toX(BASIN.w); // half-width
-  const id = toZ(BASIN.d); // half-length
-  const chrome = new THREE.MeshPhongMaterial({ color: '#d4dbe2', shininess: 110, specular: '#ffffff' });
-  const tileFace = (w) => {
-    const t = pixelTex(TILE, true);
-    t.repeat.set(w / 0.8, 1); // two rows of 40 cm tiles
-    return new THREE.MeshPhongMaterial({ map: t, shininess: 30 });
-  };
-  const cream = mat('#f6efe0');
-
-  // the counter: sky-blue tiled body, white top
-  const longSide = tileFace(id * 2);
-  const shortSide = tileFace(iw * 2);
-  const counter = mesh(new THREE.BoxGeometry(iw * 2, 0.8, id * 2), [longSide, longSide, shortSide, shortSide, shortSide, shortSide], { cast: true, receive: true });
-  counter.position.set(bx, 0.4, bz);
-  worldRoot.add(counter);
-  const topMat = new THREE.MeshPhongMaterial({ color: '#fbfbf8', shininess: 50 }); // a plain white counter top
-  const top = mesh(new THREE.BoxGeometry(iw * 2 + 0.14, 0.07, id * 2 + 0.14), topMat, { cast: true, receive: true });
-  top.position.set(bx, 0.835, bz);
-  worldRoot.add(top);
-
-  // a mirrored divider down the middle
-  const divider = mesh(new THREE.BoxGeometry(0.14, 1.05, id * 2 - 0.3), cream, { cast: true });
-  divider.position.set(bx, 0.87 + 0.525, bz);
-  const mirrorMat = new THREE.MeshPhongMaterial({ color: '#d9ecf2', emissive: '#3d5560', shininess: 140, specular: '#ffffff' });
-  for (const side of [-1, 1]) {
-    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(id * 2 - 0.6, 0.8), mirrorMat);
-    mirror.position.set(bx + side * 0.072, 1.42, bz);
-    mirror.rotation.y = side * Math.PI / 2;
-    worldRoot.add(mirror);
-  }
-  const dividerCap = mesh(new THREE.BoxGeometry(0.2, 0.05, id * 2 - 0.25), chrome);
-  dividerCap.position.set(bx, 1.945, bz);
-  worldRoot.add(divider, dividerCap);
-
-  // sinks and taps: four along each long side
-  const water = new THREE.MeshPhongMaterial({ color: PAL.water[0], emissive: PAL.water[1], shininess: 120 });
-  const bowl = mat('#ffffff');
-  for (const side of [-1, 1]) {
-    for (const r of SINK_ROWS) {
-      const z = bz + id * r;
-      const x = bx + side * (iw - 0.3);
-      const basin = mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.02, 20), bowl);
-      basin.position.set(x, 0.872, z);
-      const pool = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.02, 20), water);
-      pool.position.set(x, 0.878, z);
-      const neck = mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.3, 8), chrome);
-      neck.position.set(bx + side * (iw - 0.62), 1.02, z);
-      const spout = mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), chrome);
-      spout.position.set(bx + side * (iw - 0.48), 1.16, z);
-      worldRoot.add(basin, pool, neck, spout);
-    }
-  }
-
-  // straight benches either side of the island: a base tiled like the island, a warm wooden seat; three seats each
-  const oak = new THREE.MeshLambertMaterial({ map: pixelTex(OAK, true) });
+  const { ground } = buildGrounds({
+    L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, pixelTex, M, wishHits, vendingMachine, planter,
+    tex: { grass: grassCanvas, pavement: pavementCanvas, floor: floorCanvas, tile: TILE, brick: brickCanvas },
+    lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
+  });
+  floorMesh = ground;
   benchSpots.length = 0;
   benchSeats.length = 0;
-  for (const side of [-1, 1]) {
-    for (const off of [-0.5, 0.5]) {
-      const x = bx + side * (iw + 3.2);
-      const z = bz + off * id * 1.1;
-      const benchLong = tileFace(2.3);
-      const benchShort = tileFace(0.55);
-      const base = mesh(new THREE.BoxGeometry(0.55, 0.32, 2.3), [benchLong, benchLong, benchShort, benchShort, benchShort, benchShort], { cast: true, receive: true });
-      base.position.set(x, 0.16, z);
-      const seat = mesh(new THREE.BoxGeometry(0.62, 0.09, 2.4), oak, { cast: true, receive: true });
-      seat.position.set(x, 0.365, z);
-      worldRoot.add(base, seat);
-      benchSpots.push({ x: x / U, y: z / U });
-      benchSeats.push([-0.72, 0, 0.72].map((dz) => ({ x: x / U, y: (z + dz) / U })));
-    }
-  }
-
-  // drink machines along both side walls by the way in, past the last stalls
-  [['#4aa6dc', 1], ['#fbfbf8', 2], ['#ffd23f', 3]].forEach(([color, k], i) => {
-    vendingMachine(back + 0.4, rd - 3.0 + i * 1.0, Math.PI / 2, color, k);
-    vendingMachine(rw - back - 0.4, rd - 3.0 + i * 1.0, -Math.PI / 2, color, k + 3);
+  GROUNDS.plaza.tables.forEach((t, k) => {
+    benchSpots.push({ x: t.x, y: t.y });
+    benchSeats.push(GROUNDS.seats.filter((s) => s.table === k).map((s) => ({ x: s.x, y: s.y })));
   });
-
-  // plants only by the way in and between the benches, so none of them hides a stall
-  planter(rw / 2 - 3.8, rd - 0.9, 1.3, 1, 'snake');
-  planter(rw / 2 + 3.8, rd - 0.9, 1.3, 2, 'snake');
-  for (const side of [-1, 1]) planter(bx + side * (iw + 3.2), bz, 1.0, side + 8);
-
-  lampLights.length = 0;
-  const centre = new THREE.PointLight(PAL.lamps[0], PAL.lampPower * 1.5, 15, 1.6);
-  lampLights.push([centre, 1.5]);
-  centre.position.set(bx, 3.3, bz);
-  lamps.add(centre);
-  for (const [x, z] of [[rw * 0.25, rd * 0.28], [rw * 0.75, rd * 0.28], [rw * 0.25, rd * 0.72], [rw * 0.75, rd * 0.72]]) {
-    const light = new THREE.PointLight(PAL.lamps[0], PAL.lampPower, 15, 1.6);
-    lampLights.push([light, 1]);
-    light.position.set(x, 3.2, z); // just light, no fixture hanging in the way
-    lamps.add(light);
-  }
   applyTimeOfDay();
 }
 
-// the world around the building: a sidewalk out front, then grass that stays flat near the walls and
-// curves away further out like a small planet, ringed by trees and low hills under a sky dome
-const FLAT_R = 26; // the ground stays level this far from the middle of the room
-const CURVE_R = 70; // then drops away along a curve this tight
-const groundY = (r) => (r <= FLAT_R ? -0.02 : -0.02 - ((r - FLAT_R) ** 2) / (2 * CURVE_R));
-function buildOutside(rw, rd, back) {
-  const cx = rw / 2;
-  const cz = (rd + back) / 2;
-  // grass: a polar grid bent by groundY, denser near the middle
-  const rings = 60;
-  const segs = 96;
-  const verts = [];
-  const uvs = [];
-  const idx = [];
-  for (let i = 0; i <= rings; i++) {
-    const r = (220 * i * i) / (rings * rings); // denser near the middle
-    for (let j = 0; j <= segs; j++) {
-      const a = (j / segs) * Math.PI * 2;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      verts.push(x, groundY(r), z);
-      uvs.push(x / 1.6, z / 1.6);
-    }
+// keep a point on the walkable ground and out of buildings and furniture (the same rule as the server's settle)
+function settleLocal(p) {
+  const c = GROUNDS.center;
+  const dx = p.x - c;
+  const dy = p.y - c;
+  const d = Math.hypot(dx, dy);
+  if (d > GROUNDS.walkR) {
+    p.x = c + (dx / d) * GROUNDS.walkR;
+    p.y = c + (dy / d) * GROUNDS.walkR;
   }
-  for (let i = 0; i < rings; i++) {
-    for (let j = 0; j < segs; j++) {
-      const p0 = i * (segs + 1) + j;
-      const p1 = p0 + segs + 1;
-      idx.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1);
-    }
+  for (const o of GROUNDS.obstacles) {
+    const x0 = o.x0 - 30;
+    const x1 = o.x1 + 30;
+    const y0 = o.y0 - 30;
+    const y1 = o.y1 + 30;
+    if (p.x <= x0 || p.x >= x1 || p.y <= y0 || p.y >= y1) continue;
+    const pushes = [[p.x - x0, 'x', x0], [x1 - p.x, 'x', x1], [p.y - y0, 'y', y0], [y1 - p.y, 'y', y1]];
+    const [, axis, edge] = pushes.reduce((a, b) => (b[0] < a[0] ? b : a));
+    p[axis] = edge;
   }
-  const ground = new THREE.BufferGeometry();
-  ground.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-  ground.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  ground.setIndex(idx);
-  ground.computeVertexNormals();
-  const gt = pixelTex(grassCanvas, true);
-  const grass = mesh(ground, new THREE.MeshLambertMaterial({ map: gt }), { receive: true });
-  grass.position.set(cx, 0, cz);
-  worldRoot.add(grass);
-
-  // a sidewalk along the open front, leading out from the entrance
-  const pt = pixelTex(pavementCanvas, true);
-  const sw = rw + 2 * STALL_D + 8;
-  pt.repeat.set(sw / 0.9, 8 / 0.9);
-  const walk = mesh(new THREE.PlaneGeometry(sw, 8), new THREE.MeshLambertMaterial({ map: pt }), { receive: true });
-  walk.rotation.x = -Math.PI / 2;
-  walk.position.set(cx, -0.005, rd + 4);
-  worldRoot.add(walk);
-
-  // trees all around, leaving the walls and the front walk clear
-  const rnd = (k) => {
-    const v = Math.sin(k * 91.3 + 7.1) * 43758.5453;
-    return v - Math.floor(v);
-  };
-  const trunkMat = mat('#8a5a3a');
-  for (let k = 0; k < 70; k++) {
-    const a = rnd(k) * Math.PI * 2;
-    const r = 24 + rnd(k + 100) * 60;
-    const x = cx + Math.cos(a) * r;
-    const z = cz + Math.sin(a) * r;
-    if (z > rd - 2 && Math.abs(x - cx) < rw / 2 + 6 && z < rd + 12) continue; // keep the front walk open
-    const size = 1.2 + rnd(k + 200) * 1.6;
-    const t = new THREE.Group();
-    const trunk = mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.2, 6), trunkMat);
-    trunk.position.y = 0.6;
-    t.add(trunk);
-    for (let n = 0; n < 3; n++) {
-      const leaf = mesh(new THREE.IcosahedronGeometry(0.75 - n * 0.12, 0), LEAF_MATS[(k + n) % 3]);
-      leaf.position.set((rnd(k * 3 + n) - 0.5) * 0.5, 1.4 + n * 0.55, (rnd(k * 5 + n) - 0.5) * 0.5);
-      leaf.rotation.set(rnd(k + n) * 3, rnd(k * 2 + n) * 3, 0);
-      t.add(leaf);
-    }
-    t.scale.setScalar(size);
-    t.position.set(x, groundY(r), z);
-    worldRoot.add(t);
-  }
-
-  // low hills on the far rim, softened by the haze
-  const hillMat = new THREE.MeshLambertMaterial({ color: '#8fbf78', flatShading: true });
-  for (let k = 0; k < 14; k++) {
-    const a = (k / 14) * Math.PI * 2 + rnd(k + 300) * 0.3;
-    const r = 120 + rnd(k + 400) * 30;
-    const hill = mesh(new THREE.SphereGeometry(18 + rnd(k + 500) * 14, 10, 6), hillMat);
-    hill.scale.y = 0.45;
-    hill.position.set(cx + Math.cos(a) * r, groundY(r) - 2, cz + Math.sin(a) * r);
-    worldRoot.add(hill);
-  }
+  return p;
 }
 
 // the sky: a dome that blends from the zenith colour to the horizon colour, with a sun and its glow by day,
@@ -1167,16 +855,6 @@ function planter(x, z, size, seed, kind = 'bush') {
   worldRoot.add(g);
 }
 
-// the open front: just a welcome mat and a wet-floor sign
-function buildEntrance(cx, z) {
-  const mat2 = mesh(new THREE.PlaneGeometry(2.8, 1.1), new THREE.MeshLambertMaterial({ map: pixelTex(matCanvas()), polygonOffset: true, polygonOffsetFactor: -1 }), { receive: true });
-  mat2.rotation.x = -Math.PI / 2;
-  mat2.position.set(cx, 0.006, z - 0.75);
-  const wet = pixelSprite(wetSign(), 0.065);
-  wet.position.set(cx + 2.9, 0, z - 0.6);
-  worldRoot.add(mat2, wet);
-}
-
 // ---------- time of day ----------
 // The sky and the light follow the visitor's clock: blue sky by day, a pink-orange sunset,
 // a starry night with the ceiling lights turned up, and a lilac dawn. ?hour=21 previews an hour.
@@ -1252,7 +930,69 @@ const stallObjs = [];
 const stallHits = [];
 const wishHits = []; // the golden poop on the back wall and its sign: tapping them opens the wish page
 
+// what a stall is called: "공중화장실 3번 칸" or "개인 화장실 5호"
+const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `개인 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
+
+// A private room's door: a tall walnut door in the building's front wall, with a brass number and a lock light.
+// Whoever is inside is in their own room, so nobody shows out here; an empty room stands ajar, warm light inside.
+const privateGlow = new THREE.MeshBasicMaterial({ color: '#f6d3a4' });
+function makePrivateDoor(i) {
+  const L = LAYOUT[i];
+  const g = new THREE.Group();
+  g.position.set(toX(L.cx), 0, toZ(L.cy));
+  const doorCanvas = canvas(48, 112, (c) => {
+    c.fillStyle = '#5a3b2a';
+    c.fillRect(0, 0, 48, 112);
+    c.fillStyle = '#6b4632'; // two raised panels
+    c.fillRect(6, 8, 36, 44);
+    c.fillRect(6, 60, 36, 44);
+    c.fillStyle = '#d9b26a'; // the brass number plate
+    c.fillRect(14, 18, 20, 16);
+    c.fillStyle = '#5a3b2a';
+    c.font = 'bold 14px -apple-system, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(String(L.no), 24, 27);
+    c.fillStyle = '#d9b26a'; // handle
+    c.fillRect(38, 56, 4, 10);
+  });
+  const doorTex = new THREE.CanvasTexture(doorCanvas);
+  doorTex.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.MeshLambertMaterial({ map: doorTex });
+  const edge = mat('#4a3022');
+  const doorway = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 2.1), privateGlow); // the warm room behind the door
+  doorway.position.set(0.55, 1.05, 0.004);
+  const hinge = new THREE.Group();
+  hinge.position.set(0.12, 0, 0.03);
+  const door = mesh(new THREE.BoxGeometry(0.86, 2.1, 0.05), [edge, edge, edge, edge, face, face], { cast: true });
+  door.position.set(0.43, 1.05, 0);
+  const lock = mesh(G.lock, M.lockGreen);
+  lock.position.set(0.74, 1.35, 0.03);
+  hinge.add(door, lock);
+  const marker = pixelSprite(PROPS.marker);
+  marker.position.set(0.55, 2.55, 0.3);
+  marker.visible = false;
+  const halo = pixelSprite(PROPS.halo);
+  halo.visible = false;
+  const feet = pixelSprite(PROPS.poop);
+  feet.visible = false;
+  const pile = new THREE.Group();
+  pile.visible = false; // the poop tower stays private too
+  const hit = new THREE.Mesh(G.hit, M.hit);
+  hit.position.set(STALL_M / 2, 1, 0.1);
+  hit.userData.stall = i;
+  g.add(doorway, hinge, marker, pile, hit);
+  stallRoot.add(g);
+  g.updateMatrixWorld(true);
+  stallHits[i] = hit;
+  return {
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet, marker, halo, pile,
+    open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0, private: true,
+  };
+}
+
 function makeStall(i) {
+  if (LAYOUT[i].type === 'private') return makePrivateDoor(i);
   const g = new THREE.Group();
   const L = LAYOUT[i];
   g.position.set(toX(L.cx), 0, toZ(L.cy));
@@ -1268,7 +1008,7 @@ function makeStall(i) {
   const doorCanvas = document.createElement('canvas');
   doorCanvas.width = 20;
   doorCanvas.height = 13;
-  drawDoorCanvas(doorCanvas, i + 1, 0);
+  drawDoorCanvas(doorCanvas, L.no, 0);
   const doorTex = pixelTex(doorCanvas);
   const face = new THREE.MeshLambertMaterial({ map: doorTex });
   const hinge = new THREE.Group();
@@ -1355,7 +1095,7 @@ function syncStalls() {
     const crack = stalls[i] ? (hp[i] < 25 ? 3 : hp[i] < 55 ? 2 : hp[i] < 85 ? 1 : 0) : 0;
     if (crack !== s.crack) {
       s.crack = crack;
-      drawDoorCanvas(s.doorCanvas, i + 1, crack);
+      drawDoorCanvas(s.doorCanvas, LAYOUT[i].no, crack);
       s.doorTex.needsUpdate = true;
     }
     if (!s.pending && s.pileShown !== piles[i]) setPile(s, piles[i]);
@@ -1442,10 +1182,8 @@ function handle(m) {
     retries = 0;
     serverDown(false);
     if (m.layout) {
+      GROUNDS = m.layout;
       LAYOUT = m.layout.stalls;
-      ROOM_W = m.layout.w;
-      ROOM_D = m.layout.d;
-      BASIN = m.layout.basin;
       builtFor = 0;
       for (const st of stallObjs) stallRoot.remove(st.group);
       stallObjs.length = 0;
@@ -1473,10 +1211,6 @@ function handle(m) {
     onKnock(m);
   } else if (m.t === 'break') {
     onBreak(m);
-  } else if (m.t === 'turn') {
-    toast(`내 차례예요! ${m.stall + 1}번 칸으로 모실게요`);
-    walkToStall(m.stall);
-    playDing();
   } else if (m.t === 'bell') {
     onBell(m);
   } else if (m.t === 'flush') {
@@ -1511,7 +1245,6 @@ function applyState(st) {
   stalls = st.stalls;
   piles = st.piles;
   hp = st.hp;
-  held = st.held;
 
   const seen = new Set();
   for (const u of st.users) {
@@ -1537,7 +1270,6 @@ function applyState(st) {
       me.p = u.p;
       me.rolling = Boolean(u.r);
       me.pd = Boolean(u.pd);
-      me.q = u.q;
       me.b = Boolean(u.b);
       if (u.r) {
         me.x = u.x;
@@ -1545,9 +1277,6 @@ function applyState(st) {
         target = null;
         pendingEnter = -1;
       }
-      const qEl = $('#queue');
-      qEl.hidden = !u.q;
-      if (u.q) qEl.textContent = u.q === 1 ? '줄 맨 앞 · 곧 내 차례예요' : `줄 서는 중 · ${u.q}번째`;
     }
   }
   for (const [id, e] of users) {
@@ -1562,7 +1291,7 @@ function applyState(st) {
 
 // ---------- movement ----------
 
-const freeFor = (i) => !stalls[i] && (!held[i] || held[i] === meId);
+const freeFor = (i) => !stalls[i];
 
 function nearestStall(x, y, ok, range = ENTER_RANGE) {
   let best = -1;
@@ -1608,32 +1337,32 @@ function tryKnock(i) {
 
 const ringBell = () => send({ t: 'bell' });
 const jump = () => me.s === -1 && !me.rolling && send({ t: 'jump' });
-// the wash island: a long counter down the middle with four sinks along each long side
-const SINK_ROWS = [-0.75, -0.25, 0.25, 0.75];
+// the sinks in the public restroom: where you stand, and the basin you look at
 function nearestSink(x, y) {
-  const side = x < BASIN.x ? -1 : 1;
-  const row = SINK_ROWS.reduce((best, r) => (Math.abs(BASIN.y + BASIN.d * r - y) < Math.abs(BASIN.y + BASIN.d * best - y) ? r : best));
-  return { side, x: BASIN.x + side * BASIN.w, y: BASIN.y + BASIN.d * row }; // the counter's edge in front of that sink
+  const s = GROUNDS.sinks.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
+  return { x: s.x, y: s.y, lookX: s.x + Math.sin(s.face) * 60, lookY: s.y + Math.cos(s.face) * 60 };
 }
-const islandGap = (x, y) => Math.hypot(Math.max(Math.abs(x - BASIN.x) - BASIN.w, 0), Math.max(Math.abs(y - BASIN.y) - BASIN.d, 0));
+const sinkGap = (x, y) => {
+  const s = nearestSink(x, y);
+  return Math.hypot(s.x - x, s.y - y);
+};
 
 // step up to the nearest sink, then wash
 function washHands() {
-  const sink = nearestSink(me.x, me.y);
-  const spot = { x: sink.x + sink.side * 60, y: sink.y }; // just outside the 55 everyone keeps from the counter
+  const spot = nearestSink(me.x, me.y);
   if (Math.hypot(spot.x - me.x, spot.y - me.y) < 8) {
     sendMove(true);
     send({ t: 'wash' });
     return;
   }
-  target = spot;
+  target = { x: spot.x, y: spot.y };
   pendingEnter = -1;
   pendingBench = false;
   pendingWash = true;
 }
 
 function nearSink() {
-  return islandGap(me.x, me.y) < 110;
+  return Boolean(GROUNDS) && sinkGap(me.x, me.y) < 110;
 }
 
 function nearBench() {
@@ -1651,7 +1380,7 @@ function freeSeat(k) {
 function goSitOnBench(k) {
   const seat = freeSeat(k);
   if (!seat) {
-    toast('이 벤치는 자리가 꽉 찼어요');
+    toast('이 테이블은 자리가 꽉 찼어요');
     return;
   }
   target = { x: seat.x, y: seat.y };
@@ -1728,17 +1457,9 @@ function moveMe(dt) {
   if (vx || vy) {
     const len = Math.hypot(vx, vy);
     walkDir = { x: vx / len, y: vy / len, at: performance.now() }; // the camera follows this
-    me.x = clamp(me.x + (vx / len) * step, 45, ROOM_W - 45);
-    me.y = clamp(me.y + (vy / len) * step, 45, ROOM_D - 40);
-    // walk around the wash island, not through it: step out along the shallower side
-    const ex = BASIN.w + 55; // a sprite is about 0.8m wide, so keep half of that plus a little clear of the counter
-    const ey = BASIN.d + 55;
-    const bdx = me.x - BASIN.x;
-    const bdy = me.y - BASIN.y;
-    if (Math.abs(bdx) < ex && Math.abs(bdy) < ey) {
-      if (ex - Math.abs(bdx) < ey - Math.abs(bdy)) me.x = BASIN.x + Math.sign(bdx || 1) * ex;
-      else me.y = BASIN.y + Math.sign(bdy || 1) * ey;
-    }
+    me.x += (vx / len) * step;
+    me.y += (vy / len) * step;
+    settleLocal(me); // round buildings and furniture, never off the grounds
   }
   sendMove(false);
 }
@@ -1754,15 +1475,15 @@ function sendMove(force) {
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
 // starts low and far back, looking in through the entrance at the whole plaza
-const cam = { yaw: 0, pitch: 0.22, dist: 16, tYaw: 0, tPitch: 0.22, tDist: 16, fx: 11, fz: 20, look: 0, tLook: 0 }; // look: tilting the view up at the sky
+const cam = { yaw: 0, pitch: 0.22, dist: 16, tYaw: 0, tPitch: 0.22, tDist: 16, fx: 20, fz: 32, look: 0, tLook: 0 }; // look: tilting the view up at the sky
 // link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
-  entrance: { fx: 11, fz: 20.8, yaw: 0, pitch: 0.22, dist: 16 },
-  plaza: { fx: 10, fz: 9.5, yaw: 0.6, pitch: 0.5, dist: 13 },
-  stalls: { fx: 14, fz: 3.5, yaw: -0.4, pitch: 0.4, dist: 10.5 },
-  above: { fx: 11, fz: 10.5, yaw: 0.35, pitch: 0.92, dist: 25 },
-  bench: { fx: 11, fz: 13.5, yaw: 0.25, pitch: 0.36, dist: 9.5 },
-  inside: { fx: 11, fz: 20.5, yaw: Math.PI, pitch: 0.55, dist: 17 }, // from inside, looking out at the way in
+  entrance: { fx: 20, fz: 31, yaw: 0, pitch: 0.24, dist: 16 },
+  plaza: { fx: 20, fz: 20, yaw: 0.5, pitch: 0.5, dist: 14 },
+  stalls: { fx: 21, fz: 9, yaw: -0.3, pitch: 0.35, dist: 12 },
+  above: { fx: 20, fz: 17, yaw: 0.3, pitch: 0.95, dist: 26 },
+  bench: { fx: 19.5, fz: 22, yaw: 0.25, pitch: 0.36, dist: 9.5 },
+  inside: { fx: 20, fz: 30, yaw: Math.PI, pitch: 0.55, dist: 17 }, // from the gate, looking back out
 };
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
@@ -1777,8 +1498,6 @@ let washFocusUntil = 0;
 function focusCamera() {
   const mx = toX(me.x);
   const mz = toZ(me.y);
-  const bx = toX(BASIN.x);
-  const bz = toZ(BASIN.y);
   let key = '';
   let yaw = 0;
   let pitch = 0.45;
@@ -1790,13 +1509,13 @@ function focusCamera() {
     key = 'wash';
     // from the side, so you see the hands under the tap; pick whichever side is closer to the current view
     const sink = nearestSink(me.x, me.y);
-    const toBasin = Math.atan2(toX(sink.x) - mx, toZ(sink.y) - mz);
+    const toBasin = Math.atan2(toX(sink.lookX) - mx, toZ(sink.lookY) - mz);
     const side = (y) => Math.abs(Math.atan2(Math.sin(y - cam.tYaw), Math.cos(y - cam.tYaw)));
     yaw = side(toBasin + Math.PI / 2) < side(toBasin - Math.PI / 2) ? toBasin + Math.PI / 2 : toBasin - Math.PI / 2;
     pitch = 0.4;
   } else if (me.b) {
     key = 'bench';
-    yaw = Math.atan2(mx - bx, mz - bz); // from the plaza, looking back at the basin
+    yaw = benchFacing(me.x, me.y) + Math.PI; // from behind the table, looking at me sitting at it
   }
   if (key === focusKey) return;
   if (!focusKey && key) camBefore = { yaw: cam.tYaw, pitch: cam.tPitch, dist: cam.tDist };
@@ -1849,7 +1568,7 @@ function followWalk(dt) {
 }
 
 function updateCamera(dt) {
-  if (me.ready && BASIN) focusCamera();
+  if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
   if (me.s !== -1 && LAYOUT[me.s]) {
     // in a stall the camera only swings around the front, never behind it
@@ -1869,32 +1588,16 @@ function updateCamera(dt) {
   const kf = 1 - Math.exp(-dt * 5);
   cam.fx = lerp(cam.fx, fx, kf);
   cam.fz = lerp(cam.fz, fz, kf);
-  // always stay in front of the stall banks, so you never see the stalls (or anyone in them) from behind.
-  // Near a wall the camera first tilts up to look down from above, and only comes closer if it still
-  // doesn't fit; both glide there instead of jumping.
-  const rw = toX(ROOM_W);
+  // outdoors there are no walls to keep the camera in: it just orbits, never straight down
   const sy = Math.sin(cam.yaw);
   const cy = Math.cos(cam.yaw);
-  const m = 0.3;
-  let room = Infinity; // how far back the camera can go, measured along the floor
-  if (sy < -1e-3) room = Math.min(room, (cam.fx - m) / -sy);
-  if (sy > 1e-3) room = Math.min(room, (rw - m - cam.fx) / sy);
-  if (cy < -1e-3) room = Math.min(room, (cam.fz - m) / -cy);
-  room = Math.max(0.3, room);
-  // backed up against a wall: rather than squeezing in close, swing round to the open side of the room
-  if (me.s === -1 && !focusKey && performance.now() - manualCamAt > 5000 && room < Math.min(cam.tDist, 10) * 0.55) {
-    const toOpen = Math.atan2(rw / 2 - cam.fx, toZ(ROOM_D) / 2 - cam.fz);
-    cam.tYaw = lerpAngle(cam.tYaw, toOpen, 1 - Math.exp(-dt * 1.6));
-  }
-  const wantPitch = Math.min(0.95, Math.max(cam.tPitch, Math.acos(Math.min(1, room / cam.tDist)))); // never a straight-down ceiling view
-  const wantDist = Math.max(DIST_MIN, Math.min(cam.tDist, room / Math.cos(wantPitch))); // never closer than the zoom limit
-  cam.pitch = lerp(cam.pitch, wantPitch, k);
-  cam.dist = lerp(cam.dist, wantDist, k);
+  cam.pitch = lerp(cam.pitch, Math.min(0.95, cam.tPitch), k);
+  cam.dist = lerp(cam.dist, Math.max(DIST_MIN, cam.tDist), k);
   cam.look = lerp(cam.look, cam.tLook, k);
   const cp = Math.cos(cam.pitch);
-  const px = clamp(cam.fx + sy * cp * cam.dist, m, rw - m);
+  const px = cam.fx + sy * cp * cam.dist;
   const py = 0.9 + Math.sin(cam.pitch) * cam.dist;
-  const pz = Math.max(cam.fz + cy * cp * cam.dist, m);
+  const pz = cam.fz + cy * cp * cam.dist;
   camera.position.set(px, py, pz);
   // the camera stays where it is and only raises its eyes, so looking at the sky never moves it:
   // the gaze tilts up from the usual downward angle by exactly cam.look
@@ -1928,7 +1631,10 @@ function overHead(obj, x, baseY, z, h) {
 }
 
 // people on benches face out, away from the wash island
-const benchFacing = (x) => (x < BASIN.x ? -Math.PI / 2 : Math.PI / 2);
+const benchFacing = (x, y) => {
+  const t = GROUNDS.plaza.tables.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
+  return Math.atan2(t.x - x, t.y - y);
+};
 
 function placeWalkers(dt, t) {
   camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -1984,8 +1690,8 @@ function placeWalkers(dt, t) {
     let want = e.facing;
     if (washing) {
       const sink = nearestSink(e.rx, e.ry);
-      want = Math.atan2(sink.x - e.rx, sink.y - e.ry);
-    } else if (benched) want = benchFacing(e.rx);
+      want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
+    } else if (benched) want = benchFacing(e.rx, e.ry);
     else if (!e.walking && e.idle > 1.5) want = cam.yaw;
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
@@ -2038,8 +1744,8 @@ function animateStalls(dt, t) {
     const occ = occId ? users.get(occId) : null;
     s.feet.visible = false;
     s.marker.visible = occId === meId;
-    // the sitter: a 3D person with pants down, made for whoever is in here now
-    const key = occ ? String(occId) : '';
+    // the sitter: a 3D person with pants down, made for whoever is in here now (private rooms keep theirs out of sight)
+    const key = occ && !s.private ? String(occId) : '';
     if (key !== s.personFor) {
       if (s.person) {
         s.seatSpot.remove(s.person.group);
@@ -2056,11 +1762,13 @@ function animateStalls(dt, t) {
     if (occ) {
       const u = occ.data;
       const face = exprOf(u, i);
-      setFace(s.person, face);
-      pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
-      s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
-      s.halo.visible = face === 'bliss';
-      s.marker.position.y = 1.6 + (Math.floor(t / 300) % 2) * 0.04;
+      if (s.person) {
+        setFace(s.person, face);
+        pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
+        s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
+        s.halo.visible = face === 'bliss';
+      }
+      s.marker.position.y = (s.private ? 2.55 : 1.6) + (Math.floor(t / 300) % 2) * 0.04;
     } else {
       s.halo.visible = false;
     }
@@ -2435,9 +2143,9 @@ function placeOf(id) {
   if (!e) return '광장';
   const u = e.data;
   const seat = id === meId ? me.s : u.s;
-  if (seat !== -1) return `${seat + 1}번 칸`;
-  if (u.b) return '벤치';
-  if (islandGap(e.rx, e.ry) < 140) return '세면대';
+  if (seat !== -1) return stallName(seat);
+  if (u.b) return '테라스';
+  if (sinkGap(e.rx, e.ry) < 140) return '세면대';
   return '광장';
 }
 
@@ -2562,7 +2270,7 @@ function renderActions() {
     const stage = Number(mode.slice(5));
     bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
-    bar.append(mainBtn('bench', '벤치에 앉기', () => goSitOnBench(bench)));
+    bar.append(mainBtn('bench', '의자에 앉기', () => goSitOnBench(bench)));
   } else if (mode === 'full') {
     bar.append(mainBtn('knock', '만칸이에요 · 노크하러 가기', () => {
       const i = closestAnywhere((k) => stalls[k] && stalls[k] !== meId);
@@ -3207,7 +2915,7 @@ function tapTo(x, y) {
     showTapMark(toX(target.x), toZ(target.y));
     return;
   }
-  target = { x: clamp(hit.point.x / U, 45, ROOM_W - 45), y: clamp(hit.point.z / U, 45, ROOM_D - 40) };
+  target = settleLocal({ x: hit.point.x / U, y: hit.point.z / U });
   pendingEnter = -1;
   showTapMark(toX(target.x), toZ(target.y));
 }

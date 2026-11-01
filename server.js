@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { createWish } = require('./lib/wish');
+const { LAYOUT: GROUNDS, settle } = require('./lib/layout');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -10,22 +11,13 @@ const VENDOR = { '/vendor/three.module.js': path.join(__dirname, 'node_modules/t
 // three.js add-ons (environment maps, model loaders) for the wish page
 const JSM_DIR = path.join(__dirname, 'node_modules/three/examples/jsm');
 
-// world layout (shared with public/app.js)
-// The room is a plaza: stalls line three walls in a U (20 at the back, 15 down each side),
-// the open middle has a round wash basin, and the entrance is in the front wall.
-// Coordinates are centimeters: x across the room, y from the back wall toward the entrance.
-const STALL_W = 110;
-const ROOM_W = 2200;
-const ROOM_D = 2300;
-const SIDE_START = 170; // side banks start a little away from the back corners
-const BACK_COUNT = 20;
-const SIDE_COUNT = 15;
-const ENTER_RANGE = 75; // how close to a stall's door you must be
-// the wash island down the middle: centre, half-width, half-length (sinks line both long sides)
-const BASIN = { x: ROOM_W / 2, y: 1050, w: 100, d: 420 };
+// the grounds (two restrooms, the plaza, the exercise ground, the bushes) live in lib/layout.js
+const LAYOUT = GROUNDS.stalls;
+const ENTER_RANGE = GROUNDS.enterRange;
 
-const MAX_STALLS = 50;
-const ROOM_CAP = 70; // 50 stalls + a line of 20
+const MAX_STALLS = LAYOUT.length; // 8 private rooms + 10 public stalls
+// there is no line any more (no stall? the bushes), so the cap is about keeping the grounds lively, not crowded
+const ROOM_CAP = 80;
 const SERVERS_PER_THEME = 1; // more servers per theme are on the backlog until there are users
 const THEMES = {
   company: '회사 화장실',
@@ -50,7 +42,6 @@ const HP_REGEN_DELAY_MS = 2500;
 const HP_REGEN_PER_TICK = 2;
 const ROLL_MS = 1600;
 const PANTS_MS = 4000;
-const TURN_MS = 10000; // how long a freed stall is held for the head of the line
 const BELL_GAP_MS = 5500;
 
 const ADJ = ['급한', '묵직한', '시원한', '조용한', '다급한', '느긋한', '수상한', '당당한', '촉촉한', '굳센', '쾌활한', '소심한', '배부른', '졸린', '비장한'];
@@ -117,7 +108,7 @@ function countPoop() {
   if (kv?.isReady) kv.multi().incr(`flushed:${today}`).expire(`flushed:${today}`, 3 * 86400).exec().catch(() => {});
 }
 
-const newMeta = () => ({ pile: 0, hp: DOOR_HP, knockedAt: 0, reservedFor: 0, reservedUntil: 0 });
+const newMeta = () => ({ pile: 0, hp: DOOR_HP, knockedAt: 0 });
 
 // Restrooms: the first one is always open; when every open one is full another opens (2호점, 3호점 ...)
 // and extra ones close again after standing empty for a while.
@@ -130,7 +121,7 @@ function openRoom(theme) {
   while (used.has(no)) no++;
   const room = {
     id: `${theme}-${no}`, theme, label: THEMES[theme], no,
-    stalls: Array(MAX_STALLS).fill(null), // all 50 stalls from the start
+    stalls: Array(MAX_STALLS).fill(null),
     meta: Array.from({ length: MAX_STALLS }, newMeta),
     users: new Set(),
     dirty: false,
@@ -142,81 +133,12 @@ function openRoom(theme) {
 }
 for (const theme of OPEN_THEMES) for (let k = 0; k < SERVERS_PER_THEME; k++) openRoom(theme);
 const isFull = (room) => room.users.size >= ROOM_CAP;
-// each stall: the left corner of its door line, its rotation (three.js y rotation), and
-// the spot in front of the door where people stand to enter or knock
-const LAYOUT = (() => {
-  const list = [];
-  const add = (cx, cy, rot) => {
-    const ax = Math.cos(rot);
-    const ay = -Math.sin(rot); // along the door
-    const fx = Math.sin(rot);
-    const fy = Math.cos(rot); // facing out of the stall
-    const doorX = cx + ax * STALL_W / 2;
-    const doorY = cy + ay * STALL_W / 2;
-    list.push({ cx, cy, rot, fx, fy, x: Math.round(doorX + fx * 45), y: Math.round(doorY + fy * 45) });
-  };
-  for (let i = 0; i < BACK_COUNT; i++) add(i * STALL_W, 0, 0);
-  for (let j = 0; j < SIDE_COUNT; j++) add(0, SIDE_START + (j + 1) * STALL_W, Math.PI / 2);
-  for (let j = 0; j < SIDE_COUNT; j++) add(ROOM_W, SIDE_START + j * STALL_W, -Math.PI / 2);
-  return list;
-})();
-const clampX = (x) => clamp(x, 45, ROOM_W - 45);
-const clampY = (y) => clamp(y, 45, ROOM_D - 40);
-// nobody stands inside the wash island: push a position out along the shallower side
-const ISLAND_PAD = 55;
-function outOfIsland(u) {
-  const ex = BASIN.w + ISLAND_PAD;
-  const ey = BASIN.d + ISLAND_PAD;
-  const dx = u.x - BASIN.x;
-  const dy = u.y - BASIN.y;
-  if (Math.abs(dx) >= ex || Math.abs(dy) >= ey) return;
-  if (ex - Math.abs(dx) < ey - Math.abs(dy)) u.x = BASIN.x + Math.sign(dx || 1) * ex;
-  else u.y = BASIN.y + Math.sign(dy || 1) * ey;
-}
-const isReserved = (room, i, now = Date.now()) => room.meta[i].reservedFor && room.meta[i].reservedUntil > now;
-
-// The line only exists once all 50 stalls are taken.
-function lineActive(room) {
-  const now = Date.now();
-  return !room.stalls.some((s, i) => !s && !isReserved(room, i, now));
-}
-
-function lineOrder(room) {
-  return [...room.users].filter((u) => u.stall === -1).sort((a, b) => a.outsideSince - b.outsideSince);
-}
-
-// A stall just became free: if people are waiting, hold it for the head of the line.
-function offerStall(room, i) {
-  if (i >= room.stalls.length || room.stalls[i]) return;
-  const now = Date.now();
-  // only hold stalls for people when there's an actual line, i.e. no other stall is free
-  if (room.stalls.some((s, j) => j !== i && !s && !isReserved(room, j, now))) return;
-  const holders = new Set(room.meta.filter((m, j) => isReserved(room, j, now)).map((m) => m.reservedFor));
-  const head = lineOrder(room).find((u) => !holders.has(u.id));
-  if (!head) return;
-  room.meta[i].reservedFor = head.id;
-  room.meta[i].reservedUntil = now + TURN_MS;
-  send(head.ws, { t: 'turn', stall: i, ms: TURN_MS });
-  room.dirty = true;
-}
-
-// drop any stall this user was holding and pass it to the next person in line
-function releaseReservations(room, user) {
-  room.meta.forEach((m, j) => {
-    if (m.reservedFor !== user.id) return;
-    m.reservedFor = 0;
-    offerStall(room, j);
-  });
-}
-
 function sit(room, user, i) {
   room.stalls[i] = user;
   user.stall = i;
   user.bench = false;
   user.holding = false;
   room.meta[i].hp = DOOR_HP;
-  room.meta[i].reservedFor = 0;
-  releaseReservations(room, user);
   room.dirty = true;
 }
 
@@ -230,7 +152,6 @@ function leaveStall(room, user) {
   user.y = LAYOUT[i].y;
   user.stall = -1;
   user.holding = false;
-  user.outsideSince = Date.now();
   room.dirty = true;
   return i;
 }
@@ -243,24 +164,19 @@ function breakDoor(room, i, breaker) {
   victim.stall = -1;
   victim.holding = false;
   victim.progress = 0;
-  victim.outsideSince = now; // back of the line
-  // tumble out of the door into the plaza
+  // tumble out of the door
   const L = LAYOUT[i];
   const side = (Math.random() - 0.5) * 240;
   const out = 200 + Math.random() * 120;
   victim.x = L.x;
   victim.y = L.y;
-  victim.roll = {
-    fx: L.x, fy: L.y,
-    tx: clampX(L.x + L.fx * out + L.fy * side),
-    ty: clampY(L.y + L.fy * out + L.fx * side),
-    t0: now,
-  };
+  const to = settle({ x: L.x + L.fx * out + L.fy * side, y: L.y + L.fy * out + L.fx * side });
+  victim.roll = { fx: L.x, fy: L.y, tx: to.x, ty: to.y, t0: now };
   victim.pantsUntil = now + ROLL_MS + PANTS_MS;
   breaker.progress = 0;
   sit(room, breaker, i);
   broadcast(room, { t: 'break', stall: i, by: breaker.id, victim: victim.id });
-  broadcast(room, { t: 'toast', text: `💥 ${breaker.name}님이 ${i + 1}번 칸 문을 부쉈어요! ${victim.name}님 데굴데굴~` });
+  broadcast(room, { t: 'toast', text: `💥 ${breaker.name}님이 공중화장실 ${LAYOUT[i].no}번 칸 문을 부쉈어요! ${victim.name}님 데굴데굴~` });
 }
 
 function send(ws, msg) {
@@ -274,19 +190,16 @@ function broadcast(room, msg) {
 
 function snapshot(room) {
   const now = Date.now();
-  const line = lineActive(room) ? lineOrder(room) : [];
-  const place = new Map(line.map((u, k) => [u.id, k + 1]));
   return JSON.stringify({
     t: 'state',
     flushed: flushedToday,
     stalls: room.stalls.map((u) => (u ? u.id : 0)),
     piles: room.meta.map((m) => m.pile),
     hp: room.meta.map((m) => Math.round(m.hp)),
-    held: room.meta.map((m, i) => (isReserved(room, i, now) ? m.reservedFor : 0)),
     users: [...room.users].map((u) => ({
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
-      r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, q: place.get(u.id) || 0, b: u.bench ? 1 : 0,
+      r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
     })),
   });
 }
@@ -334,14 +247,6 @@ setInterval(() => {
     room.meta.forEach((m, i) => {
       if (room.stalls[i] && m.hp < DOOR_HP && now - m.knockedAt > HP_REGEN_DELAY_MS) {
         m.hp = Math.min(DOOR_HP, m.hp + HP_REGEN_PER_TICK);
-        room.dirty = true;
-      }
-      // a missed turn passes to the next person in line
-      if (m.reservedFor && m.reservedUntil <= now) {
-        const late = [...room.users].find((u) => u.id === m.reservedFor);
-        m.reservedFor = 0;
-        if (late) late.outsideSince = now;
-        offerStall(room, i);
         room.dirty = true;
       }
     });
@@ -408,8 +313,8 @@ wss.on('connection', (ws, req) => {
     name: isValidName(q.get('name')) ? q.get('name') : `${pick(ADJ)} ${pick(NOUN)}`,
     color: pick(COLORS),
     ws,
-    x: ROOM_W / 2 + (Math.random() - 0.5) * 300,
-    y: ROOM_D - 260 - Math.random() * 120,
+    x: GROUNDS.spawn.x + (Math.random() - 0.5) * 240, // just inside the gate
+    y: GROUNDS.spawn.y - Math.random() * 100,
     dir: 1,
     stall: -1,
     progress: 0,
@@ -421,7 +326,6 @@ wss.on('connection', (ws, req) => {
     lastJump: 0,
     lastWash: 0,
     bench: false,
-    outsideSince: now,
     roll: null,
     pantsUntil: 0,
   };
@@ -430,7 +334,7 @@ wss.on('connection', (ws, req) => {
 
   send(ws, {
     t: 'welcome', you: user.id, name: user.name, room: room.id, theme: room.theme, label: room.label, no: room.no, notice,
-    layout: { stalls: LAYOUT, w: ROOM_W, d: ROOM_D, basin: BASIN },
+    layout: GROUNDS,
   });
   broadcast(room, { t: 'toast', text: `${user.name}님이 화장실에 들어왔어요` });
 
@@ -450,27 +354,25 @@ wss.on('connection', (ws, req) => {
     const validStall = Number.isInteger(i) && i >= 0 && i < room.stalls.length;
 
     if (m.t === 'move' && user.stall === -1 && !user.roll) {
-      user.x = clampX(Number(m.x) || 0);
-      user.y = clampY(Number(m.y) || 0);
-      outOfIsland(user);
+      user.x = Number(m.x) || 0;
+      user.y = Number(m.y) || 0;
+      settle(user);
       user.dir = m.d === -1 ? -1 : 1;
       user.bench = false; // moving gets you up off the bench
       room.dirty = true;
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
       if (!validStall || room.stalls[i] || !nearStall(i)) return;
-      if (isReserved(room, i) && room.meta[i].reservedFor !== user.id) {
-        send(ws, { t: 'toast', text: `${i + 1}번 칸은 대기 1번 손님 차례예요`, direct: true });
-        return;
-      }
       sit(room, user, i);
-      broadcast(room, { t: 'toast', text: `${user.name}님이 ${i + 1}번 칸에 들어갔어요` });
+      const where = LAYOUT[i].type === 'private' ? `개인 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i].no}번 칸`;
+      broadcast(room, { t: 'toast', text: `${user.name}님이 ${where}에 들어갔어요` });
     } else if (m.t === 'knock' && user.stall === -1 && !user.roll) {
       if (!validStall || !room.stalls[i] || !nearStall(i)) return;
       const now = Date.now();
       if (now - user.lastKnock < KNOCK_GAP_MS) return;
       user.lastKnock = now;
       const meta = room.meta[i];
-      meta.hp = Math.max(0, meta.hp - KNOCK_DMG);
+      // private rooms are locked: you can knock, but the door won't give
+      if (LAYOUT[i].type !== 'private') meta.hp = Math.max(0, meta.hp - KNOCK_DMG);
       meta.knockedAt = now;
       room.dirty = true;
       broadcast(room, { t: 'knock', stall: i, by: user.id, hp: meta.hp });
@@ -495,8 +397,7 @@ wss.on('connection', (ws, req) => {
       user.lastBell = now;
       broadcast(room, { t: 'bell', stall: user.stall, id: user.id });
     } else if (m.t === 'exit') {
-      const freed = leaveStall(room, user);
-      if (freed !== -1) offerStall(room, freed);
+      leaveStall(room, user);
     } else if (m.t === 'flush' && user.stall !== -1) {
       // flushing clears your poop tower but keeps your seat
       room.meta[user.stall].pile = 0;
@@ -516,10 +417,8 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    const freed = leaveStall(room, user);
+    leaveStall(room, user);
     room.users.delete(user);
-    releaseReservations(room, user);
-    if (freed !== -1) offerStall(room, freed);
     room.dirty = true;
   });
 });

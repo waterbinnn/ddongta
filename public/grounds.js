@@ -265,7 +265,7 @@ export function buildGrounds(kit) {
   }
 
   // ---------- the premium restroom: a villa in the manner of Aman's tropical pavilions. Long and low; cream lime walls
-  // on a honed stone base; a veranda of dark timber posts and a teak deck before the doors; a steep pitched roof of
+  // on a honed stone base; a veranda of light teak posts and a teak deck before the doors; a steep pitched roof of
   // dark wooden shingles with timber-latticed gables and upswept finials; two long, still, dark reflecting pools with
   // lilies and floating candles either side of a stepping-stone path; stone lanterns, frangipani and palms ----------
   {
@@ -288,12 +288,12 @@ export function buildGrounds(kit) {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       return new Mat({ map: t, ...extra });
     };
-    const darkWood = mat('#3e2e22');
+    const wood = mat('#a8794c'); // a light honey teak
     const teakDeck = canvasMat(256, 64, (g) => {
-      g.fillStyle = '#9a6a40';
+      g.fillStyle = '#c8955f';
       g.fillRect(0, 0, 256, 64);
       for (let k = 0; k < 8; k++) {
-        g.fillStyle = k % 2 ? '#8e6038' : '#a5744a';
+        g.fillStyle = k % 2 ? '#bd8a55' : '#d29f69';
         g.fillRect(0, k * 8, 256, 7);
         g.fillStyle = 'rgba(60, 36, 18, 0.6)';
         g.fillRect(0, k * 8 + 7, 256, 1);
@@ -302,26 +302,26 @@ export function buildGrounds(kit) {
     });
     teakDeck.map.repeat.set((W + 1.2) / 2, 1.3 / 0.5);
     const WALL = 3.0;
-    // the walls: cream lime, a honed stone base, a dark timber band at the top
-    block(W, WALL, D, mat('#ece2cf'), cx, WALL / 2, cz);
-    block(W + 0.1, 0.3, D + 0.05, mat('#a9a196'), cx, 0.15, cz - 0.025);
-    block(W + 0.04, 0.16, D + 0.04, darkWood, cx, WALL - 0.08, cz);
-    // the veranda: a teak deck a step up, dark timber posts on stone footings along its edge
+    // the walls: bright lime white, a honed stone base, a light teak band at the top
+    block(W, WALL, D, mat('#faf5ec'), cx, WALL / 2, cz);
+    block(W + 0.1, 0.3, D + 0.05, mat('#d6cfc3'), cx, 0.15, cz - 0.025);
+    block(W + 0.04, 0.16, D + 0.04, wood, cx, WALL - 0.08, cz);
+    // the veranda: a teak deck a step up, light teak posts on stone footings along its edge
     block(W + 1.2, 0.1, 1.3, teakDeck, cx, 0.05, z1 + 0.65, { receive: true });
-    block(W + 1.24, 0.04, 0.06, darkWood, cx, 0.08, z1 + 1.3);
+    block(W + 1.24, 0.04, 0.06, wood, cx, 0.08, z1 + 1.3);
     const posts = L.templeColumns.map((c) => [c.x * U, c.y * U]);
     const E = 3.1; // the eaves
     const m4 = new THREE.Matrix4();
     for (const [geo, material, y] of [
-      [new THREE.BoxGeometry(0.3, 0.16, 0.3), mat('#a9a196'), 0.18],
-      [new THREE.BoxGeometry(0.17, E - 0.26, 0.17), darkWood, 0.26 + (E - 0.26) / 2],
+      [new THREE.BoxGeometry(0.3, 0.16, 0.3), mat('#d6cfc3'), 0.18],
+      [new THREE.BoxGeometry(0.17, E - 0.26, 0.17), wood, 0.26 + (E - 0.26) / 2],
     ]) {
       const im = new THREE.InstancedMesh(geo, material, posts.length);
       posts.forEach(([x, z], k) => im.setMatrixAt(k, m4.makeTranslation(x, y, z)));
       im.castShadow = im.receiveShadow = true;
       root.add(im);
     }
-    block(W + 1.0, 0.22, 0.2, darkWood, cx, E - 0.11, posts[0][1]); // the beam across the post tops
+    block(W + 1.0, 0.22, 0.2, wood, cx, E - 0.11, posts[0][1]); // the beam across the post tops
     // the veranda's ceiling: teak boards under the eaves
     const ceil = mesh(new THREE.PlaneGeometry(W + 1.0, 1.25), teakDeck);
     ceil.rotation.x = Math.PI / 2;
@@ -331,15 +331,15 @@ export function buildGrounds(kit) {
     const lanterns = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.11, 0.13, 0.3, 14), lantern, posts.length);
     posts.forEach(([x, z], k) => lanterns.setMatrixAt(k, m4.makeTranslation(x, E - 0.55, z - 0.35)));
     root.add(lanterns);
-    // the roof: steep, pitched, the ridge along the building, dark shingles, the eaves reaching out over the deck
+    // the roof: steep, pitched, the ridge along the building, warm wooden shingles, the eaves reaching out over the deck
     const shingle = canvasMat(128, 128, (g) => {
       for (let row = 0; row < 8; row++) {
         for (let k = 0; k < 8; k++) {
           const t = 0.85 + rnd(row * 8 + k + 900) * 0.3;
-          g.fillStyle = `rgb(${Math.round(64 * t)}, ${Math.round(52 * t)}, ${Math.round(44 * t)})`;
+          g.fillStyle = `rgb(${Math.round(150 * t)}, ${Math.round(124 * t)}, ${Math.round(96 * t)})`;
           g.fillRect(k * 16 + (row % 2) * 8, row * 16, 15, 15);
         }
-        g.fillStyle = 'rgba(20, 14, 10, 0.7)';
+        g.fillStyle = 'rgba(70, 50, 34, 0.45)';
         g.fillRect(0, row * 16 + 15, 128, 1);
       }
     }, { side: THREE.DoubleSide });
@@ -361,9 +361,9 @@ export function buildGrounds(kit) {
     root.add(mesh(roofGeo, shingle, { cast: true, receive: true }));
     // the gables: a timber lattice in each triangle, set back a little under the roof's edge
     const lattice = canvasMat(64, 64, (g) => {
-      g.fillStyle = '#4a3828';
+      g.fillStyle = '#a07650';
       g.fillRect(0, 0, 64, 64);
-      g.strokeStyle = '#7a5a3c';
+      g.strokeStyle = '#d6b48a';
       g.lineWidth = 3;
       for (let k = -64; k < 128; k += 12) {
         g.beginPath();
@@ -387,16 +387,16 @@ export function buildGrounds(kit) {
     const slope = Math.atan2(rise, zf - ridgeZ);
     for (const gx of [rx0, rx1]) {
       for (const [zEdge, s] of [[zf, 1], [zb, -1]]) {
-        const barge = mesh(new THREE.BoxGeometry(0.08, 0.2, Math.hypot(zEdge - ridgeZ, rise) + 0.1), darkWood, { cast: true });
+        const barge = mesh(new THREE.BoxGeometry(0.08, 0.2, Math.hypot(zEdge - ridgeZ, rise) + 0.1), wood, { cast: true });
         barge.rotation.x = s * slope;
         add(barge, gx, E + rise / 2 + 0.06, (zEdge + ridgeZ) / 2);
       }
-      const finial = mesh(new THREE.ConeGeometry(0.07, 0.7, 8), darkWood, { cast: true });
+      const finial = mesh(new THREE.ConeGeometry(0.07, 0.7, 8), wood, { cast: true });
       finial.rotation.z = gx < cx ? 0.6 : -0.6;
       add(finial, gx + (gx < cx ? -0.15 : 0.15), top + 0.3, ridgeZ);
     }
-    block(rx1 - rx0 + 0.1, 0.16, 0.22, darkWood, cx, top + 0.02, ridgeZ);
-    block(rx1 - rx0, 0.16, 0.06, darkWood, cx, E - 0.02, zf); // the front fascia
+    block(rx1 - rx0 + 0.1, 0.16, 0.22, wood, cx, top + 0.02, ridgeZ);
+    block(rx1 - rx0, 0.16, 0.06, wood, cx, E - 0.02, zf); // the front fascia
     // a warm light hidden under the beam, for the doors at night
     const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
     block(W + 0.8, 0.02, 0.04, strip, cx, E - 0.23, posts[0][1] - 0.12);
@@ -431,7 +431,7 @@ export function buildGrounds(kit) {
     for (const sx of [-1.2, 1.2]) {
       const lx = cx + sx;
       const lz = z1 + 3.1;
-      add(mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), mat('#a9a196')), lx, 0.25, lz);
+      add(mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), mat('#d6cfc3')), lx, 0.25, lz);
       add(mesh(new THREE.BoxGeometry(0.3, 0.26, 0.3), glowStone), lx, 0.63, lz);
       add(mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), mat('#8f877c')), lx, 0.8, lz);
     }
@@ -467,6 +467,74 @@ export function buildGrounds(kit) {
       flame.emissiveIntensity = 0.2 + 1.0 * dark;
       glowStone.emissiveIntensity = 0.05 + 0.9 * dark;
     });
+    // the walled back garden behind the villa (what the rooms' windows look out on): a low cream wall with a stone
+    // cap, a soft lawn, a lotus pond in a stone edge, banana plants, bird-of-paradise, rocks and a frangipani
+    {
+      const G = L.villaGarden;
+      const [gx0, gx1, gz0, gz1] = [G.x0 * U, G.x1 * U, G.y0 * U, G.y1 * U];
+      const gcx = (gx0 + gx1) / 2;
+      const gcz = (gz0 + gz1) / 2;
+      const wallMat = mat('#f4ecdd');
+      const capMat = mat('#d8cfbf');
+      block(gx1 - gx0, 0.03, gz1 - gz0, mat('#8fbf6a'), gcx, 0.015, gcz, { receive: true }); // the lawn, greener
+      for (const [w, d, x, z] of [[gx1 - gx0, 0.2, gcx, gz0], [0.2, gz1 - gz0, gx0, gcz], [0.2, gz1 - gz0, gx1, gcz]]) {
+        block(w, 0.95, d, wallMat, x, 0.475, z);
+        block(w + 0.06, 0.08, d + 0.06, capMat, x, 0.99, z);
+      }
+      // the lotus pond, toward the back, pink flowers on the pads
+      const pondX = gcx - 1.2;
+      const pondZ = gz0 + 2.2;
+      const rim = mesh(new THREE.CylinderGeometry(1.75, 1.8, 0.14, 40), capMat);
+      rim.scale.z = 0.55;
+      add(rim, pondX, 0.07, pondZ);
+      const water = mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.02, 40), new THREE.MeshPhongMaterial({ color: '#5fa7a8', shininess: 120, specular: '#ffffff' }));
+      water.scale.z = 0.55;
+      add(water, pondX, 0.14, pondZ);
+      for (let k = 0; k < 7; k++) {
+        const a = rnd(k + 300) * Math.PI * 2;
+        const d = 0.3 + rnd(k + 310) * 1.0;
+        const px = pondX + Math.cos(a) * d;
+        const pz = pondZ + Math.sin(a) * d * 0.5;
+        const pad = mesh(new THREE.CircleGeometry(0.2, 14, 0.3, Math.PI * 1.8), mat('#5f9a4c'));
+        pad.rotation.x = -Math.PI / 2;
+        add(pad, px, 0.16, pz);
+        if (k % 2 === 0) add(mesh(new THREE.ConeGeometry(0.07, 0.12, 6), mat('#f3a7c0'), { cast: false }), px + 0.05, 0.22, pz);
+      }
+      // banana plants: a few great paddle leaves on short trunks
+      const banana = new THREE.MeshLambertMaterial({ color: '#6aa84f', side: THREE.DoubleSide });
+      for (const [bx, bz, h] of [[gx0 + 0.8, gz0 + 0.9, 1.6], [gx1 - 0.9, gz0 + 1.0, 1.9], [gx1 - 1.6, gz1 - 1.3, 1.4]]) {
+        add(mesh(new THREE.CylinderGeometry(0.07, 0.1, h, 8), mat('#7d8a4c')), bx, h / 2, bz);
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2;
+          const leaf = mesh(new THREE.SphereGeometry(1, 12, 6), banana);
+          leaf.scale.set(0.75, 0.03, 0.25);
+          leaf.position.set(bx + Math.cos(a) * 0.55, h + 0.15, bz + Math.sin(a) * 0.55);
+          leaf.rotation.set(0, -a, -0.5);
+          root.add(leaf);
+        }
+      }
+      // bird-of-paradise clumps along the walls, orange flowers
+      const bop = new THREE.MeshLambertMaterial({ color: '#4f8a46', side: THREE.DoubleSide });
+      for (let c = 0; c < 6; c++) {
+        const bx = gx0 + 0.5 + (c / 5) * (gx1 - gx0 - 1.0);
+        const bz = gz0 + 0.45;
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * Math.PI * 2;
+          const leaf = mesh(new THREE.SphereGeometry(1, 10, 6), bop);
+          leaf.scale.set(0.12, 0.42, 0.04);
+          leaf.position.set(bx + Math.cos(a) * 0.12, 0.45, bz + Math.sin(a) * 0.12);
+          leaf.rotation.set(Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4);
+          root.add(leaf);
+        }
+        add(mesh(new THREE.ConeGeometry(0.05, 0.22, 6), mat('#f08a2c'), { cast: false }), bx + 0.08, 0.95, bz).rotation.z = -1.1;
+      }
+      // a few smooth rocks by the pond
+      for (let k = 0; k < 5; k++) {
+        const rock = mesh(new THREE.SphereGeometry(0.22 + rnd(k + 330) * 0.15, 12, 8), mat('#b5ada0'));
+        rock.scale.y = 0.55;
+        add(rock, pondX + 1.9 + rnd(k + 340) * 0.8, 0.08, pondZ - 0.4 + k * 0.25);
+      }
+    }
     // the palms: a ringed trunk curving up, a crown of drooping fronds, a few coconuts
     const trunkMat = mat('#8a7458');
     const frondMat = new THREE.MeshLambertMaterial({ color: '#4f8f3e', side: THREE.DoubleSide });

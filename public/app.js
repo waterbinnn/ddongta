@@ -1159,7 +1159,7 @@ const wishHits = []; // the golden poop statue: tapping it walks you up to it
 // what a stall is called: "공중화장실 3번 칸" or "프리미엄 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
 
-// A premium room's door: dark timber in narrow vertical slats, a brass number and handle, a glowing transom over it
+// A premium room's door: light teak in narrow vertical slats, a brass number and handle, a glowing transom over it
 // and a small light beside it (green free, red in use). Whoever is inside is in their own room, so nobody shows out here.
 const privateTransom = new THREE.MeshBasicMaterial({ color: '#f2d3a0' });
 function makePrivateDoor(i) {
@@ -1167,10 +1167,10 @@ function makePrivateDoor(i) {
   const g = new THREE.Group();
   g.position.set(toX(L.cx), 0, toZ(L.cy));
   const doorCanvas = canvas(48, 112, (c) => {
-    c.fillStyle = '#3e2e22'; // dark timber
+    c.fillStyle = '#a8794c'; // light honey teak
     c.fillRect(0, 0, 48, 112);
     for (let x = 3; x < 46; x += 5) {
-      c.fillStyle = '#4e3a2a'; // narrow vertical slats
+      c.fillStyle = '#b98a5a'; // narrow vertical slats
       c.fillRect(x, 3, 4, 106);
     }
     c.fillStyle = '#c9a15a'; // the brass number
@@ -1186,7 +1186,7 @@ function makePrivateDoor(i) {
   const doorTex = new THREE.CanvasTexture(doorCanvas);
   doorTex.colorSpace = THREE.SRGBColorSpace;
   const face = new THREE.MeshLambertMaterial({ map: doorTex }); // (lights up under the pointer)
-  const edge = mat('#2e2219');
+  const edge = mat('#8e6440');
   const transom = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.38), privateTransom); // a glowing glass transom above
   transom.position.set(0.55, 2.42, 0.02);
   g.add(transom);
@@ -1320,8 +1320,29 @@ function syncStalls() {
 
 // ---------- characters ----------
 
+// Behind a tree or a wall, I still show: a soft see-through silhouette of me, drawn only where something stands in
+// front of me. My own body is drawn after the rest of the world and marks the stencil wherever it shows, so the
+// silhouette (drawn where something is nearer than me) fills just the hidden parts, never over my own arms and legs.
+const ghostMat = new THREE.MeshBasicMaterial({
+  color: '#fff3c4', transparent: true, opacity: 0.5, depthWrite: false, depthFunc: THREE.GreaterDepth,
+  stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc,
+});
+function addGhost(p) {
+  const parts = [];
+  p.group.traverse((o) => o.isMesh && !o.isSkinnedMesh && o !== p.face && parts.push(o));
+  for (const m of parts) {
+    m.renderOrder = 5;
+    for (const mm of [m.material].flat()) Object.assign(mm, { stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp });
+    const ghost = new THREE.Mesh(m.geometry, ghostMat);
+    ghost.renderOrder = 20;
+    ghost.frustumCulled = false;
+    m.add(ghost);
+  }
+}
+
 function makeWalker(u) {
   const p = makeCharacter(u.k, hairFor(u.id)); // a person or an animal, as the server picked
+  if (u.id === meId) addGhost(p);
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
@@ -1652,7 +1673,7 @@ function exitStall() {
   send({ t: 'exit' });
 }
 
-// The public restroom is open only at the front: walking in or out from the side goes round by the opening first
+// The public restroom is open only at the front: walking in or out from the side goes round by the opening first.
 function waypoint(from, to) {
   const P = GROUNDS.public;
   const edge = P.y1 + 45; // the side walls end at y1, and people keep about 30 cm off them
@@ -1660,8 +1681,15 @@ function waypoint(from, to) {
   const byOpening = (p) => p.x > P.x0 + 40 && p.x < P.x1 - 40 && p.y > edge;
   const a = inside(from);
   const b = inside(to);
-  if (a === b || (!a && byOpening(from)) || (!b && byOpening(to))) return to;
-  return { x: clamp(from.x, P.x0 + 90, P.x1 - 90), y: edge + 40 };
+  if (!(a === b || (!a && byOpening(from)) || (!b && byOpening(to)))) return { x: clamp(from.x, P.x0 + 90, P.x1 - 90), y: edge + 40 };
+  // the villa has long pools before it: going up to its doors from the front, walk in by the path between them
+  const pools = GROUNDS.villaPools;
+  const mid = (pools[0].x1 + pools[1].x0) / 2;
+  const [py0, py1] = [pools[0].y0, pools[0].y1];
+  if (to.y < py0 && from.y > py0 - 30 && from.x > pools[0].x0 - 40 && from.x < pools[1].x1 + 40) {
+    return Math.abs(from.x - mid) > 20 ? { x: mid, y: Math.max(from.y, py1 + 45) } : { x: mid, y: py0 - 45 };
+  }
+  return to;
 }
 
 // the way you're asking to go, from the keys or the on-screen stick, turned to where the camera looks
@@ -1947,11 +1975,16 @@ function updateCamera(dt) {
   if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
   if (inRoom && roomSeat >= 0) {
-    // resting on the stool or the sofa: the camera comes round in front of it, or behind it when it faces the window
+    // resting on the stool or the sofa, looking out: the camera goes up into the corner by the door (room.js says where)
+    // and looks out of the window past you
     if (performance.now() - manualCamAt > 2500) {
-      const st = room.seats[roomSeat];
-      const want = st.turn + (st.behind ? Math.PI : 0);
-      if (st.behind) cam.tPitch = 0.12; // low, over the shoulder
+      const { view } = room.seats[roomSeat];
+      const c = roomWorld(view.cam);
+      const f = roomWorld(view.aim);
+      const h = Math.hypot(c.x - f.x, c.z - f.z);
+      const want = Math.atan2(c.x - f.x, c.z - f.z);
+      cam.tPitch = Math.atan2(c.y - 0.9, h);
+      cam.tDist = Math.hypot(h, c.y - 0.9);
       cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
     }
   } else if (inRoom && roomStanding && roomSeat < 0) {
@@ -1981,9 +2014,8 @@ function updateCamera(dt) {
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
   if (inRoom) {
     const seat = room.seats[roomSeat];
-    // resting facing the window, the camera looks past you at it; resting otherwise, at you; walking about, at you; on the toilet, at it
-    const out = seat?.behind ? 1.4 : 0;
-    const aim = seat ? roomWorld(new THREE.Vector3(seat.at.x + Math.sin(seat.turn) * out, 0, seat.at.z + Math.cos(seat.turn) * out)) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim);
+    // resting, the camera looks past you out of the window; walking about, at you; on the toilet, at it
+    const aim = seat ? roomWorld(seat.view.aim) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim);
     fx = aim.x;
     fz = aim.z;
   } else if (me.s !== -1) {
@@ -2188,28 +2220,31 @@ function placeWalkers(dt, t) {
 // I sit in there with my shorts down, my poop tower still on my head.
 const outdoorLights = () => [sun, lamps];
 
-// The private room's big window looks out on the real grounds: a camera stands on the villa's front step looking out
-// over the garden, and what it sees (people, animals, the sky, day and night) is drawn onto the window's glass.
-const windowRT = new THREE.WebGLRenderTarget(512, 512);
-const windowCam = new THREE.PerspectiveCamera(55, 1, 0.1, 420);
-room.windowMat.map = windowRT.texture;
-room.windowMat.color.set('#ffffff');
-room.windowMat.needsUpdate = true;
-let frameNo = 0;
-function renderWindowView() {
-  const V = GROUNDS.private;
-  windowCam.position.set(toX((V.x0 + V.x1) / 2), 1.7, toZ(V.y1 + 140));
-  windowCam.lookAt(toX((V.x0 + V.x1) / 2 + 500), 2.4, toZ(V.y1 + 2400));
-  // just for this picture: the grounds on, the room off
-  worldRoot.visible = stallRoot.visible = charRoot.visible = true;
-  for (const o of outdoorLights()) o.visible = true;
-  room.group.visible = false;
-  renderer.setRenderTarget(windowRT);
-  renderer.render(scene, windowCam);
-  renderer.setRenderTarget(null);
-  worldRoot.visible = stallRoot.visible = charRoot.visible = false;
-  for (const o of outdoorLights()) o.visible = false;
-  room.group.visible = true;
+// The private room's big window looks out on a walled back garden built right outside the glass (room.js), so it
+// moves as you look round. Nobody else is there: no other visitors, just the garden's own few animals ambling about,
+// and its light follows the real sun or moon.
+let garden = null;
+function syncGarden(sec) {
+  if (!garden) {
+    garden = { last: sec };
+    garden.list = room.outside.animals.map(([k, x, z, r], i) => {
+      const p = makeCharacter(k);
+      room.group.add(p.group);
+      return { p, x, z, r, a: i * 1.7, phase: 0, seed: i * 3 };
+    });
+  }
+  const dt = Math.min(0.1, sec - garden.last);
+  garden.last = sec;
+  for (const g of garden.list) {
+    const gait = Math.max(0, Math.sin(sec * 0.22 + g.seed)); // a slow wander, then a while standing about
+    g.a += dt * gait * 0.5;
+    g.phase += dt * gait * 8;
+    g.p.group.position.set(g.x + Math.cos(g.a) * g.r * 0.6, 0, g.z + Math.sin(g.a) * g.r);
+    g.p.group.rotation.y = Math.atan2(-Math.sin(g.a) * g.r * 0.6, Math.cos(g.a) * g.r);
+    pose(g.p, { mode: gait > 0.15 ? 'walk' : 'stand', phase: g.phase, t: sec, seed: g.seed });
+  }
+  room.outside.sun.color.copy(sun.color);
+  room.outside.sun.intensity = sun.intensity;
 }
 function syncRoom(t, dt) {
   const want = me.s !== -1 && LAYOUT[me.s]?.type === 'private' && stallObjs[me.s] ? me.s : -1;
@@ -3030,7 +3065,7 @@ function frame(t) {
     v.shake = Math.max(0, v.shake - dt);
     v.group.rotation.z = v.shake > 0 ? Math.sin(t / 25) * 0.04 * (v.shake / 0.35) : 0;
   }
-  if (inRoom && GROUNDS && frameNo++ % 2 === 0) renderWindowView(); // every other frame is plenty for a view
+  if (inRoom) syncGarden(performance.now() / 1000); // the garden outside the window
   renderer.render(scene, camera);
   updateLabels(dt);
   placeBeanLabel();

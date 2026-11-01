@@ -511,6 +511,40 @@ body:not(.wish-near) .chat { display: none; }
 }
 
 .loading.done { opacity: 0; pointer-events: none; }
+/* the loading screen: a little pixel cat having a go, and the poop dropping out under its tail, over and over */
+.loading { align-content: center; gap: 14px; background: #000; } /* pitch black, the little cat lit up in the middle */
+.loading-cat { position: relative; width: 150px; height: 150px; }
+.loading-cat svg { position: absolute; display: block; image-rendering: pixelated; }
+.loading-cat .cat { left: 0; top: 40px; animation: cat-strain 2.8s ease-in-out infinite; transform-origin: 50% 100%; }
+.loading-cat .drop { left: 8px; top: 84px; opacity: 0; animation: poop-drop 2.8s ease-in infinite; }
+.loading-grunt { position: absolute; right: -6px; top: 10px; font-size: 14px; font-weight: 700; color: #ffd34e; animation: grunt 2.8s ease-in-out infinite; }
+.loading-text { font-size: 13px; color: rgba(255, 250, 240, 0.6); }
+@keyframes cat-strain {
+  0%, 6% { transform: translate(0, 0) scale(1, 1); }
+  10%, 18%, 26%, 34%, 42% { transform: translate(1px, 1px) scale(1.02, 0.97); }
+  14%, 22%, 30%, 38%, 46% { transform: translate(-1px, 1px) scale(1.02, 0.97); }
+  54% { transform: translate(0, -6px) scale(0.98, 1.04); } /* out it comes: a little hop of relief */
+  62%, 100% { transform: translate(0, 0) scale(1, 1); }
+}
+@keyframes poop-drop {
+  0%, 50% { opacity: 0; transform: translateY(0) scale(0.6); }
+  54% { opacity: 1; transform: translateY(0) scale(0.75); }
+  64% { opacity: 1; transform: translateY(18px) scale(1); }
+  70% { transform: translateY(13px) scale(1.05, 0.95); }
+  76%, 92% { opacity: 1; transform: translateY(18px) scale(1); }
+  100% { opacity: 0; transform: translateY(18px) scale(1); }
+}
+@keyframes grunt {
+  0%, 4% { opacity: 0; transform: translateY(4px) scale(0.9); }
+  12%, 46% { opacity: 1; transform: translateY(0) scale(1); }
+  20%, 36% { transform: translateY(0) scale(1.12); }
+  28% { transform: translateY(0) scale(1); }
+  54%, 100% { opacity: 0; transform: translateY(-6px) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-cat .cat, .loading-grunt { animation: none; }
+  .loading-cat .drop { animation: none; opacity: 1; transform: translateY(18px); }
+}
 
 /* ---------- room-wide chat feed, top-left ---------- */
 

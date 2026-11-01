@@ -48,6 +48,13 @@ export function buildGrounds(kit) {
     m.rotation.x = -Math.PI / 2;
     return add(m, x, y, z);
   };
+  // a straight path from one point to another, any direction
+  const lane = (ax, az, bx, bz, w, material, y = 0.008) => {
+    const len = Math.hypot(bx - ax, bz - az);
+    const m = mesh(new THREE.PlaneGeometry(w, len), material, { receive: true });
+    m.rotation.set(-Math.PI / 2, 0, Math.atan2(bx - ax, bz - az)); // its length lies along a to b
+    return add(m, (ax + bx) / 2, y, (az + bz) / 2);
+  };
   const strip = (x0, z0, x1, z1, material, y = 0.009) => {
     const m = mesh(new THREE.PlaneGeometry(Math.abs(x1 - x0), Math.abs(z1 - z0)), material, { receive: true });
     m.rotation.x = -Math.PI / 2;
@@ -138,16 +145,29 @@ export function buildGrounds(kit) {
   strip(C - 0.75, C + PZ - 0.2, C + 0.75, C + PR - PW / 2, dirt);              // south, to the gate
   strip(C + PZ - 0.2, ex[1] - 0.75, ex[0] - L.exercise.r * U + 0.3, ex[1] + 0.75, dirt); // east, to the exercise lawn
   strip(C - bushIn - 0.1, C - 0.75, C - PZ + 0.2, C + 0.75, dirt);              // west, to the bushes
+  // to the café terrace and to the pond, on the diagonals
+  for (const p of [L.terrace, L.pond]) {
+    const [tx, tz] = P(p);
+    const a = Math.atan2(tx - C, tz - C);
+    const r = p === L.terrace ? L.terraceR * U : L.pond.r * U + 0.4;
+    lane(C + Math.sin(a) * (PZ - 0.2), C + Math.cos(a) * (PZ - 0.2), tx - Math.sin(a) * (r - 0.2), tz - Math.cos(a) * (r - 0.2), 1.4, dirt);
+  }
   // a paved forecourt in front of both restrooms, joining the plaza
   const court = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1) });
   court.map.repeat.set(22, 4);
   strip(L.private.x0 * U - 0.6, L.private.y1 * U, L.public.x1 * U + 0.6, C - PZ + 0.3, court, 0.011);
 
-  // ---------- plaza: café terrace, coffee cart, vending machine, the golden-poop sign ----------
+  // ---------- the café terrace: its own paved circle, tables, a coffee cart, a vending machine ----------
+  {
+    const [tx, tz] = P(L.terrace);
+    const deck = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1), color: '#fff3e2' });
+    deck.map.repeat.set(L.terraceR * U * 2.2, L.terraceR * U * 2.2);
+    disc(L.terraceR * U, deck, tx, tz, 0.012);
+  }
   const white = mat('#fffaf0');
   const metal = mat('#3b3a36');
   const shades = ['#9fd8c7', '#ffc2a8', '#ffe28a'];
-  L.plaza.tables.forEach((t, k) => {
+  L.terrace.tables.forEach((t, k) => {
     const [x, z] = P(t);
     add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 28), white, { cast: true, receive: true }), x, 0.74, z);
     add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.72, 8), metal), x, 0.37, z);
@@ -157,7 +177,7 @@ export function buildGrounds(kit) {
     add(mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.09, 12), mat('#ffffff')), x + 0.14, 0.81, z + 0.06); // a cup
   });
   for (const s of L.seats) {
-    const t = L.plaza.tables[s.table];
+    const t = L.terrace.tables[s.table];
     const face = Math.atan2(t.x - s.x, t.y - s.y); // the sitter faces the table
     const chair = new THREE.Group();
     const seat = mesh(new THREE.BoxGeometry(0.42, 0.05, 0.42), white, { cast: true });
@@ -175,7 +195,7 @@ export function buildGrounds(kit) {
   }
   // string lights over the terrace
   const bulbMat = new THREE.MeshBasicMaterial({ color: '#fff1c2' });
-  const tables = L.plaza.tables.map(P);
+  const tables = L.terrace.tables.map(P);
   const lx0 = Math.min(...tables.map((t) => t[0])) - 1.6;
   const lx1 = Math.max(...tables.map((t) => t[0])) + 1.6;
   const lz = Math.max(...tables.map((t) => t[1])) + 1.2;
@@ -188,7 +208,7 @@ export function buildGrounds(kit) {
   root.add(bulbs);
   // the coffee cart
   {
-    const [x, z] = P(L.plaza.cart);
+    const [x, z] = P(L.terrace.cart);
     block(1.3, 1.0, 0.8, mat('#7cc6b2'), x, 0.6, z);
     block(1.5, 0.06, 1.0, white, x, 1.75, z);
     for (const sx of [-0.6, 0.6]) add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.65, 6), white), x + sx, 1.42, z + 0.4);
@@ -199,14 +219,15 @@ export function buildGrounds(kit) {
     }
     sign('COFFEE', x, 1.2, z + 0.41, 0, [0.9, 0.24], { bg: '#ffffff', ink: '#3f8f7c', font: 72 });
   }
-  // the vending machine, facing the middle of the plaza
+  // the vending machine, facing the middle of the terrace
   {
-    const [x, z] = P(L.plaza.vending);
-    vendingMachine(x, z, Math.atan2(C - x, C - z), '#e85d5d', 2);
+    const [x, z] = P(L.terrace.vending);
+    const [tx, tz] = P(L.terrace);
+    vendingMachine(x, z, Math.atan2(tx - x, tz - z), '#e85d5d', 2);
   }
   // the golden-poop sign: tap it to go and make a wish
   {
-    const [x, z] = P(L.plaza.sign);
+    const [x, z] = P(L.wish);
     add(mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.25, 10), mat('#8a5a34'), { cast: true }), x, 0.62, z);
     const hit = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 0.7), M.hit);
     hit.position.set(x, 1.55, z);
@@ -401,6 +422,12 @@ export function buildGrounds(kit) {
   });
   trunks.castShadow = crowns.castShadow = tiers.castShadow = true;
   root.add(trunks, crowns, tiers);
+
+  // flowers round the beanstalk's mound
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.3;
+    flowerPatch(L.bean.x * U + Math.cos(a) * 1.25, L.bean.y * U + Math.sin(a) * 1.25, 0.3, 6, 50 + k);
+  }
 
   // ---------- the garden between the two restrooms ----------
   flowerPatch(L.garden.x * U, L.garden.y * U, 2.0, 46, 20);

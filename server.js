@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { createWish } = require('./lib/wish');
-const { LAYOUT: GROUNDS, settle, inBush, onLawn } = require('./lib/layout');
+const { LAYOUT: GROUNDS, settle, inBush, nearBean, onLawn } = require('./lib/layout');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -424,8 +424,8 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { t: 'bell', stall: user.stall, id: user.id });
     } else if (m.t === 'exit') {
       leaveStall(room, user);
-    } else if (m.t === 'fert' && user.pile > 0 && !user.roll) {
-      // the tower on your head goes to the beanstalk as fertilizer
+    } else if (m.t === 'fert' && user.pile > 0 && !user.roll && user.stall === -1 && nearBean(user)) {
+      // standing in front of the beanstalk, the tower on your head goes to it as fertilizer
       const n = user.pile;
       user.pile = 0;
       beanstalk += n;

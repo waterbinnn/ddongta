@@ -424,7 +424,7 @@ function buildRoom() {
   placeBeanstalk();
   benchSpots.length = 0;
   benchSeats.length = 0;
-  GROUNDS.plaza.tables.forEach((t, k) => {
+  GROUNDS.terrace.tables.forEach((t, k) => {
     benchSpots.push({ x: t.x, y: t.y });
     benchSeats.push(GROUNDS.seats.filter((s) => s.table === k).map((s) => ({ x: s.x, y: s.y })));
   });
@@ -1370,7 +1370,7 @@ const jump = () => me.s === -1 && !me.rolling && send({ t: 'jump' });
 // the sinks in the public restroom: where you stand, and the basin you look at
 function nearestSink(x, y) {
   const s = GROUNDS.sinks.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
-  return { x: s.x, y: s.y, lookX: s.x + Math.sin(s.face) * 60, lookY: s.y + Math.cos(s.face) * 60 };
+  return { x: s.x, y: s.y, lookX: s.x + Math.sin(s.face) * 60, lookY: s.y + Math.cos(s.face) * 60, pond: Boolean(s.pond) };
 }
 const sinkGap = (x, y) => {
   const s = nearestSink(x, y);
@@ -1742,7 +1742,7 @@ function overHead(obj, x, baseY, z, h) {
 
 // people on benches face out, away from the wash island
 const benchFacing = (x, y) => {
-  const t = GROUNDS.plaza.tables.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
+  const t = GROUNDS.terrace.tables.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
   return Math.atan2(t.x - x, t.y - y);
 };
 
@@ -1821,7 +1821,7 @@ function placeWalkers(dt, t) {
       overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob);
       continue;
     }
-    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? 'wash' : squatting ? 'squat' : move || (e.walking ? 'walk' : 'stand');
+    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? (e.washPond ? 'pondwash' : 'wash') : squatting ? 'squat' : move || (e.walking ? 'walk' : 'stand');
     if (move !== e.exMove) {
       e.exMove = move; // each move starts from its beginning
       e.exStart = sec;
@@ -2022,14 +2022,19 @@ let beanHoldUntil = 0; // while my fertilizer is in the air, the stalk waits for
 let beanTotal = 0;
 function placeBeanstalk() {
   if (bean) worldRoot.remove(bean.group);
-  bean = makeBeanstalk(toX(GROUNDS.garden.x), toZ(GROUNDS.garden.y));
+  bean = makeBeanstalk(toX(GROUNDS.bean.x), toZ(GROUNDS.bean.y));
   bean.setTotal(beanTotal);
   worldRoot.add(bean.group);
 }
 
+const nearBean = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.bean.x, me.y - GROUNDS.bean.y) <= GROUNDS.beanRange;
 function fertilize() {
   if (!me.pl) {
     toast('머리 위에 아직 똥이 없어요');
+    return;
+  }
+  if (!nearBean()) {
+    toast('비료는 광장의 콩나무 앞에서 뿌릴 수 있어요');
     return;
   }
   setHold(false);
@@ -2077,7 +2082,7 @@ function placeBeanLabel() {
     el.hidden = true;
     return;
   }
-  beanAt.set(toX(GROUNDS.garden.x), 0, toZ(GROUNDS.garden.y));
+  beanAt.set(toX(GROUNDS.bean.x), 0, toZ(GROUNDS.bean.y));
   const far = beanAt.distanceTo(camera.position) > 30;
   beanAt.project(camera);
   const on = !far && beanAt.z < 1 && Math.abs(beanAt.x) < 0.95 && beanAt.y > -0.7 && beanAt.y < 0.95;
@@ -2174,8 +2179,10 @@ function onWash(m) {
   let hands;
   let top;
   let bottom;
+  let noStream = false;
   if (inside) {
     // the little sink in my room: step over from the toilet and wash there
+    e.washPond = false;
     roomWashUntil = performance.now() + 2200;
     tap = roomWorld(room.tap);
     hands = roomWorld(room.washSpot).lerp(tap, 0.5).setY(0.92);
@@ -2183,24 +2190,28 @@ function onWash(m) {
     bottom = 0.86;
   } else {
     const sink = nearestSink(e.rx, e.ry);
-    tap = new THREE.Vector3(toX(sink.lookX), 1.12, toZ(sink.lookY)); // the tap over that basin
+    tap = new THREE.Vector3(toX(sink.lookX), sink.pond ? 0.06 : 1.12, toZ(sink.lookY)); // the tap over that basin (or the pond's water)
     const ux = toX(e.rx);
     const uz = toZ(e.ry);
     const d = Math.hypot(tap.x - ux, tap.z - uz) || 1;
-    hands = new THREE.Vector3(ux + ((tap.x - ux) / d) * 0.35, 0.95, uz + ((tap.z - uz) / d) * 0.35);
+    hands = new THREE.Vector3(ux + ((tap.x - ux) / d) * 0.35, sink.pond ? 0.35 : 0.95, uz + ((tap.z - uz) / d) * 0.35);
     top = tap.y;
-    bottom = 0.9;
+    bottom = sink.pond ? 0.04 : 0.9;
+    noStream = sink.pond; // at the pond you scoop the water, there's no tap
+    e.washPond = sink.pond;
   }
   const tapX = tap.x;
   const tapZ = tap.z;
   pop(hands.clone().add(new THREE.Vector3(0, 0.45, 0)), '뽀득뽀득', inside);
   if (!document.hidden) {
     // a stream of water from the tap toward this person's hands
-    const stream = new THREE.Mesh(streamGeo, new THREE.MeshBasicMaterial({ color: '#9fe0ff', transparent: true, opacity: 0.8 }));
-    stream.position.set(tapX, (top + bottom) / 2, tapZ);
-    stream.scale.y = top - bottom;
-    fxRoot.add(stream);
-    washFx.push({ o: stream, t: 0, life: 2.2, kind: 'stream' });
+    if (!noStream) {
+      const stream = new THREE.Mesh(streamGeo, new THREE.MeshBasicMaterial({ color: '#9fe0ff', transparent: true, opacity: 0.8 }));
+      stream.position.set(tapX, (top + bottom) / 2, tapZ);
+      stream.scale.y = top - bottom;
+      fxRoot.add(stream);
+      washFx.push({ o: stream, t: 0, life: 2.2, kind: 'stream' });
+    }
     // soap bubbles floating up from the hands
     for (let k = 0; k < 12; k++) {
       const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(PROPS.bubble), transparent: true }));
@@ -2532,11 +2543,12 @@ function renderActions() {
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
   const anyFree = stalls.some((_, i) => freeFor(i));
-  const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : nearSink() ? 'sink'
+  const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
-  if (`${mode}${me.pl > 0}` === actionMode) return; // a tower on your head adds the fertilizer button
-  actionMode = `${mode}${me.pl > 0}`;
+  const key = mode === 'bean' ? `bean${me.pl}` : mode; // the fertilizer button shows how many you carry
+  if (key === actionMode) return;
+  actionMode = key;
   const bar = $('#actions');
   bar.innerHTML = '';
   const pad = $('#pushPad');
@@ -2556,8 +2568,8 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
-    if (mode === 'squatting') bar.append(miniBtn('sprout', '비료로 뿌리기', fertilize), miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
-    else bar.append(miniBtn('sprout', '비료로 뿌리기', fertilize), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+    if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
+    else bar.append(miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -2573,6 +2585,8 @@ function renderActions() {
     bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
     bar.append(mainBtn('bench', '의자에 앉기', () => goSitOnBench(bench)));
+  } else if (mode === 'bean') {
+    bar.append(mainBtn('sprout', `비료로 뿌리기 · ${me.pl}개`, fertilize));
   } else if (mode === 'bush') {
     bar.append(mainBtn('door', '쪼그려 앉아 누기', () => send({ t: 'squat', on: true })));
   } else if (mode === 'lawn') {
@@ -2594,7 +2608,6 @@ function renderActions() {
     }));
   }
   if (mode !== 'inside' && mode !== 'rolling' && mode !== 'squatting') {
-    if (me.pl > 0) bar.append(miniBtn('sprout', '비료로 뿌리기', fertilize)); // out and about with a tower on your head
     const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
     go.dataset.move = '1';
     bar.append(go);
@@ -2628,8 +2641,9 @@ function placeAt(x, y) {
   const V = L.private;
   if (x > P.x0 - 40 && x < P.x1 + 40 && y > P.y0 && y < P.y1 + 40) return '공중화장실';
   if (x > V.x0 - 120 && x < V.x1 + 120 && y > V.y1 && y < V.y1 + 280) return '개인 화장실';
-  if (near(L.garden, 260)) return '콩나무 정원';
-  if (near({ x: L.center, y: L.center }, L.plazaR + 20)) return '카페 테라스';
+  if (near(L.garden, 260)) return '작은 정원';
+  if (near(L.bean, L.plazaR + 20)) return '콩나무 광장';
+  if (near(L.terrace, L.terraceR + 40)) return '카페 테라스';
   if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
   if (near(L.pond, L.pond.r + 160)) return '연못';
   if (near(L.bush, L.bush.r)) return '풀숲';
@@ -3238,6 +3252,10 @@ window.addEventListener('keydown', (e) => {
     if (MOVE_KEYS.some((k) => keys.has(k))) return;
     if (me.b) {
       if (!e.repeat) send({ t: 'bench', on: false }); // Space again gets you up
+      return;
+    }
+    if (me.pl > 0 && nearBean()) {
+      if (!e.repeat) fertilize();
       return;
     }
     if (nearSink()) {

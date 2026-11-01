@@ -1,5 +1,5 @@
-// The beanstalk in the garden between the restrooms. Everyone's poop goes to it as fertilizer, in every room,
-// and it never stops growing: 5 cm for every poop, from the day it was planted (kept by the server).
+// The beanstalk in the middle of the courtyard. Everyone's poop goes to it as fertilizer, in every room:
+// 5 cm for every poop given today. Every midnight (KST) it starts again from a sprout (kept by the server).
 import * as THREE from '/vendor/three.module.js';
 
 const CM_PER_POOP = 5;

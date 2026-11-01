@@ -1461,6 +1461,7 @@ function applyState(st) {
   // everyone in this restroom, and how many stalls are in use right now
   $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
+  if (st.beanY !== undefined) beanYesterday = st.beanY;
   if (st.bean !== undefined && performance.now() > beanHoldUntil && st.bean !== beanTotal) {
     beanTotal = st.bean;
     bean?.setTotal(beanTotal);
@@ -2312,6 +2313,7 @@ function syncTower(p, id, count, dt) {
 let bean = null;
 let beanHoldUntil = 0; // while my fertilizer is in the air, the stalk waits for it to land
 let beanTotal = 0;
+let beanYesterday = 0; // poops it had yesterday, before it went back to a sprout at midnight
 function placeBeanstalk() {
   if (bean) worldRoot.remove(bean.group);
   bean = makeBeanstalk(toX(GROUNDS.bean.x), toZ(GROUNDS.bean.y));
@@ -2383,7 +2385,7 @@ function placeBeanLabel() {
   const on = beanAt.z < 1 && Math.abs(beanAt.x) < 0.95 && beanAt.y > -0.7 && beanAt.y < 0.95;
   el.hidden = !on;
   if (!on) return;
-  const text = `콩나무 ${heightText(bean.height)} · 똥을 비료로 주면 자라요`;
+  const text = `콩나무 ${heightText(bean.height)} · 똥을 비료로 주면 자라요${beanYesterday ? `\n어제는 ${heightText(beanHeight(beanYesterday))}까지 자랐어요` : ''}`;
   if (el.textContent !== text) el.textContent = text;
   el.style.transform = `translate(${((beanAt.x + 1) / 2) * W}px, ${((1 - beanAt.y) / 2) * H + 8}px) translate(-50%, 0)`;
 }

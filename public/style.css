@@ -137,12 +137,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   top: 0;
   z-index: 6;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(40, 80, 30, 0.78); /* like the golden poop's label, in leaf green */
   color: #e6ffc8;
   font-size: 12px;
   box-shadow: 0 0 12px rgba(150, 220, 110, 0.4);
-  white-space: nowrap;
+  white-space: pre; /* yesterday's height on a second line */
+  text-align: center;
+  line-height: 1.5;
   pointer-events: none;
 }
 .bean-label[hidden] { display: none; }

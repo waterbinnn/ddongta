@@ -90,10 +90,14 @@ function cleanChat(text) {
     .replace(PHONE, '***-****-****');
 }
 
-const kstDate = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const kstDate = (ago = 0) => new Date(Date.now() - ago + 9 * 3600e3).toISOString().slice(0, 10);
+const DAY_MS = 24 * 3600e3;
 let today = kstDate();
 let flushedToday = 0;
-let beanstalk = 0; // every poop ever given to the beanstalk as fertilizer, in all rooms; it never stops growing
+// the beanstalk: every poop given to it as fertilizer today, in all rooms. At midnight (KST) it goes back to a sprout,
+// and yesterday's height stays on its label
+let beanstalk = 0;
+let beanYesterday = 0;
 
 // "today's poops" survives restarts and deploys when a Key Value store is attached (REDIS_URL on Render)
 let kv = null;
@@ -107,10 +111,11 @@ if (process.env.REDIS_URL) {
     console.warn('key value:', err.message);
   });
   kv.connect()
-    .then(() => Promise.all([kv.get(`flushed:${today}`), kv.get('beanstalk')]))
-    .then(([saved, bean]) => {
+    .then(() => Promise.all([kv.get(`flushed:${today}`), kv.get(`bean:${today}`), kv.get(`bean:${kstDate(DAY_MS)}`)]))
+    .then(([saved, bean, yesterday]) => {
       flushedToday = Math.max(flushedToday, Number(saved) || 0);
       beanstalk = Math.max(beanstalk, Number(bean) || 0);
+      beanYesterday = Math.max(beanYesterday, Number(yesterday) || 0);
     })
     .catch((err) => console.warn('key value unavailable:', err.message));
 }
@@ -258,6 +263,7 @@ function snapshot(room) {
     t: 'state',
     flushed: flushedToday,
     bean: beanstalk,
+    beanY: beanYesterday,
     stalls: room.stalls.map((u) => (u ? u.id : 0)),
     hp: room.meta.map((m) => Math.round(m.hp)),
     users: [...room.users].map((u) => ({
@@ -275,6 +281,9 @@ setInterval(() => {
   if (d !== today) {
     today = d;
     flushedToday = 0;
+    beanYesterday = beanstalk; // a new day: the beanstalk starts again from a sprout
+    beanstalk = 0;
+    for (const r of rooms) r.dirty = true;
   }
   const now = Date.now();
   for (let k = rooms.length - 1; k >= 0; k--) {
@@ -487,7 +496,7 @@ wss.on('connection', (ws, req) => {
       const n = user.pile;
       user.pile = 0;
       beanstalk += n;
-      if (kv?.isReady) kv.incrBy('beanstalk', n).catch(() => {});
+      if (kv?.isReady) kv.multi().incrBy(`bean:${today}`, n).expire(`bean:${today}`, 3 * 24 * 3600).exec().catch(() => {});
       for (const r of rooms) r.dirty = true; // every room's beanstalk grows
       broadcast(room, { t: 'fert', id: user.id, n, total: beanstalk });
     } else if ((m.t === 'rub' || m.t === 'pray') && user.stall === -1 && !user.roll && !user.squat && nearWish(user)) {

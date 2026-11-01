@@ -60,7 +60,7 @@ function matOf(color, both = false) {
 // ---------- faces: drawn once per expression, shared by everyone ----------
 
 // Plain dot eyes and round blush, no mouth (like 사우나 고요); the face only changes while pooping and so on.
-const INK = '#6b4a3a'; // soft brown, not black
+const INK = '#2d201a'; // a very dark brown: it has to show on fur at night too, when everything else goes dark
 const FW = 256;
 const FH = 200;
 const EYE_Y = 130; // below the fringe
@@ -83,11 +83,17 @@ function drawFace(expr) {
     pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
     g.stroke();
   };
-  const dots = (r = 8.5) =>
+  const dots = (r = 9.5) =>
     eyes((x) => {
       g.beginPath();
       g.arc(x, EYE_Y, r, 0, Math.PI * 2);
       g.fill();
+      // a little white catchlight, so the eyes stand out on dark fur
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(x + r * 0.35, EYE_Y - r * 0.35, r * 0.32, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = INK;
     });
   // flat round blush
   g.fillStyle = 'rgba(240, 160, 165, 0.5)';

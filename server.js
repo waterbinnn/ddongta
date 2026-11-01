@@ -492,6 +492,12 @@ wss.on('connection', (ws, req) => {
       if (now - user.lastWash < 2000) return;
       user.lastWash = now;
       broadcast(room, { t: 'wash', id: user.id });
+    } else if (m.t === 'pick' && user.under && (user.stall !== -1 || user.squat)) {
+      // picking up the poop under you: it goes on top of the pile on your head
+      user.under = false;
+      user.pile++;
+      room.dirty = true;
+      broadcast(room, { t: 'pick', id: user.id, pile: user.pile });
     } else if (m.t === 'lunch' && user.stall !== -1) {
       // a lunchbox opened on the lap, in the stall
       const now = Date.now();

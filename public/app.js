@@ -1446,6 +1446,8 @@ function handle(m) {
     onDrink(m);
   } else if (m.t === 'lunch') {
     onLunch(m);
+  } else if (m.t === 'pick') {
+    onPick(m);
   } else if (m.t === 'stuck') {
     onStuck(m);
   } else if (m.t === 'knock') {
@@ -1521,6 +1523,7 @@ function applyState(st) {
       me.cn = Boolean(u.cn);
       me.pk = u.pk || [];
       me.k = u.k;
+      me.un = Boolean(u.un);
       if (u.r) {
         me.x = u.x;
         me.y = u.y;
@@ -2039,7 +2042,7 @@ function placeWalkers(dt, t) {
     syncTower(p, id, u.pl, dt);
     setFlush(p, ...(squatting ? flushOf(u) : [0, u.cn ? 1 : 0]));
     const under = squatting && Boolean(u.un);
-    if (e.under && !under && !u.un && p.under) leaveBehind(p, id); // got up: it stays on the ground
+    if (e.under && !squatting && !u.un && p.under) leaveBehind(p, id); // got up: it stays on the ground (unless it was picked up)
     e.under = under;
     syncUnder(p, id, under, true);
     setFace(p, face);
@@ -2287,7 +2290,7 @@ function bodySpot(k, fit, out) {
   const row = Math.floor((j % perLayer) / RING);
   const col = j % RING;
   const a = (col / RING) * Math.PI * 2 + row * 0.39 + layer * 0.21;
-  const r = fit.r + 0.015 + layer * 0.05;
+  const r = fit.r * 1.2 + 0.08 + layer * 0.05; // well out from the body, so they stick out round it and aren't buried
   return out.set(Math.sin(a) * r, fit.y1 - ((fit.y1 - fit.y0) * (row + 0.5)) / ROWS.length, Math.cos(a) * r);
 }
 function syncTower(p, id, count, dt) {
@@ -2867,7 +2870,7 @@ function renderActions() {
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -2891,6 +2894,7 @@ function renderActions() {
     push.insertAdjacentHTML('beforeend', '<kbd>Space</kbd>');
     pad.append(push); // only the poop button lives in the bottom-right
     if ((me.pk || []).length) bar.append(mainBtn('wash', '쾌변음료 마시기', drinkNow, 'drink'));
+    if (me.un) bar.append(miniBtn('poop', '줍기', () => send({ t: 'pick' }))); // the poop under you, onto your head
     if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
     else {
       if (inRoom) bar.append(miniBtn('bench', '일어나기', () => { setHold(false); roomStanding = true; }));
@@ -3043,6 +3047,17 @@ function drinkPose(p) {
   p.parts.arm_R?.rotation.set(-1.55, 0, -0.55);
   p.parts.head?.rotation.set(-0.3, 0, -0.18); // head tipped back and toward the bottle
 }
+// picking up the poop under you: up it goes onto the pile on your head (a golden one stays golden)
+function onPick(m) {
+  if (underGold.has(m.id)) {
+    if (!poopGolds.has(m.id)) poopGolds.set(m.id, new Set());
+    poopGolds.get(m.id).add(m.pile - 1);
+    underGold.delete(m.id);
+  }
+  const h = headOf(m.id);
+  if (h) pop(h.clone(), '줍줍', m.id === meId && inRoom);
+}
+
 // ---------- 도시락: a lunchbox opened on the lap in the stall, eaten with chopsticks ----------
 
 const LUNCH_MS = 6500;

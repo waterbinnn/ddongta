@@ -1854,7 +1854,8 @@ const OG_VIEWS = {
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
 const DIST_MIN = 3.5;
-const ROOM_DIST = [2.6, 4.2]; // how near and far the camera can be inside the private room
+const ROOM_DIST = [2.6, 6.0]; // how near and far the camera can be inside the private room
+const ROOM_VIEW = 4.2; // where it starts; past this the walls stop it, so zooming out further widens the lens instead
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 12; // zooming out stops before the place shrinks to a toy
 const BENCH_DIST = 2.6; // sitting at a terrace table: close, as if across the table from you
@@ -1906,7 +1907,7 @@ function focusCamera() {
     cam.tLook = 0;
     // far enough back that about four stalls fit across the screen, so the neighbours show on a phone too
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    cam.tDist = key === 'room' ? ROOM_DIST[1] : key === 'bench' ? BENCH_DIST : clamp(Math.max(6.5, 4.4 / (2 * halfW)), DIST_MIN, 16);
+    cam.tDist = key === 'room' ? ROOM_VIEW : key === 'bench' ? BENCH_DIST : clamp(Math.max(6.5, 4.4 / (2 * halfW)), DIST_MIN, 16);
   } else if (camBefore) {
     cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;
@@ -2059,6 +2060,14 @@ function updateCamera(dt) {
     ({ x: px, y: py, z: pz } = local);
   }
   camera.position.set(px, py, pz);
+  if (inRoom) {
+    // zoomed out past where the walls let the camera go: a wider lens, so you still see more of the room
+    const fov = 55 + clamp((cam.dist - ROOM_VIEW) / (ROOM_DIST[1] - ROOM_VIEW), 0, 1) * 17;
+    if (Math.abs(camera.fov - fov) > 0.05) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+  }
   if (roomShake > 0) {
     // someone is knocking on my door: the room gives a little jolt
     roomShake = Math.max(0, roomShake - dt);
@@ -3906,8 +3915,8 @@ function pluckNote(bus, f, t, vol, decay) {
 }
 
 // ---------- what plays where ----------
-// With 배경음악도 on: the private room has the waltz, the public restroom a lo-fi hip-hop loop, the bushes the sound
-// of the woods. Out on the grounds it's quiet.
+// With 배경음악도 on: the private room has the waltz, the public restroom a lo-fi hip-hop loop. Whenever sound is on,
+// the grounds have their own soft outdoor sound, and the bushes the closer sound of the woods.
 
 const MUSIC_VOLUME = 0.2; // a soft background
 // a track's own volume, fading in from silence; stopping fades it out and lets it go
@@ -4135,6 +4144,101 @@ function startForest() {
   });
 }
 
+// the whole grounds, quietly, all the time you're outdoors: a soft breeze and rustling leaves under everything,
+// distant birds by day and crickets at night. Softer near the bushes (their own woods take over there), faint
+// from inside a stall, gone in the private room (it has its own garden window and music).
+let ambience = null;
+function startAmbience() {
+  const ctx = actx();
+  const bus = ctx.createGain();
+  bus.gain.value = 0.0001;
+  bus.connect(out());
+  const bed = (type, freq, vol, sway) => {
+    const src = ctx.createBufferSource();
+    src.buffer = noise();
+    src.loop = true;
+    src.loopStart = Math.random(); // (a different stretch of the noise from the bushes' own)
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = sway;
+    const depth = ctx.createGain();
+    depth.gain.value = vol * 0.6;
+    lfo.connect(depth).connect(g.gain);
+    src.connect(f).connect(g).connect(bus);
+    src.start(0, Math.random() * 1.5);
+    lfo.start();
+  };
+  bed('bandpass', 320, 0.2, 0.05); // a breeze, rising and falling
+  bed('highpass', 3600, 0.035, 0.13); // the leaves overhead
+  // far-off birds: a little lowpassed, so they sound across the grounds rather than right beside you
+  const far = ctx.createBiquadFilter();
+  far.type = 'lowpass';
+  far.frequency.value = 3800;
+  far.connect(bus);
+  const bird = (t, f, pan, vol) => {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * (Math.random() < 0.5 ? 1.3 : 0.8), t + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    o.connect(g).connect(p).connect(far);
+    o.start(t);
+    o.stop(t + 0.12);
+  };
+  // a cricket: a quick train of high pulses
+  const cricket = (t, f, pan) => {
+    const o = ctx.createOscillator();
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    for (let k = 0; k < 4; k++) {
+      g.gain.setValueAtTime(0.0001, t + k * 0.045);
+      g.gain.linearRampToValueAtTime(0.022, t + k * 0.045 + 0.008);
+      g.gain.linearRampToValueAtTime(0.0001, t + k * 0.045 + 0.03);
+    }
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    o.connect(g).connect(p).connect(bus);
+    o.start(t);
+    o.stop(t + 0.2);
+  };
+  let nextBird = ctx.currentTime + 2;
+  let nextCricket = ctx.currentTime + 0.5;
+  scheduler((horizon) => {
+    const night = stars.material.opacity > 0.5;
+    while (nextBird < horizon) {
+      if (!night) {
+        const f = 1800 + Math.random() * 2200;
+        const pan = Math.random() * 1.8 - 0.9;
+        const n = 1 + Math.floor(Math.random() * 3);
+        for (let k = 0; k < n; k++) bird(nextBird + k * 0.16, f * (1 + (k % 2) * 0.1), pan, 0.05);
+      }
+      nextBird += 2 + Math.random() * 5;
+    }
+    while (nextCricket < horizon) {
+      if (night) for (const pan of [-0.6, 0.5]) if (Math.random() < 0.7) cricket(nextCricket + Math.random() * 0.3, 4200 + pan * 300, pan);
+      nextCricket += 0.7 + Math.random() * 0.4;
+    }
+  });
+  return bus;
+}
+function updateAmbience() {
+  const outdoors = me.s === -1 && !inRoom;
+  const want = !soundOn || !soundStarted ? 0 : inRoom ? 0 : !outdoors ? 0.25 : byTheBushes() ? 0.5 : 1;
+  if (!want && !ambience) return;
+  ambience ??= startAmbience();
+  ambience.gain.setTargetAtTime(Math.max(0.0001, want), actx().currentTime, 0.6);
+}
+
 const TRACKS = { waltz: startWaltz, hiphop: startHiphop, forest: startForest };
 let track = { name: '', stop: null };
 // near the bushes (in them, or within a few metres): the woods can be heard
@@ -4145,7 +4249,7 @@ function wantedTrack() {
   if (soundMode !== 'all') return ''; // the music comes with 장소 음악도
   if (inRoom) return dancing() ? 'hiphop' : 'waltz'; // dancing in the room puts the beat on
   if ((me.s !== -1 && LAYOUT[me.s]?.type === 'public') || (GROUNDS && placeAt(me.x, me.y) === '공중화장실')) return 'hiphop';
-  return ''; // out on the grounds it's quiet
+  return ''; // out on the grounds, just the outdoors (updateAmbience)
 }
 function updateTrack() {
   const want = wantedTrack();
@@ -4153,7 +4257,10 @@ function updateTrack() {
   track.stop?.();
   track = { name: want, stop: want ? TRACKS[want]() : null };
 }
-setInterval(updateTrack, 400);
+setInterval(() => {
+  updateTrack();
+  updateAmbience();
+}, 400);
 
 // Phones only let a page make sound after a tap, and iPhones mute Web Audio when the silent switch is on.
 // So on the tap that turns sound on: ask for "playback" audio, loop a silent <audio> (which also switches

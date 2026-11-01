@@ -292,12 +292,19 @@ const brickCanvas = canvas(16, 8, (g) => {
   }
 });
 const grassCanvas = canvas(16, 16, (g) => {
-  g.fillStyle = '#7fb35a';
+  g.fillStyle = '#86c45c';
   g.fillRect(0, 0, 16, 16);
-  const tufts = ['#8cc063', '#72a54f', '#93c76b'];
+  const tufts = ['#94d066', '#79b552', '#9cd872'];
   for (let k = 0; k < 40; k++) {
     g.fillStyle = tufts[k % 3];
     g.fillRect((k * 7 + (k >> 2) * 3) % 16, (k * 11 + (k >> 1)) % 16, 1, 1);
+  }
+  // little light tufts in a V, like the grass in 동물의 숲
+  g.fillStyle = '#a8de7c';
+  for (const [x, y] of [[3, 4], [11, 11]]) {
+    g.fillRect(x, y, 1, 1);
+    g.fillRect(x + 2, y, 1, 1);
+    g.fillRect(x + 1, y + 1, 1, 1);
   }
 });
 const pavementCanvas = canvas(16, 16, (g) => {
@@ -1443,12 +1450,13 @@ function exitStall() {
 // The public restroom is open only at the front: walking in or out from the side goes round by the opening first
 function waypoint(from, to) {
   const P = GROUNDS.public;
-  const inside = (p) => p.x > P.x0 && p.x < P.x1 && p.y < P.y1;
-  const byOpening = (p) => p.x > P.x0 + 40 && p.x < P.x1 - 40 && p.y > P.y1;
+  const edge = P.y1 + 45; // the side walls end at y1, and people keep about 30 cm off them
+  const inside = (p) => p.x > P.x0 - 30 && p.x < P.x1 + 30 && p.y > P.y0 - 30 && p.y < edge;
+  const byOpening = (p) => p.x > P.x0 + 40 && p.x < P.x1 - 40 && p.y > edge;
   const a = inside(from);
   const b = inside(to);
   if (a === b || (!a && byOpening(from)) || (!b && byOpening(to))) return to;
-  return { x: clamp(from.x, P.x0 + 90, P.x1 - 90), y: P.y1 + 60 };
+  return { x: clamp(from.x, P.x0 + 90, P.x1 - 90), y: edge + 40 };
 }
 
 function moveMe(dt) {
@@ -1528,23 +1536,23 @@ function sendMove(force) {
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
 // starts low and far back, looking in through the entrance at the whole plaza
-const cam = { yaw: 0, pitch: 0.22, dist: 16, tYaw: 0, tPitch: 0.22, tDist: 16, fx: 20, fz: 32, look: 0, tLook: 0 }; // look: tilting the view up at the sky
+const cam = { yaw: 0, pitch: 0.22, dist: 16, tYaw: 0, tPitch: 0.22, tDist: 16, fx: 20, fz: 38, look: 0, tLook: 0 }; // look: tilting the view up at the sky
 // link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
-  entrance: { fx: 20, fz: 31, yaw: 0, pitch: 0.24, dist: 16 },
-  plaza: { fx: 20, fz: 20, yaw: 0.5, pitch: 0.5, dist: 14 },
-  stalls: { fx: 21, fz: 9, yaw: -0.3, pitch: 0.35, dist: 12 },
-  above: { fx: 20, fz: 17, yaw: 0.3, pitch: 0.95, dist: 26 },
-  bushes: { fx: 3, fz: 20, yaw: 1.57, pitch: 0.6, dist: 17 },
+  entrance: { fx: 20, fz: 37, yaw: 0, pitch: 0.24, dist: 18 },
+  plaza: { fx: 20, fz: 20, yaw: 0.5, pitch: 0.5, dist: 16 },
+  stalls: { fx: 20, fz: 11.5, yaw: 0, pitch: 0.35, dist: 16 },
+  above: { fx: 20, fz: 19, yaw: 0.3, pitch: 0.95, dist: 36 },
+  bushes: { fx: -1, fz: 20, yaw: 1.57, pitch: 0.6, dist: 18 },
   bench: { fx: 19.5, fz: 22, yaw: 0.25, pitch: 0.36, dist: 9.5 },
-  inside: { fx: 20, fz: 30, yaw: Math.PI, pitch: 0.55, dist: 17 }, // from the gate, looking back out
+  inside: { fx: 20, fz: 38, yaw: Math.PI, pitch: 0.55, dist: 18 }, // from the gate, looking back out
 };
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
 const DIST_MIN = 3.5;
 const ROOM_DIST = [2.4, 3.3]; // how near and far the camera can be inside the private room
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
-const DIST_MAX = 26;
+const DIST_MAX = 32;
 
 // pooping, washing or sitting turns the camera around to face me, and puts it back afterwards
 let focusKey = '';

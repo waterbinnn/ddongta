@@ -8,7 +8,7 @@ const { LAYOUT: GROUNDS, settle, inBush, nearBean, nearVending, nearCart, nearWi
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const VENDOR = { '/vendor/three.module.js': path.join(__dirname, 'node_modules/three/build/three.module.js') };
-// three.js add-ons (environment maps, model loaders) for the wish page
+// three.js add-ons (model loaders, skinned-model cloning) for the page
 const JSM_DIR = path.join(__dirname, 'node_modules/three/examples/jsm');
 
 // the grounds (two restrooms, the plaza, the exercise ground, the bushes) live in lib/layout.js
@@ -104,7 +104,7 @@ if (process.env.REDIS_URL) {
     })
     .catch((err) => console.warn('key value unavailable:', err.message));
 }
-// the wish page's golden poop, shared by everyone
+// the golden poop statue: rubs counted and wishes kept, shared by everyone
 const wish = createWish({ kv: () => kv, kstDate, clean: cleanChat });
 
 function countPoop() {
@@ -165,7 +165,6 @@ function poopNow(room, u) {
   u.signal = false; // the signal has been answered
   u.exCount = 0;
   room.dirty = true;
-  if (gold) wish.gild(); // a golden poop puts a little gold back on the wish page's poop
 }
 
 function giveDrink(u, drink) {
@@ -323,7 +322,7 @@ const server = http.createServer((req, res) => {
     return res.end(JSON.stringify(rooms.map((r) => ({ id: r.id, theme: r.theme, label: r.label, no: r.no, online: r.users.size, max: ROOM_CAP }))));
   }
   const jsm = url.pathname.startsWith('/vendor/jsm/') && path.join(JSM_DIR, path.normalize(url.pathname.slice('/vendor/jsm/'.length)));
-  const page = { '/': 'index.html', '/wish': 'wish.html' }[url.pathname];
+  const page = { '/': 'index.html' }[url.pathname];
   const file = VENDOR[url.pathname] || jsm || path.join(PUBLIC_DIR, page || path.normalize(url.pathname));
   if (jsm ? !jsm.startsWith(JSM_DIR + path.sep) : !VENDOR[url.pathname] && !file.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
@@ -345,11 +344,6 @@ let nextId = 1;
 
 wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://localhost').searchParams;
-  if (q.get('wish')) {
-    ws.isAlive = true;
-    ws.on('pong', () => (ws.isAlive = true));
-    return wish.join(ws);
-  }
   const wanted = rooms.find((r) => r.id === q.get('room')) || rooms[0];
   let room = !isFull(wanted) ? wanted : rooms.find((r) => r.theme === wanted.theme && !isFull(r)) || rooms.find((r) => !isFull(r));
   if (!room && rooms.length < MAX_ROOMS) room = openRoom(wanted.theme);
@@ -479,7 +473,7 @@ wss.on('connection', (ws, req) => {
       for (const r of rooms) r.dirty = true; // every room's beanstalk grows
       broadcast(room, { t: 'fert', id: user.id, n, total: beanstalk });
     } else if ((m.t === 'rub' || m.t === 'pray') && user.stall === -1 && !user.roll && !user.squat && nearWish(user)) {
-      // at the golden poop statue: rub it (wearing the same gold as the wish page) or put your palms together
+      // at the golden poop statue: rub it or put your palms together
       const now = Date.now();
       if (now - user.lastEx < 1200) return;
       user.lastEx = now;

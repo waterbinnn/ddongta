@@ -1089,7 +1089,7 @@ function stallWorld(i, lx, ly, lz) {
 
 const stallObjs = [];
 const stallHits = [];
-const wishHits = []; // the golden poop on the back wall and its sign: tapping them opens the wish page
+const wishHits = []; // the golden poop statue: tapping it walks you up to it
 
 // what a stall is called: "공중화장실 3번 칸" or "개인 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `개인 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);

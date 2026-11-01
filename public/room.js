@@ -196,8 +196,30 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   wall(depth, Math.PI / 2, -W / 2, midZ);  // left
   wall(depth, -Math.PI / 2, W / 2, midZ);  // right
   wall(W, Math.PI, 0, FRONT);              // front, behind the camera
-  const ceiling = add(new THREE.PlaneGeometry(W, depth), lambert('#ffffff', { map: ceilingTex(W / 0.8, depth / 0.8) }), 0, H, midZ, { cast: false });
-  ceiling.rotation.x = Math.PI / 2;
+  // the ceiling, with a skylight cut in it over the middle of the room: look up, and there's the sky
+  const SKY = { hw: 0.7, hd: 0.7, z: -0.45, well: 0.32 }; // half width, half depth, centre (the middle of the room), shaft depth
+  const ceilingMat = lambert('#ffffff', { map: ceilingTex(W / 0.8, depth / 0.8) });
+  const ceilingPart = (x0, x1, z0, z1) => {
+    const part = add(new THREE.PlaneGeometry(x1 - x0, z1 - z0), ceilingMat, (x0 + x1) / 2, H, (z0 + z1) / 2, { cast: false });
+    part.rotation.x = Math.PI / 2;
+  };
+  ceilingPart(-W / 2, W / 2, -D, SKY.z - SKY.hd); // behind the skylight
+  ceilingPart(-W / 2, W / 2, SKY.z + SKY.hd, FRONT); // in front of it
+  ceilingPart(-W / 2, -SKY.hw, SKY.z - SKY.hd, SKY.z + SKY.hd); // either side
+  ceilingPart(SKY.hw, W / 2, SKY.z - SKY.hd, SKY.z + SKY.hd);
+  // the shaft up through the roof: pale plaster sides, a wooden frame, and clear glass at the top
+  const shaft = lambert('#efe6d6', { side: THREE.DoubleSide });
+  const wellY = H + SKY.well / 2;
+  for (const [w, rotY, x, z] of [[SKY.hw * 2, 0, 0, SKY.z - SKY.hd], [SKY.hw * 2, Math.PI, 0, SKY.z + SKY.hd], [SKY.hd * 2, Math.PI / 2, -SKY.hw, SKY.z], [SKY.hd * 2, -Math.PI / 2, SKY.hw, SKY.z]]) {
+    const side = add(new THREE.PlaneGeometry(w, SKY.well), shaft, x, wellY, z, { cast: false });
+    side.rotation.y = rotY;
+  }
+  const oak = lambert('#7a5a3c');
+  for (const z of [SKY.z - SKY.hd, SKY.z + SKY.hd]) box(SKY.hw * 2 + 0.1, 0.05, 0.05, oak, 0, H - 0.02, z, { cast: false });
+  for (const x of [-SKY.hw, SKY.hw]) box(0.05, 0.05, SKY.hd * 2 + 0.1, oak, x, H - 0.02, SKY.z, { cast: false });
+  const pane = add(new THREE.PlaneGeometry(SKY.hw * 2, SKY.hd * 2), new THREE.MeshBasicMaterial({ color: '#dff0fa', transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }), 0, H + SKY.well, SKY.z, { cast: false, receive: false });
+  pane.rotation.x = Math.PI / 2;
+  box(SKY.hw * 2 + 0.04, 0.03, 0.03, oak, 0, H + SKY.well, SKY.z, { cast: false }); // a glazing bar across the middle
   // a dark wooden rail along the top of the slats
   const trim = lambert('#7a5a3c');
   for (const x of [-W / 2 + 0.02, W / 2 - 0.02]) box(0.04, 0.05, depth, trim, x, PANEL, midZ, { cast: false });
@@ -265,11 +287,12 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   // ---------- a framed picture, the pendant lamp ----------
   box(0.5, 0.62, 0.03, lambert('#2e2a28'), 0.35, 1.7, -D + 0.02);
   box(0.42, 0.54, 0.01, lambert('#ffffff', { map: pictureTex() }), 0.35, 1.7, -D + 0.04, { cast: false });
-  cyl(0.006, 0.006, 0.2, lambert('#2e2a28'), 0.2, 2.5, -1.4, 6, { cast: false });
-  cyl(0.04, 0.22, 0.16, new THREE.MeshLambertMaterial({ color: '#2e2a28', side: THREE.DoubleSide }), 0.2, 2.32, -1.4, 24, { cast: false });
-  ball(0.07, new THREE.MeshBasicMaterial({ color: '#fff3d6' }), 0.2, 2.22, -1.4, { cast: false, receive: false });
+  // (the lamp hangs at the back, over the toilet, out of the skylight's way)
+  cyl(0.006, 0.006, 0.2, lambert('#2e2a28'), 0.2, 2.5, -1.95, 6, { cast: false });
+  cyl(0.04, 0.22, 0.16, new THREE.MeshLambertMaterial({ color: '#2e2a28', side: THREE.DoubleSide }), 0.2, 2.32, -1.95, 24, { cast: false });
+  ball(0.07, new THREE.MeshBasicMaterial({ color: '#fff3d6' }), 0.2, 2.22, -1.95, { cast: false, receive: false });
   const lamp = new THREE.PointLight('#ffcf98', 4, 7, 1.4); // a low, warm light
-  lamp.position.set(0.2, 2.1, -1.4);
+  lamp.position.set(0.2, 2.1, -1.95);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.bias = -0.004;

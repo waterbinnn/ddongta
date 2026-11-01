@@ -285,7 +285,7 @@ function snapshot(room) {
     users: [...room.users, ...room.npcs].map((u) => ({
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
-      r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
+      r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0, ly: u.lie ? 1 : 0,
       q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile, un: u.under ? 1 : 0,
       pk: u.pocket, cn: u.stuck ? 1 : 0, k: u.kind, ...(u.npc && { npc: 1 }),
     })),
@@ -432,6 +432,7 @@ wss.on('connection', (ws, req) => {
     lastWash: 0,
     lastLunch: 0,
     bench: false,
+    lie: false, // lying on your back in the grass, looking at the sky
     roll: null,
     pantsUntil: 0,
     squat: false, // squatting in the bushes
@@ -478,6 +479,7 @@ wss.on('connection', (ws, req) => {
       settle(user);
       user.dir = m.d === -1 ? -1 : 1;
       user.bench = false; // moving gets you up off the bench
+      user.lie = false; // or up off the grass
       user.ex = '';
       if (user.squat) {
         user.squat = false; // and up out of a squat
@@ -504,6 +506,13 @@ wss.on('connection', (ws, req) => {
       if (meta.hp <= 0) breakDoor(room, i, user);
     } else if (m.t === 'bench' && user.stall === -1 && !user.roll) {
       user.bench = Boolean(m.on);
+      user.lie = false;
+      room.dirty = true;
+    } else if (m.t === 'lie' && user.stall === -1 && !user.roll && !user.squat) {
+      // 눕기: on your back wherever you are, looking up at the sky
+      user.lie = Boolean(m.on);
+      user.bench = false;
+      user.ex = '';
       room.dirty = true;
     } else if (m.t === 'jump' && user.stall === -1 && !user.roll) {
       const now = Date.now();
@@ -611,6 +620,7 @@ wss.on('connection', (ws, req) => {
       if (!onLawn(user) || now - user.lastEx < 1200) return;
       user.lastEx = now;
       user.ex = m.move;
+      user.lie = false;
       user.exUntil = now + EX_MS;
       user.bench = false;
       user.exCount++;

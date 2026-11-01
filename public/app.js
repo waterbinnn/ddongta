@@ -189,6 +189,7 @@ const ICONS = {
   poop: asIcon(PROPS.poop),
   drink: icon(['..xx..', '..xx..', '.YYYY.', 'YWWWWY', 'YWWWWY', 'YYYYYY', 'YYYYYY', '.yyyy.']),
   kick: icon(['...FF....', '...FF....', '...FF....', '..DDD....', '.DDDDDDD.', 'DDDDDDDDD', 'ddddddddd']),
+  lie: icon(['.........', '.FF......', 'FffAAAAA.', 'FffAAAAAA', '.FF......']),
   lunch: icon(['DDDDDDDDD', 'DWWWWkxAD', 'DWWWWkkAD', 'DWWWWxkAD', 'DDDDDDDDD']),
   // the push button: an empty (pale) poop that fills up with the real one
   poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
@@ -1478,6 +1479,7 @@ function applyState(st) {
       me.rolling = Boolean(u.r);
       me.pd = Boolean(u.pd);
       me.b = Boolean(u.b);
+      me.ly = Boolean(u.ly);
       me.q = Boolean(u.q);
       me.pl = u.pl || 0;
       me.cn = Boolean(u.cn);
@@ -1706,6 +1708,9 @@ function sendMove(force) {
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
 // starts low and far back, looking in through the entrance at the whole plaza
+let skyView = 0; // 0 the usual view, 1 lying in the grass looking up
+const lookAt = new THREE.Vector3();
+const skyAt = new THREE.Vector3();
 const cam = { yaw: 0, pitch: 0.24, dist: 9, tYaw: 0, tPitch: 0.24, tDist: 9, fx: 20, fz: 48, look: 0, tLook: 0 }; // look: tilting the view up at the sky
 // link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
@@ -1848,7 +1853,7 @@ function updateCamera(dt) {
   if (inRoom) {
     cam.tPitch = clamp(cam.tPitch, 0.1, 0.45);
     cam.tDist = clamp(cam.tDist, ROOM_DIST[0], ROOM_DIST[1]);
-    cam.tLook = 0;
+    // dragging up raises your eyes, as outside: up to the skylight and the sky through it
   }
   const k = 1 - Math.exp(-dt * 7);
   cam.yaw = lerpAngle(cam.yaw, cam.tYaw, k);
@@ -1899,7 +1904,19 @@ function updateCamera(dt) {
   // the camera stays where it is and only raises its eyes, so looking at the sky never moves it:
   // the gaze tilts up from the usual downward angle by exactly cam.look
   const elev = Math.atan2(0.9 - py, Math.hypot(px - cam.fx, pz - cam.fz)) + cam.look;
-  camera.lookAt(px - sy * Math.cos(elev), py + Math.sin(elev), pz - cy * Math.cos(elev));
+  lookAt.set(px - sy * Math.cos(elev), py + Math.sin(elev), pz - cy * Math.cos(elev));
+  // 눕기: the view goes down to where you lie and looks straight up at the sky, past your head
+  skyView = lerp(skyView, me.ly && me.s === -1 && !inRoom ? 1 : 0, 1 - Math.exp(-dt * 2.5));
+  if (skyView > 0.001) {
+    const turn = users.get(meId)?.turn ?? 0;
+    const fx = Math.sin(turn);
+    const fz = Math.cos(turn); // the way my feet point
+    const x = toX(me.x);
+    const z = toZ(me.y);
+    camera.position.lerp(skyAt.set(x + fx * 0.15, 0.55, z + fz * 0.15), skyView);
+    lookAt.lerp(skyAt.set(x - fx * 5, 7, z - fz * 5), skyView); // up past your head, with the treetops round the edge
+  }
+  camera.lookAt(lookAt);
   // while typing, the keyboard covers the bottom of the screen: slide the picture up so you
   // sit in the middle of what is still visible, between the top bar and the chat box
   // Measured from the real positions of the top bar, the chat box and the canvas, because phones
@@ -1996,7 +2013,7 @@ function placeWalkers(dt, t) {
     }
     else if (move === 'rub' || move === 'pray') want = Math.atan2(GROUNDS.wish.x - e.rx, GROUNDS.wish.y - e.ry); // facing the golden poop
     else if (move) want = cam.yaw + Math.PI / 2; // exercising: side on to the camera, so the moves show
-    else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
+    else if (!e.walking && e.idle > 1.5 && !u.q && !u.ly) want = cam.yaw; // (lying down, you stay as you lay)
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
     syncTower(p, id, u.pl, dt);
@@ -2019,7 +2036,7 @@ function placeWalkers(dt, t) {
       e.kickT += dt;
       if (e.kickT > 0.45) e.kickT = 0;
     }
-    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? (e.washPond ? 'pondwash' : 'wash') : squatting ? 'squat' : e.kickT > 0 ? 'kick' : move || (e.walking ? 'walk' : 'stand');
+    const mode = rolling ? 'roll' : u.ly ? 'lie' : lift > 0 ? 'jump' : washing ? (e.washPond ? 'pondwash' : 'wash') : squatting ? 'squat' : e.kickT > 0 ? 'kick' : move || (e.walking ? 'walk' : 'stand');
     if (move !== e.exMove) {
       e.exMove = move; // each move starts from its beginning
       e.exStart = sec;
@@ -2839,7 +2856,7 @@ function renderActions() {
   const near = out && nearestEmptyStall(me.x, me.y) >= 0;
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
-  const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
+  const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.ly ? 'lying' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
@@ -2880,6 +2897,8 @@ function renderActions() {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
     bar.append(b);
+  } else if (mode === 'lying') {
+    bar.append(withKey(mainBtn('jump', '일어나기', () => send({ t: 'lie', on: false })), 'F'));
   } else if (mode === 'benched') {
     bar.append(withKey(mainBtn('jump', '일어나기', () => send({ t: 'bench', on: false })), 'F'));
   } else if (mode === 'sink') {
@@ -2903,8 +2922,9 @@ function renderActions() {
   } else if (mode === 'lawn') {
     // 쾌변 체조: any move, any time (1 to 4)
     for (const [move, label] of EX_MOVES) bar.append(miniBtn(null, label, () => doExercise(move)));
+    bar.append(withKey(miniBtn('lie', '눕기', lieDown), 'Z'));
   } else {
-    bar.append(mainBtn('find', '똥 누러 가기', goPoop), withKey(miniBtn('bench', '앉기', sitHere), 'F')); // 앉기: right where you are
+    bar.append(mainBtn('find', '똥 누러 가기', goPoop), withKey(miniBtn('bench', '앉기', sitHere), 'F'), withKey(miniBtn('lie', '눕기', lieDown), 'Z')); // right where you are
   }
   const canMove = !['inside', 'standing', 'rolling', 'squatting'].includes(mode);
   $('#moveBtn').disabled = !canMove;
@@ -2948,6 +2968,13 @@ function labelKeys(bar) {
     b.dataset.key = key;
     b.insertAdjacentHTML('beforeend', `<kbd>${key}</kbd>`);
   }
+}
+
+// 눕기: on your back right here, and the view goes up to the sky
+function lieDown() {
+  target = null;
+  sendMove(true);
+  send({ t: 'lie', on: true });
 }
 
 function sitHere() {

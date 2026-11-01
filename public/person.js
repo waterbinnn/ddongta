@@ -329,7 +329,7 @@ function followLegs(p) {
   }
 }
 
-// mode: 'stand' | 'walk' | 'sit' | 'wash' | 'pondwash' | 'roll' | 'jump' | 'squat' (in the bushes)
+// mode: 'stand' | 'walk' | 'sit' | 'wash' | 'pondwash' | 'roll' | 'jump' | 'squat' (in the bushes) | 'lie'
 //       and the 쾌변 체조 moves: 'bridge' | 'boat' | 'twist' | 'bow'
 export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed = 0, upright = false }) {
   const { parts: P, rest } = p;
@@ -451,6 +451,16 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.leg_R.rotation.set(1.3 * k, 0, -0.12);
     P.arm_L.rotation.set(0, 0, 0.2);
     P.arm_R.rotation.set(0, 0, -0.2);
+  } else if (mode === 'lie') {
+    // 눕기: flat on the back in the grass, arms and legs out a little, breathing slowly
+    p.spin.rotation.x = -Math.PI / 2;
+    p.spin.position.set(0, 0.13, 0.45);
+    P.torso.scale.y = 1 + breathe * 0.6;
+    P.arm_L.rotation.set(0, 0, 0.55);
+    P.arm_R.rotation.set(0, 0, -0.55);
+    P.leg_L.rotation.set(0, 0, 0.12);
+    P.leg_R.rotation.set(0, 0, -0.12);
+    P.head.rotation.y = Math.sin(t * 0.4 + seed) * 0.15;
   } else if (mode === 'boat') {
     // 보트 자세: sitting on the bottom, leaning back, legs and arms up in a V, wobbling a little
     const w = Math.sin(t * 3) * 0.05;

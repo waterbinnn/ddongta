@@ -274,6 +274,21 @@ export function buildGrounds(kit) {
     roof.scale.set(1, 1, 0.7);
     add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
     block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1); // a wooden fascia over the doors
+    // a skylight in the roof over each room (inside, you can look up through it at the sky)
+    const rise = (depth / Math.sqrt(3)) * 1.5 * 0.7; // from the eaves up to the ridge
+    const run = depth / 2;
+    const n = new THREE.Vector3(0, run, rise).normalize(); // straight out of the front slope
+    const tilt = Math.atan2(n.z, n.y);
+    const glassMat = new THREE.MeshPhongMaterial({ color: '#8fc3e0', shininess: 120, specular: '#ffffff' });
+    const frameMat = mat('#5e4330');
+    for (const s of L.stalls.filter((st) => st.type === 'private')) {
+      const at = new THREE.Vector3(s.x * U, WH + rise * 0.45, (z0 + z1) / 2 + run * 0.55);
+      for (const [w, h, l, m, out] of [[0.66, 0.04, 0.82, frameMat, 0.02], [0.54, 0.03, 0.7, glassMat, 0.045]]) {
+        const pane = mesh(new THREE.BoxGeometry(w, h, l), m, { cast: false, receive: true });
+        pane.rotation.x = tilt;
+        add(pane, ...at.clone().addScaledVector(n, out).toArray());
+      }
+    }
   }
 
   // ---------- the 쾌변 exercise ground: a wide open lawn in a clearing, mats in rows, walk in from any side ----------

@@ -356,31 +356,73 @@ export function buildGrounds(kit) {
     root.add(shrubMesh, cores, tuftMesh);
   }
 
-  // ---------- lanterns up the way in and round the courtyard: low garden lanterns, a paper box on a wooden post
-  // under a little hipped cap. Cream paper by day, glowing warm at night ----------
+  // ---------- lanterns: low path lanterns lining the way in, taller garden lanterns round the courtyard. Each is a paper
+  // box in a wooden frame under a two-tier cap: cream by day; at night the paper glows, with a soft halo round it
+  // and a pool of warm light on the ground below ----------
   {
-    const n = L.lampPosts.length;
     const wood = mat('#4a3a2c');
+    const stone = mat('#8d8a82');
     const paper = new THREE.MeshLambertMaterial({ color: '#f3e7cc', emissive: '#ffb85c', emissiveIntensity: 0.05 });
-    glows.push((dark) => (paper.emissiveIntensity = 0.05 + 1.05 * dark));
-    const parts = [
-      [new THREE.BoxGeometry(0.4, 0.12, 0.4), mat('#8d8a82'), 0.06], // a stone footing
-      [new THREE.BoxGeometry(0.09, 1.25, 0.09), wood, 0.72], // the post
-      [new THREE.BoxGeometry(0.34, 0.05, 0.34), wood, 1.37], // the tray the lantern sits on
-      [new THREE.BoxGeometry(0.27, 0.36, 0.27), paper, 1.57], // the paper lantern
-      [new THREE.BoxGeometry(0.3, 0.025, 0.3), wood, 1.76], // its top frame
-      [new THREE.ConeGeometry(0.3, 0.2, 4).rotateY(Math.PI / 4), wood, 1.87], // the little roof
-      [new THREE.SphereGeometry(0.035, 8, 6), wood, 1.98], // a knob on top
+    const glowTex = (inner, size = 128) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      grad.addColorStop(0, inner);
+      grad.addColorStop(0.35, 'rgba(255, 190, 110, 0.35)');
+      grad.addColorStop(1, 'rgba(255, 170, 90, 0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, size, size);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    const haloMat = new THREE.SpriteMaterial({ map: glowTex('rgba(255, 225, 160, 0.9)'), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 });
+    const poolMat = new THREE.MeshBasicMaterial({ map: glowTex('rgba(255, 200, 120, 0.55)'), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 });
+    glows.push((dark) => {
+      paper.emissiveIntensity = 0.05 + 1.05 * dark;
+      haloMat.opacity = dark * 0.9;
+      poolMat.opacity = dark * 0.8;
+    });
+    // [geometry, material, height] for each part, sized for a lantern whose paper box is s across, at height h
+    const design = (s, h, post) => [
+      [new THREE.BoxGeometry(s * 1.5, 0.1, s * 1.5), stone, 0.05], // stone footing
+      [new THREE.BoxGeometry(post, h - s * 0.75, post), wood, (h - s * 0.75) / 2 + 0.05], // the post
+      [new THREE.BoxGeometry(s * 1.25, 0.04, s * 1.25), wood, h - s * 0.68], // the tray
+      [new THREE.BoxGeometry(s, s * 1.3, s), paper, h], // the paper box
+      ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => [new THREE.BoxGeometry(0.022, s * 1.32, 0.022).translate((a * s) / 2, 0, (b * s) / 2), wood, h]), // corner posts
+      [new THREE.BoxGeometry(s * 1.04, 0.018, s * 1.04), wood, h], // a rail round the middle
+      [new THREE.BoxGeometry(s * 1.12, 0.03, s * 1.12), wood, h + s * 0.67], // top frame
+      [new THREE.ConeGeometry(s * 1.35, s * 0.28, 4).rotateY(Math.PI / 4), wood, h + s * 0.8], // wide lower eave
+      [new THREE.ConeGeometry(s * 0.75, s * 0.5, 4).rotateY(Math.PI / 4), wood, h + s * 1.08], // the peak
+      [new THREE.SphereGeometry(s * 0.12, 8, 6), wood, h + s * 1.36], // a knob
     ];
     const m4 = new THREE.Matrix4();
-    for (const [geo, material, y] of parts) {
-      const im = new THREE.InstancedMesh(geo, material, n);
-      L.lampPosts.forEach((l, k) => {
+    for (const [low, list] of [[false, L.lampPosts.filter((l) => !l.low)], [true, L.lampPosts.filter((l) => l.low)]]) {
+      if (!list.length) continue;
+      const s = low ? 0.2 : 0.28; // the paper box
+      const h = low ? 0.55 : 1.55; // its middle, above the ground
+      for (const [geo, material, y] of design(s, h, low ? 0.07 : 0.1)) {
+        const im = new THREE.InstancedMesh(geo, material, list.length);
+        list.forEach((l, k) => {
+          const [x, z] = P(l);
+          im.setMatrixAt(k, m4.makeTranslation(x, y, z));
+        });
+        im.castShadow = material !== paper;
+        root.add(im);
+      }
+      const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat, list.length);
+      const r = low ? 2.4 : 4.2;
+      list.forEach((l, k) => {
         const [x, z] = P(l);
-        im.setMatrixAt(k, m4.makeTranslation(x, y, z));
+        pools.setMatrixAt(k, m4.compose(new THREE.Vector3(x, 0.03, z), new THREE.Quaternion(), new THREE.Vector3(r, 1, r)));
+        const halo = new THREE.Sprite(haloMat);
+        halo.scale.setScalar(low ? 0.9 : 1.3);
+        halo.position.set(x, h, z);
+        root.add(halo);
       });
-      im.castShadow = material !== paper;
-      root.add(im);
+      pools.renderOrder = 1;
+      root.add(pools);
     }
   }
 

@@ -161,6 +161,7 @@ const EX_MS = 2600;
 const EX_FOR_SIGNAL = 3;
 
 // 변비 and the drinks that cure it (PLAN.md 4장, 6장)
+const JOIN_CHANCE = Number(process.env.NPC_JOIN) || 0.35; // how often an animal comes to squat beside someone pushing
 const STUCK_CHANCE = Number(process.env.STUCK_CHANCE) || 0.1; // about one poop in ten gets stuck
 const POCKET_MAX = 1; // one drink, held in your hand
 const DRINKS = ['banana', 'latte', 'americano', 'yogurt', 'prune'];
@@ -604,8 +605,15 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { t: 'drink', id: user.id, drink, cure: wasStuck ? 1 : 0 });
       if (wasStuck) setTimeout(() => room.users.has(user) && unstick(room, user), 1800);
     } else if (m.t === 'hold') {
+      const was = user.holding;
       user.holding = Boolean(m.on) && (user.stall !== -1 || user.squat);
       room.dirty = true;
+      // now and then an animal comes over and squats down beside you to do the same
+      const now = Date.now();
+      if (user.holding && !was && Math.random() < JOIN_CHANCE && now - (room.joinedAt || 0) > 20000) {
+        room.joinedAt = now;
+        npcs.join(room, user, LAYOUT);
+      }
     } else if (m.t === 'squat' && user.stall === -1 && !user.roll) {
       // only in the bushes; there's no squatting on the plaza. Getting up, the poop under you stays on the ground
       if (user.squat && !m.on && user.under) dropPoop(room, user);

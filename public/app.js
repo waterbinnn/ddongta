@@ -156,8 +156,10 @@ const POOP_OF = {
   rabbit: ['pellets', 0.8], giraffe: ['log', 1.2], wombat: ['cube', 0.9],
 };
 const kindOf = (id) => (id === meId ? me.k : users.get(id)?.data.k) || 'person';
-const poopArt = (id, gold = false) => POOPS[(POOP_OF[kindOf(id)] || POOP_OF.person)[0]][gold ? 1 : 0];
-const poopSize = (id) => (POOP_OF[kindOf(id)] || POOP_OF.person)[1];
+const artFor = (kind, gold = false) => POOPS[(POOP_OF[kind] || POOP_OF.person)[0]][gold ? 1 : 0];
+const sizeFor = (kind) => (POOP_OF[kind] || POOP_OF.person)[1];
+const poopArt = (id, gold = false) => artFor(kindOf(id), gold);
+const poopSize = (id) => sizeFor(kindOf(id));
 
 const ICON_PAL = {
   D: '#b07a48', d: '#e2b07a', k: '#ffe08a', F: '#ffd9b8', f: '#e6b48c', B: '#8fd0ff', b: '#4f9fd8', Y: '#ffb347',
@@ -1474,6 +1476,7 @@ function applyState(st) {
   $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
   if (st.beanY !== undefined) beanYesterday = st.beanY;
+  syncDrops(st.drops);
   if (st.bean !== undefined && performance.now() > beanHoldUntil && st.bean !== beanTotal) {
     beanTotal = st.bean;
     bean?.setTotal(beanTotal);
@@ -2042,8 +2045,6 @@ function placeWalkers(dt, t) {
     syncTower(p, id, u.pl, dt);
     setFlush(p, ...(squatting ? flushOf(u) : [0, u.cn ? 1 : 0]));
     const under = squatting && Boolean(u.un);
-    if (e.under && !squatting && !u.un && p.under) leaveBehind(p, id); // got up: it stays on the ground (unless it was picked up)
-    e.under = under;
     syncUnder(p, id, under, true);
     setFace(p, face);
     setPantsDown(p, pantsDown || squatting);
@@ -2250,19 +2251,25 @@ function syncUnder(p, id, show, squat) {
   if (!show && !squat) underGold.delete(id);
 }
 
-// left behind in the bushes when you get up: the grass takes it back after a while
-const leftovers = [];
-const LEFTOVER_S = 45;
-function leaveBehind(p, id) {
-  const at = p.under.getWorldPosition(new THREE.Vector3());
-  const s = pixelSprite(poopArt(id, underGold.has(id)), 0.022 * poopSize(id));
-  s.position.set(at.x, 0.005, at.z);
-  s.material.transparent = true;
-  fxRoot.add(s);
-  leftovers.push({ s, age: 0 });
-  if (leftovers.length > 40) fxRoot.remove(leftovers.shift().s);
-  underGold.delete(id);
+// left behind in the bushes when someone gets up (the server keeps them for a while): anyone can pick one up
+const drops = new Map(); // drop id -> { s, x, y }
+function syncDrops(list = []) {
+  const seen = new Set();
+  for (const d of list) {
+    seen.add(d.i);
+    if (drops.has(d.i)) continue;
+    const s = pixelSprite(artFor(d.k, d.g), 0.022 * sizeFor(d.k));
+    s.position.set(toX(d.x), 0.005, toZ(d.y));
+    fxRoot.add(s);
+    drops.set(d.i, { s, x: d.x, y: d.y });
+  }
+  for (const [i, d] of drops) {
+    if (seen.has(i)) continue;
+    fxRoot.remove(d.s);
+    drops.delete(i);
+  }
 }
+const nearDropHere = () => me.s === -1 && !me.q && [...drops.values()].some((d) => Math.hypot(d.x - me.x, d.y - me.y) <= 90);
 const TOWER_STEP = 0.11;
 const POOP_PX = 0.018; // a small poop
 const towerHeight = (count) => Math.min(count || 0, HEAD_STACK) * TOWER_STEP;
@@ -2602,15 +2609,6 @@ function showTapMark(x, z) {
 }
 
 function updateEffects(dt) {
-  for (let k = leftovers.length - 1; k >= 0; k--) {
-    const l = leftovers[k];
-    l.age += dt;
-    l.s.material.opacity = Math.min(1, (LEFTOVER_S - l.age) / 3);
-    if (l.age >= LEFTOVER_S) {
-      fxRoot.remove(l.s);
-      leftovers.splice(k, 1);
-    }
-  }
   for (let k = flights.length - 1; k >= 0; k--) {
     const f = flights[k];
     f.t = Math.min(1, f.t + dt / f.dur);
@@ -2870,7 +2868,7 @@ function renderActions() {
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -2936,6 +2934,7 @@ function renderActions() {
   // 앉기: sit down right where you are, anywhere, while just walking about (not where a place has its own buttons;
   // on a mat 돗자리에 앉기 takes you to a place on it instead)
   if (mode === 'far') bar.append(miniBtn('bench', '앉기', sitHere));
+  if (!['inside', 'standing', 'rolling', 'squatting'].includes(mode) && nearDropHere()) bar.append(miniBtn('poop', '줍기', () => send({ t: 'pick' }))); // a poop on the ground right in front
   if ((me.pk || []).length && !['inside', 'rolling', 'squatting'].includes(mode)) bar.append(miniBtn('wash', '쾌변음료 마시기', drinkNow)); // a drink in hand
   const canMove = !['inside', 'standing', 'rolling', 'squatting'].includes(mode);
   $('#moveBtn').disabled = !canMove;
@@ -3049,10 +3048,14 @@ function drinkPose(p) {
 }
 // picking up the poop under you: up it goes onto the pile on your head (a golden one stays golden)
 function onPick(m) {
-  if (underGold.has(m.id)) {
+  if (m.gold) {
     if (!poopGolds.has(m.id)) poopGolds.set(m.id, new Set());
     poopGolds.get(m.id).add(m.pile - 1);
-    underGold.delete(m.id);
+  }
+  if (!m.drop) underGold.delete(m.id);
+  else if (drops.has(m.drop)) {
+    fxRoot.remove(drops.get(m.drop).s); // gone from the ground at once, before the next state
+    drops.delete(m.drop);
   }
   const h = headOf(m.id);
   if (h) pop(h.clone(), '줍줍', m.id === meId && inRoom);

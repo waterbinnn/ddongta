@@ -143,6 +143,7 @@ function openRoom(theme) {
     stalls: Array(MAX_STALLS).fill(null),
     meta: Array.from({ length: MAX_STALLS }, newMeta),
     users: new Set(),
+    drops: [], // poops left on the ground in the bushes, for anyone to pick up for a while
     dirty: false,
     emptySince: Date.now(),
   };
@@ -176,6 +177,16 @@ function unstick(room, u) {
   else u.progress = 0;
 }
 
+// a poop left behind in the bushes when someone gets up: anyone can pick it up, until the grass takes it back
+const DROP_MS = 60 * 1000;
+const DROP_MAX = 40;
+const PICK_RANGE = 90; // cm: right in front of you
+let nextDrop = 1;
+function dropPoop(room, u) {
+  room.drops.push({ i: nextDrop++, x: Math.round(u.x), y: Math.round(u.y), k: u.kind, g: u.underGold ? 1 : 0, at: Date.now() });
+  if (room.drops.length > DROP_MAX) room.drops.shift();
+}
+
 function poopNow(room, u) {
   u.progress = 0;
   u.checked = false;
@@ -185,8 +196,10 @@ function poopNow(room, u) {
   // the first one each time you sit down stays under you (in the bowl, or on the ground in the bushes);
   // every one after that goes on top of your head, and stays there until you give it to the beanstalk
   const under = !u.under;
-  if (under) u.under = true;
-  else u.pile++;
+  if (under) {
+    u.under = true;
+    u.underGold = gold;
+  } else u.pile++;
   broadcast(room, { t: 'poop', id: u.id, n: u.count, pile: u.pile, ...(under && { under: 1 }), ...(u.stall !== -1 ? { stall: u.stall } : { bush: 1 }), ...(gold && { gold: 1 }) });
   u.signal = false; // the signal has been answered
   u.exCount = 0;
@@ -264,6 +277,7 @@ function snapshot(room) {
     flushed: flushedToday,
     bean: beanstalk,
     beanY: beanYesterday,
+    drops: room.drops.map(({ i, x, y, k, g }) => ({ i, x, y, k, g })),
     stalls: room.stalls.map((u) => (u ? u.id : 0)),
     hp: room.meta.map((m) => Math.round(m.hp)),
     users: [...room.users].map((u) => ({
@@ -292,6 +306,11 @@ setInterval(() => {
     else if (r.no > 1 && now - r.emptySince > EMPTY_CLOSE_MS) rooms.splice(k, 1);
   }
   for (const room of rooms) {
+    const fresh = room.drops.filter((d) => now - d.at < DROP_MS);
+    if (fresh.length !== room.drops.length) {
+      room.drops = fresh;
+      room.dirty = true;
+    }
     for (const u of room.users) {
       if (u.roll) {
         const t = Math.min(1, (now - u.roll.t0) / ROLL_MS);
@@ -492,12 +511,22 @@ wss.on('connection', (ws, req) => {
       if (now - user.lastWash < 2000) return;
       user.lastWash = now;
       broadcast(room, { t: 'wash', id: user.id });
-    } else if (m.t === 'pick' && user.under && (user.stall !== -1 || user.squat)) {
-      // picking up the poop under you: it goes on top of the pile on your head
-      user.under = false;
-      user.pile++;
-      room.dirty = true;
-      broadcast(room, { t: 'pick', id: user.id, pile: user.pile });
+    } else if (m.t === 'pick' && !user.roll) {
+      // picking up a poop onto the pile on your head: the one under you, or one left on the ground right in front
+      if (user.under && (user.stall !== -1 || user.squat)) {
+        user.under = false;
+        user.pile++;
+        room.dirty = true;
+        broadcast(room, { t: 'pick', id: user.id, pile: user.pile, ...(user.underGold && { gold: 1 }) });
+      } else if (user.stall === -1 && !user.squat) {
+        let best = null;
+        for (const d of room.drops) if (Math.hypot(d.x - user.x, d.y - user.y) <= PICK_RANGE && (!best || Math.hypot(d.x - user.x, d.y - user.y) < Math.hypot(best.x - user.x, best.y - user.y))) best = d;
+        if (!best) return;
+        room.drops = room.drops.filter((d) => d !== best);
+        user.pile++;
+        room.dirty = true;
+        broadcast(room, { t: 'pick', id: user.id, pile: user.pile, drop: best.i, ...(best.g && { gold: 1 }) });
+      }
     } else if (m.t === 'lunch' && user.stall !== -1) {
       // a lunchbox opened on the lap, in the stall
       const now = Date.now();
@@ -563,7 +592,8 @@ wss.on('connection', (ws, req) => {
       user.holding = Boolean(m.on) && (user.stall !== -1 || user.squat);
       room.dirty = true;
     } else if (m.t === 'squat' && user.stall === -1 && !user.roll) {
-      // only in the bushes; there's no squatting on the plaza
+      // only in the bushes; there's no squatting on the plaza. Getting up, the poop under you stays on the ground
+      if (user.squat && !m.on && user.under) dropPoop(room, user);
       user.squat = Boolean(m.on) && inBush(user);
       if (!user.squat) user.holding = false;
       user.under = false; // squatting down (or getting up) starts afresh

@@ -7,6 +7,24 @@ import { buildPrivateRoom, ROOM } from './room.js';
 import { makeBeanstalk, beanHeight, heightText } from './beanstalk.js';
 import { doorWoodCanvas } from './nature.js';
 
+// a hello for whoever opens the console
+console.log(
+  `%c
+             (
+              )
+            _( )_
+           (_____)
+         _(       )_
+        ( (o)   (o) )
+      _(     \\_/     )_
+     (_________________)
+%c
+  다들 쾌변하는 삶 사세요 💩
+`,
+  'color:#8a5228;font-family:monospace;font-size:13px;line-height:1.15',
+  'color:#5e3517;font-size:15px;font-weight:700',
+);
+
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
 const ENTER_RANGE = 75;

@@ -163,6 +163,8 @@ const ICONS = {
   jump: icon(['...A...', '..AAA..', '.AAAAA.', '...A...', '...A...', '...A...']),
   sprout: icon(['.AA.AA.', 'AAA.AAA', '.AAAAA.', '...A...', '...A...', '.DDDDD.', 'DDDDDDD']),
   pin: icon(['..xxx..', '.xxxxx.', 'xxWWxxx', 'xxWWxxx', '.xxxxx.', '..xxx..', '...x...']),
+  rub: icon(['.k.....k.', '...FF....', '..FFFF.k.', '.FFFFFF..', '.FFffFF..', '..FFFF...', '...FF....']),
+  pray: icon(['...FF...', '..FffF..', '..FffF..', '..FffF..', '.FFffFF.', 'FFF..FFF']),
   poop: asIcon(PROPS.poop),
   // the push button: an empty (pale) poop that fills up with the real one
   poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
@@ -211,7 +213,6 @@ let roomFor = -1;
 let roomPerson = null;
 let roomPersonFor = '';
 let roomShake = 0;
-let kicksToday = 0; // the vending machines' kick count today (all rooms)
 let roomWashUntil = 0; // washing at the room's sink until then
 let roomStanding = false; // up off the toilet, standing in the room
 let roomSpot = ''; // where I am in the room: 'seat', 'stand' or 'wash'
@@ -872,98 +873,152 @@ function drawDrink(g, kind, x, y, s) {
   g.restore();
 }
 
-// the vending machine on the terrace: a lit window of drinks, a little screen counting today's kicks, a pick-up slot.
-// Kicked, it shakes.
+// the vending machines on the terrace, built like real ones: a painted steel cabinet, a lit sign on top,
+// shelves of drinks behind glass, a control panel with buttons and a coin slot, a pick-up flap at the bottom.
+// Kicked, they shake.
 const vendings = [];
 function vendingMachine(x, z, rotY, color) {
-  const front = canvas(256, 512, (g) => {
-    g.fillStyle = color;
-    g.fillRect(0, 0, 256, 512);
-    g.fillStyle = '#f3ece0'; // the header
-    g.fillRect(12, 12, 232, 44);
-    g.fillStyle = color;
-    g.font = 'bold 26px -apple-system, "Apple SD Gothic Neo", sans-serif';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText('똥타 음료', 128, 35);
-    // the lit window, four shelves of drinks with little price tags
-    const glass = g.createLinearGradient(0, 66, 0, 330);
-    glass.addColorStop(0, '#f7fbfc');
-    glass.addColorStop(1, '#dfe9ec');
-    g.fillStyle = glass;
-    g.fillRect(16, 66, 224, 264);
-    const rows = [['banana', 'banana', 'banana', 'yogurt', 'yogurt'], ['latte', 'latte', 'americano', 'americano', 'americano'], ['prune', 'prune', 'yogurt', 'banana', 'latte'], ['americano', 'banana', 'prune', 'latte', 'yogurt']];
-    rows.forEach((row, r) => {
-      row.forEach((kind, k) => drawDrink(g, kind, 40 + k * 44, 100 + r * 64, 2.2));
-      g.fillStyle = '#b9c4c7';
-      g.fillRect(16, 128 + r * 64, 224, 4); // the shelf
-      g.fillStyle = '#4a4a4a';
-      g.font = '11px -apple-system, sans-serif';
-      row.forEach((_, k) => g.fillText('1,200', 40 + k * 44, 140 + r * 64));
-    });
-    g.fillStyle = 'rgba(255, 255, 255, 0.18)'; // a sheen on the glass
-    g.beginPath();
-    g.moveTo(16, 66);
-    g.lineTo(110, 66);
-    g.lineTo(40, 330);
-    g.lineTo(16, 330);
-    g.fill();
-    g.fillStyle = '#2b2a2e'; // buttons, coin slot, pick-up slot
-    for (let k = 0; k < 5; k++) {
-      g.beginPath();
-      g.arc(40 + k * 44, 350, 7, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.fillRect(200, 382, 26, 40);
-    g.fillStyle = '#c9c4bb';
-    g.fillRect(210, 390, 6, 22);
-    g.fillStyle = '#1d1c1f';
-    g.fillRect(30, 440, 196, 50);
-    g.fillStyle = '#3a393d';
-    g.fillRect(36, 446, 184, 10);
-  });
-  const t = new THREE.CanvasTexture(front);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  const body = new THREE.MeshPhongMaterial({ color, shininess: 40 });
-  const faceMat = new THREE.MeshLambertMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.18 });
+  const tex = (c) => {
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  };
   const group = new THREE.Group();
   group.position.set(x, 0, z);
   group.rotation.y = rotY;
-  const box = mesh(new THREE.BoxGeometry(0.95, 1.9, 0.8), [body, body, body, body, faceMat, body], { cast: true, receive: true });
-  box.position.y = 0.95;
-  group.add(box);
-  // the screen: today's kicks, in green letters
-  const screen = canvas(160, 48, () => {});
-  const screenTex = new THREE.CanvasTexture(screen);
-  screenTex.colorSpace = THREE.SRGBColorSpace;
-  const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.12), new THREE.MeshBasicMaterial({ map: screenTex }));
-  screenMesh.position.set(-0.12, 1.08, 0.405);
-  group.add(screenMesh);
+  const part = (geo, material, px, py, pz) => {
+    const m = mesh(geo, material, { cast: true, receive: true });
+    m.position.set(px, py, pz);
+    group.add(m);
+    return m;
+  };
+  // painted steel: a soft sheen, a little lighter at the top
+  const paint = canvas(64, 256, (g) => {
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, '#d9d9d9');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 256);
+    g.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    g.fillRect(6, 0, 3, 256); // a highlight down the edge
+  });
+  const steel = new THREE.MeshStandardMaterial({ color, map: tex(paint), metalness: 0.35, roughness: 0.4 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#232326', metalness: 0.5, roughness: 0.5 });
+  part(new THREE.BoxGeometry(0.98, 1.92, 0.78), steel, 0, 1.0, 0);          // the cabinet
+  part(new THREE.BoxGeometry(1.02, 0.06, 0.82), dark, 0, 0.03, 0);           // its plinth
+  part(new THREE.BoxGeometry(1.0, 0.05, 0.8), steel, 0, 1.985, 0);           // the top rim
+  // the lit sign on top
+  const sign = canvas(512, 96, (g) => {
+    const grad = g.createLinearGradient(0, 0, 0, 96);
+    grad.addColorStop(0, '#fffdf6');
+    grad.addColorStop(1, '#f1e9d6');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 512, 96);
+    g.fillStyle = color;
+    g.font = 'bold 54px -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('쾌변음료', 256, 50);
+  });
+  const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.16), new THREE.MeshBasicMaterial({ map: tex(sign) }));
+  signMesh.position.set(0, 1.82, 0.392);
+  group.add(signMesh);
+  // shelves of drinks, behind glass, lit from inside
+  const shelves = canvas(512, 640, (g) => {
+    const glow = g.createLinearGradient(0, 0, 0, 640);
+    glow.addColorStop(0, '#fbfdfd');
+    glow.addColorStop(1, '#dce6e8');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, 512, 640);
+    const rows = [['banana', 'banana', 'banana', 'yogurt', 'yogurt', 'yogurt'], ['latte', 'latte', 'americano', 'americano', 'americano', 'latte'], ['prune', 'prune', 'yogurt', 'banana', 'banana', 'latte'], ['americano', 'banana', 'prune', 'prune', 'latte', 'yogurt']];
+    rows.forEach((row, r) => {
+      const y = 30 + r * 150;
+      g.fillStyle = 'rgba(0, 0, 0, 0.06)'; // the back of each shelf, in shade
+      g.fillRect(0, y - 20, 512, 110);
+      row.forEach((kind, k) => drawDrink(g, kind, 45 + k * 84, y + 35, 4));
+      g.fillStyle = '#aab6b9'; // the shelf edge
+      g.fillRect(0, y + 92, 512, 8);
+      g.fillStyle = '#ffffff'; // price tags
+      row.forEach((_, k) => g.fillRect(22 + k * 84, y + 102, 46, 18));
+      g.fillStyle = '#333333';
+      g.font = 'bold 14px -apple-system, sans-serif';
+      g.textAlign = 'center';
+      row.forEach((_, k) => g.fillText('1,200', 45 + k * 84, y + 116));
+      g.fillStyle = '#e5484d'; // a little lit button under each
+      row.forEach((_, k) => g.fillRect(40 + k * 84, y + 124, 10, 6));
+    });
+  });
+  const shelfMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.84), new THREE.MeshBasicMaterial({ map: tex(shelves) }));
+  shelfMesh.position.set(-0.1, 1.2, 0.392); // just in front of the cabinet face, behind the glass
+  group.add(shelfMesh);
+  const frame = new THREE.MeshStandardMaterial({ color: '#cfd3d6', metalness: 0.6, roughness: 0.3 });
+  part(new THREE.BoxGeometry(0.72, 0.03, 0.04), frame, -0.1, 1.635, 0.405);
+  part(new THREE.BoxGeometry(0.72, 0.03, 0.04), frame, -0.1, 0.765, 0.405);
+  part(new THREE.BoxGeometry(0.03, 0.9, 0.04), frame, -0.465, 1.2, 0.405);
+  part(new THREE.BoxGeometry(0.03, 0.9, 0.04), frame, 0.265, 1.2, 0.405);
+  // the glass: clear, with a diagonal sheen
+  const sheen = canvas(128, 256, (g) => {
+    g.clearRect(0, 0, 128, 256);
+    const grad = g.createLinearGradient(0, 0, 128, 256);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.0)');
+    grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.0)');
+    grad.addColorStop(0.42, 'rgba(255, 255, 255, 0.35)');
+    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.0)');
+    grad.addColorStop(0.62, 'rgba(255, 255, 255, 0.18)');
+    grad.addColorStop(0.68, 'rgba(255, 255, 255, 0.0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 256);
+  });
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.88), new THREE.MeshBasicMaterial({ map: tex(sheen), transparent: true, depthWrite: false }));
+  glass.position.set(-0.1, 1.2, 0.398);
+  group.add(glass);
+  // the control panel on the right: a display, a coin slot, a note slot, the change return
+  const panel = canvas(128, 512, (g) => {
+    g.fillStyle = '#e9e7e2';
+    g.fillRect(0, 0, 128, 512);
+    g.fillStyle = '#10140f';
+    g.fillRect(14, 30, 100, 44);
+    g.fillStyle = '#8ef08a';
+    g.font = 'bold 18px -apple-system, "Apple SD Gothic Neo", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('발로 차면', 64, 44);
+    g.fillText('가끔 나와요', 64, 64);
+    g.fillStyle = '#9aa0a4';
+    g.fillRect(48, 110, 32, 70); // coin slot plate
+    g.fillStyle = '#1d1d20';
+    g.fillRect(61, 120, 6, 50);
+    g.fillStyle = '#9aa0a4';
+    g.fillRect(20, 210, 88, 46); // note slot
+    g.fillStyle = '#1d1d20';
+    g.fillRect(30, 228, 68, 8);
+    g.fillStyle = '#b5bbbf';
+    g.beginPath();
+    g.arc(64, 300, 18, 0, Math.PI * 2); // change return button
+    g.fill();
+    g.fillStyle = '#4a4f53';
+    g.font = '12px -apple-system, sans-serif';
+    g.fillText('반환', 64, 334);
+  });
+  const panelMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.8), new THREE.MeshLambertMaterial({ map: tex(panel) }));
+  panelMesh.position.set(0.37, 1.2, 0.392);
+  group.add(panelMesh);
+  // the pick-up box at the bottom, with its flap
+  part(new THREE.BoxGeometry(0.62, 0.22, 0.06), dark, -0.05, 0.36, 0.38);
+  const flap = new THREE.MeshStandardMaterial({ color: '#3a3b3f', metalness: 0.3, roughness: 0.6, transparent: true, opacity: 0.85 });
+  part(new THREE.BoxGeometry(0.56, 0.16, 0.02), flap, -0.05, 0.37, 0.415);
+  // a brand strip along the bottom
+  part(new THREE.BoxGeometry(0.98, 0.1, 0.02), new THREE.MeshBasicMaterial({ color: '#f3ece0' }), 0, 0.15, 0.392);
   worldRoot.add(group);
-  let shown = -1;
   const vending = {
     group,
     shake: 0,
-    setKicks(n) {
-      if (n === shown) return;
-      shown = n;
-      const g = screen.getContext('2d');
-      g.fillStyle = '#10140f';
-      g.fillRect(0, 0, 160, 48);
-      g.fillStyle = '#8ef08a';
-      g.font = 'bold 15px -apple-system, "Apple SD Gothic Neo", sans-serif';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText(`오늘 ${n.toLocaleString('ko-KR')}번 맞았어요`, 80, 24);
-      screenTex.needsUpdate = true;
-    },
     // where a dropped drink shows (world)
     slot() {
       return group.localToWorld(new THREE.Vector3(0, 0.45, 0.45));
     },
   };
-  vending.setKicks(kicksToday);
   vendings.push(vending);
 }
 
@@ -1398,10 +1453,6 @@ function applyState(st) {
   // everyone in this restroom, and how many stalls are in use right now
   $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
-  if (st.kicks !== undefined && st.kicks !== kicksToday) {
-    kicksToday = st.kicks;
-    for (const v of vendings) v.setKicks(kicksToday);
-  }
   if (st.bean !== undefined && performance.now() > beanHoldUntil && st.bean !== beanTotal) {
     beanTotal = st.bean;
     bean?.setTotal(beanTotal);
@@ -2622,7 +2673,7 @@ function placeWishLink() {
     return;
   }
   emblem.getWorldPosition(wishAt);
-  wishAt.y -= 0.72;
+  wishAt.y = 0.5; // on the plinth's face
   wishAt.project(camera);
   const on = wishAt.z < 1 && Math.abs(wishAt.x) < 0.95 && wishAt.y > -0.6 && wishAt.y < 0.95;
   link.hidden = !on;
@@ -2840,7 +2891,7 @@ function renderActions() {
     bar.append(mainBtn('bench', '의자에 앉기', () => goSitOnBench(bench)));
   } else if (mode === 'wish') {
     // at the golden poop: rub it, put your palms together, and write a wish in the box below
-    bar.append(mainBtn('find', '문지르기', () => send({ t: 'rub' })), miniBtn(null, '합장하기', () => send({ t: 'pray' })));
+    bar.append(mainBtn('rub', '황금똥 문지르기', () => send({ t: 'rub' })), mainBtn('pray', '합장하기', () => send({ t: 'pray' })));
   } else if (mode === 'vend') {
     bar.append(mainBtn('knock', '자판기 차기', () => send({ t: 'kick' })));
   } else if (mode === 'bean') {
@@ -2866,12 +2917,9 @@ function renderActions() {
     }));
   }
   if ((me.pk || []).length && !['inside', 'rolling', 'squatting'].includes(mode)) bar.append(miniBtn('wash', '쾌변음료 마시기', drinkNow)); // a drink in hand
-  if (!['inside', 'standing', 'rolling', 'squatting'].includes(mode)) {
-    const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
-    go.dataset.move = '1';
-    bar.append(go);
-  }
-  else setMoveMenu(false);
+  const canMove = !['inside', 'standing', 'rolling', 'squatting'].includes(mode);
+  $('#moveBtn').disabled = !canMove;
+  if (!canMove) setMoveMenu(false);
 }
 
 // ---------- the vending machines, the drink in your hand, and 변비 ----------
@@ -2926,8 +2974,8 @@ function syncHand(p, kind) {
       const cap = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 10), mat(d.cap));
       cap.position.y = 0.06;
       g.add(body, cap);
-      g.scale.setScalar(1.6); // big enough to read on a chibi hand
-      g.position.set(0, -0.06, 0.06);
+      g.scale.setScalar(2.3); // big enough to read on a chibi hand
+      g.position.set(0, -0.08, 0.07);
       p.parts.hand_R.add(g);
       p.hand = g;
     }
@@ -2941,8 +2989,10 @@ function drinkPose(p) {
 // what someone holds and whether they're drinking it, after their pose for this frame
 function handFor(p, id, u, free) {
   const now = drinkingNow(id);
-  syncHand(p, now || (free ? (u.pk || [])[0] || '' : ''));
+  const held = free ? (u.pk || [])[0] || '' : '';
+  syncHand(p, now || held);
   if (now) drinkPose(p);
+  else if (held) p.parts.arm_R?.rotation.set(-0.8, 0, 0.3); // carried out in front, where you can see it
 }
 
 function onDrink(m) {
@@ -3055,6 +3105,8 @@ function updatePlaceName() {
 // ---------- 공간 이동: a shortcut to each place on the grounds (walking there still works) ----------
 
 const moveMenu = $('#moveMenu');
+$('#moveBtn').innerHTML = `${icoImg('pin')}<span>공간 이동</span>`;
+$('#moveBtn').addEventListener('click', () => setMoveMenu(moveMenu.hidden));
 function setMoveMenu(open) {
   if (open && (!GROUNDS || me.s !== -1 || me.rolling)) return;
   if (open) {
@@ -3603,7 +3655,7 @@ soundMenu.addEventListener('click', (e) => {
 });
 document.addEventListener('pointerdown', (e) => {
   if (!soundMenu.hidden && !e.target.closest('#soundMenu, #soundBtn')) setSoundMenu(false);
-  if (!moveMenu.hidden && !e.target.closest('#moveMenu, [data-move]')) setMoveMenu(false);
+  if (!moveMenu.hidden && !e.target.closest('#moveMenu, #moveBtn')) setMoveMenu(false);
 }, true);
 
 // ---------- keyboard ----------

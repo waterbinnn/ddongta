@@ -82,7 +82,6 @@ const kstDate = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 1
 let today = kstDate();
 let flushedToday = 0;
 let beanstalk = 0; // every poop ever given to the beanstalk as fertilizer, in all rooms; it never stops growing
-let kicksToday = 0; // how many times the vending machines were kicked today, in all rooms (shown on their screens)
 
 // "today's poops" survives restarts and deploys when a Key Value store is attached (REDIS_URL on Render)
 let kv = null;
@@ -96,11 +95,10 @@ if (process.env.REDIS_URL) {
     console.warn('key value:', err.message);
   });
   kv.connect()
-    .then(() => Promise.all([kv.get(`flushed:${today}`), kv.get('beanstalk'), kv.get(`kicks:${today}`)]))
-    .then(([saved, bean, kicks]) => {
+    .then(() => Promise.all([kv.get(`flushed:${today}`), kv.get('beanstalk')]))
+    .then(([saved, bean]) => {
       flushedToday = Math.max(flushedToday, Number(saved) || 0);
       beanstalk = Math.max(beanstalk, Number(bean) || 0);
-      kicksToday = Math.max(kicksToday, Number(kicks) || 0);
     })
     .catch((err) => console.warn('key value unavailable:', err.message));
 }
@@ -236,7 +234,6 @@ function snapshot(room) {
     t: 'state',
     flushed: flushedToday,
     bean: beanstalk,
-    kicks: kicksToday,
     stalls: room.stalls.map((u) => (u ? u.id : 0)),
     hp: room.meta.map((m) => Math.round(m.hp)),
     users: [...room.users].map((u) => ({
@@ -254,7 +251,6 @@ setInterval(() => {
   if (d !== today) {
     today = d;
     flushedToday = 0;
-    kicksToday = 0;
   }
   const now = Date.now();
   for (let k = rooms.length - 1; k >= 0; k--) {
@@ -493,12 +489,10 @@ wss.on('connection', (ws, req) => {
       const now = Date.now();
       if (now - user.lastKick < 700) return;
       user.lastKick = now;
-      kicksToday++;
-      if (kv?.isReady) kv.multi().incr(`kicks:${today}`).expire(`kicks:${today}`, 3 * 86400).exec().catch(() => {});
       const r = Math.random();
       const drink = r < GOLD_CAN ? 'gold' : r < KICK_DROP ? DRINKS[Math.floor(Math.random() * DRINKS.length)] : '';
       const kept = drink ? giveDrink(user, drink) : false;
-      for (const rm of rooms) rm.dirty = true; // every machine's screen counts the kicks
+      if (kept) room.dirty = true; // the drink shows in your hand
       broadcast(room, { t: 'kick', id: user.id, v: nearVending(user), ...(drink && { drink, kept: kept ? 1 : 0 }) });
     } else if (m.t === 'drink' && user.pocket.length && !user.roll) {
       // drinking: if you're stuck, a gurgle, and a moment later it all comes out

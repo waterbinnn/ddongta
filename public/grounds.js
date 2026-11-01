@@ -175,19 +175,21 @@ export function buildGrounds(kit) {
       vendingMachine(x, z, Math.atan2(tx - x, tz - z), k ? '#3f7fb5' : '#b8463e');
     });
   }
-  // the golden poop: a statue on a stone plinth, like the ones in a park. Tap it to go and make a wish
+  // the golden poop: a statue as big as a temple's Buddha, on a broad two-tier stone plinth.
+  // Rub it, put your palms together, make a wish (all right there; tapping it walks you up to it)
   {
     const [x, z] = P(L.wish);
-    const stone = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), 1, 1), color: '#d8d2c6' }); // pale granite
-    const base = mesh(new THREE.BoxGeometry(1.1, 0.12, 1.1), stone, { cast: true, receive: true });
-    base.position.set(x, 0.06, z);
-    const plinth = mesh(new THREE.BoxGeometry(0.85, 0.3, 0.85), stone, { cast: true, receive: true });
-    plinth.position.set(x, 0.27, z);
-    const cap = mesh(new THREE.BoxGeometry(1.0, 0.08, 1.0), stone, { cast: true, receive: true });
-    cap.position.set(x, 0.46, z); // a low plinth: the golden poop sits about at head height
-    root.add(base, plinth, cap);
-    const hit = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.9, 1.2), M.hit);
-    hit.position.set(x, 1.0, z);
+    const stone = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), 2, 1), color: '#d8d2c6' }); // pale granite
+    const slab = (w, h, y) => {
+      const m = mesh(new THREE.BoxGeometry(w, h, w), stone, { cast: true, receive: true });
+      m.position.set(x, y, z);
+      root.add(m);
+    };
+    slab(2.8, 0.25, 0.125); // the lower step
+    slab(2.2, 0.45, 0.475); // the plinth
+    slab(2.35, 0.08, 0.74); // its cap
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(2.6, 4.8, 2.6), M.hit);
+    hit.position.set(x, 2.4, z);
     hit.userData.wish = true;
     root.add(hit);
     wishHits.push(hit);
@@ -199,11 +201,14 @@ export function buildGrounds(kit) {
           o.castShadow = true;
         }
       });
-      poop.scale.setScalar(0.8);
-      poop.position.set(x, 0.5, z);
+      poop.scale.setScalar(2.3);
+      poop.position.set(x, 0.78, z);
       root.add(poop);
-      kit.onSignPoop?.(poop);
     });
+    // a warm light on it at night
+    const glow = new THREE.PointLight(lampColor, lampPower * 0.6, 9, 1.6);
+    glow.position.set(x, 3.6, z + 2.4);
+    lamps.add(glow);
   }
 
   // ---------- the public restroom: an open-fronted pavilion, ten stalls along the back, sinks on the east wall ----------
@@ -230,7 +235,7 @@ export function buildGrounds(kit) {
     block(cw, 0.82, cd, tile(cd, 0.82), cx, 0.41, cz);
     block(cw + 0.08, 0.06, cd + 0.08, mat('#fbfbf8'), cx, 0.85, cz);
     const chrome = new THREE.MeshPhongMaterial({ color: '#d4dbe2', shininess: 110, specular: '#ffffff' });
-    for (const s of L.sinks) {
+    for (const s of L.sinks.filter((k) => !k.pond)) { // the pond's washing spots have no basin
       const z = s.y * U;
       add(mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.03, 20), mat('#ffffff')), cx - 0.05, 0.88, z);
       add(mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.28, 8), chrome), cx + 0.25, 1.02, z);
@@ -358,7 +363,9 @@ export function buildGrounds(kit) {
     const r = (L.treeR0 + rnd(k + 100) * (L.treeR1 - L.treeR0)) * U;
     const x = C + Math.cos(a) * r;
     const z = C + Math.sin(a) * r;
-    if (Math.abs(L.gate.x * U - x) < 7 && z > C) continue; // keep the way in clear, and the view through the gate
+    // keep the way in clear: no forest in a wide wedge south of the middle, near enough to stand in the view
+    const fromSouth = Math.abs(Math.atan2(x - C, z - C));
+    if (z > C && fromSouth < 0.75 && r < (L.treeR1 * U) - 2) continue;
     if (Math.hypot(x - L.bush.x * U, z - L.bush.y * U) < L.bush.r * U * 0.6) continue; // a clearing in the thicket
     treeSpots.push({ x, z, y: groundY(r), s: 1.7 + rnd(k + 200) * 1.5, cedar: rnd(k + 300) < 0.3, k }); // 4 to 8 m tall
   }

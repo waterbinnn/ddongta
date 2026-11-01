@@ -51,6 +51,11 @@
     </div>
   </header>
 
+  <div class="move-wrap">
+    <button class="chip move-chip" id="moveBtn" type="button" aria-haspopup="true"></button>
+    <div class="sound-menu move-menu" id="moveMenu" role="menu" hidden></div>
+  </div>
+
   <div class="chip toast" id="toast" hidden></div>
   <div class="place-name" id="placeName" aria-live="polite"></div>
 
@@ -61,7 +66,6 @@
   <div class="dock">
     <div class="push-pad" id="pushPad"></div>
     <nav class="actions" id="actions"></nav>
-    <div class="sound-menu move-menu" id="moveMenu" role="menu" hidden></div>
     <form class="chat" id="chatBox">
       <input id="chatInput" maxlength="80" placeholder="주변에 한마디…" autocomplete="off" enterkeyhint="send">
       <button type="submit" aria-label="보내기">↵</button>

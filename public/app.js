@@ -3643,7 +3643,7 @@ function placeAt(x, y) {
   if (x > V.x0 - 120 && x < V.x1 + 120 && y > V.y1 && y < V.y1 + 280) return '프리미엄 화장실';
   if (near(L.garden, 260)) return '작은 정원';
   if (near(L.bean, L.plazaR + 20)) return '콩나무 광장';
-  if (near(L.terrace, L.terraceR + 40)) return '테라스';
+  if (near(L.terrace, L.terraceR + 40)) return '자판기';
   if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
   if (near(L.pond, L.pond.r + 160)) return '연못';
   if (L.bushes.some((b) => near(b, b.r))) return '풀숲';

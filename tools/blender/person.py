@@ -3,12 +3,12 @@
 Run from the repo root (Blender does not need to be open):
   /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/blender/person.py -- [preview.png]
 
-The person is a set of rounded parts, each with its pivot at its joint, so the page can swing legs and arms
-and turn the head in code (no animation clips). Colours are not set here: the page paints each part by name
-(skin, hair, shirt, pants, shoes) so every visitor can get their own look. The face is drawn by the page too.
+Everyone who comes as a person looks the same: this one character. It is a set of rounded parts, each with
+its pivot at its joint, so the page can swing legs and arms and turn the head in code (no animation clips).
+Colours are not set here: the page paints each part by name (skin, hair, shirt, pants, shoes), and draws the face.
 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
-  hips (shorts) > torso (shirt) > head (skin) > hair_short / hair_bob / hair_long / hair_bun / hair_pigtails / cap
+  hips (shorts) > torso (shirt) > head (skin) > hair
                                 > arm_L / arm_R (sleeves) > hand_L / hand_R
                 > leg_L / leg_R (pants) > shoe_L / shoe_R, cuff_L / cuff_R (pants round the ankles, hidden by default)
 """
@@ -103,26 +103,6 @@ def keep_short(p, _):
     return p.z > -0.14  # down to the nape
 
 
-def keep_bob(p, _):
-    face = around(p) < 0.85 and p.z < FRINGE
-    return not face and p.z > -0.22
-
-
-def keep_cap(p, _):
-    return p.z > 0.04
-
-
-def join(objs, name):
-    bpy.ops.object.select_all(action='DESELECT')
-    for o in objs:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = objs[0]
-    bpy.ops.object.join()
-    objs[0].name = name
-    objs[0].data.name = name
-    return objs[0]
-
-
 # ---------- body ----------
 hips = ellipsoid('hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.03), (0.15, 0.115, 0.085))
 torso = ellipsoid('torso', (0, 0, WAIST_Z), (0, 0, WAIST_Z + 0.13), (0.15, 0.115, 0.155), hips)
@@ -141,30 +121,8 @@ for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they fac
         v.co += hip + Vector((0, 0, -0.2))
     new_object(f'cuff_{tag}', bm, hip + Vector((0, 0, -0.2)), leg)
 
-# ---------- hair styles (the page shows one) ----------
-neck = Vector((0, 0, NECK_Z))
-new_object('hair_short', shell(keep_short, 0.262), neck, head)
-new_object('hair_bob', shell(keep_bob, 0.272), neck, head)
-
-long_top = new_object('hair_long', shell(keep_bob, 0.272), neck, head)
-long_back = ellipsoid('hair_long_back', neck, HEAD_C + Vector((0, 0.15, -0.2)), (0.22, 0.09, 0.2), head)
-join([long_top, long_back], 'hair_long')
-
-bun_top = new_object('hair_bun', shell(keep_short, 0.262), neck, head)
-bun = ellipsoid('hair_bun_knot', neck, HEAD_C + Vector((0, 0.05, 0.27)), (0.095, 0.095, 0.085), head)
-join([bun_top, bun], 'hair_bun')
-
-pig_top = new_object('hair_pigtails', shell(keep_short, 0.262), neck, head)
-tails = [ellipsoid(f'tail_{s}', neck, HEAD_C + Vector((s * 0.26, 0.04, -0.07)), (0.07, 0.07, 0.115), head) for s in (1, -1)]
-join([pig_top, *tails], 'hair_pigtails')
-
-cap_dome = new_object('cap', shell(keep_cap, 0.266), neck, head)
-bm = bmesh.new()
-bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=0.17, radius2=0.17, depth=0.022)
-for v in bm.verts:
-    v.co = Vector((v.co.x, v.co.y * 0.85, v.co.z)) + HEAD_C + Vector((0, -0.17, 0.045))
-brim = new_object('cap_brim', bm, neck, head)
-join([cap_dome, brim], 'cap')
+# ---------- hair: a short cut with a straight fringe ----------
+new_object('hair', shell(keep_short, 0.262), Vector((0, 0, NECK_Z)), head)
 
 # ---------- export ----------
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
@@ -182,7 +140,7 @@ bpy.ops.export_scene.gltf(
 tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in scene.objects if o.type == 'MESH')
 print('exported', OUT, os.path.getsize(OUT) // 1024, 'KB,', tris, 'triangles,', [o.name for o in scene.objects])
 
-# ---------- optional preview: three looks side by side ----------
+# ---------- optional preview ----------
 if PREVIEW:
     def mat(name, rgb):
         m = bpy.data.materials.new(name)
@@ -192,13 +150,13 @@ if PREVIEW:
         b.inputs['Roughness'].default_value = 0.75
         return m
 
-    skin, hair, shirt, pants, shoe = mat('skin', (1, 0.72, 0.55)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.42, 0.3)), mat('pants', (0.2, 0.32, 0.6)), mat('shoe', (0.1, 0.08, 0.1))
-    paint = {'head': skin, 'hand': skin, 'hair': hair, 'cap': mat('cap', (0.2, 0.45, 0.9)), 'torso': shirt, 'arm': shirt, 'hips': pants, 'leg': pants, 'cuff': pants, 'shoe': shoe}
+    skin, hair, shirt, pants, shoe = mat('skin', (1, 0.72, 0.55)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
+    paint = {'head': skin, 'hand': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'leg': pants, 'cuff': pants, 'shoe': shoe}
     for o in scene.objects:
         if o.type == 'MESH':
             o.data.materials.append(next(v for k, v in paint.items() if o.name.startswith(k)))
     for o in scene.objects:
-        if o.name.startswith('cuff') or (o.name.startswith(('hair', 'cap')) and o.name != 'hair_bob'):
+        if o.name.startswith('cuff'):
             o.hide_render = True
 
     world = bpy.data.worlds.new('w')

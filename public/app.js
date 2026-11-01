@@ -31,9 +31,6 @@ const PX_M = 0.05; // meters per sprite pixel
 const PILE_MAX = 10;
 
 const INK = '#2a1f2b';
-const SKIN = '#ffd9b8';
-// natural shades plus a few bright, fun ones (no grey: it read as grandma)
-const HAIRS = ['#3b2a20', '#1f1b22', '#6b4226', '#c26a3a', '#e0b25c', '#f2d38a', '#e86a92', '#5b8ee6', '#9a6ad6', '#3fae8f', '#ff9f5a', '#4a3460'];
 // a casual fast-food restroom: butter-yellow tile, ketchup-red doors, cream stalls, warm daylight
 const OG = new URLSearchParams(location.search).has('og'); // ?og renders the link-preview frame
 
@@ -125,33 +122,6 @@ function sprite(rows, pal, extra = null, outline = INK) {
 }
 
 // ---------- character art ----------
-
-// every visitor gets a look picked from their id: hair style, skin, cap, stripes, pants
-const SKINS = ['#ffd9b8', '#f6c8a2', '#e8b08a', '#c98e64', '#9a6644'];
-const STYLES_GIRL = ['long', 'pigtails', 'ponytail', 'bob', 'bun'];
-const STYLES_BOY = ['short', 'cap', 'curly', 'buzz', 'short'];
-const PANTS = ['#4a6fa5', '#b08a5a', '#2f2f3a', '#6b8a4a', '#8e4a5e'];
-const CAPS = ['#e5484d', '#3a7bd5', '#46a758', '#f5a524', '#8a5cd0'];
-
-function hashId(n) {
-  let x = Math.imul(n + 1, 2654435761) >>> 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 2246822519) >>> 0;
-  x ^= x >>> 13;
-  return x >>> 0;
-}
-
-function lookFor(u) {
-  const h = hashId(u.id);
-  const pick = (arr, shift) => arr[(h >>> shift) % arr.length];
-  const girl = (h >>> 27) % 2 === 0; // about half the visitors, told apart only by longer hair
-  const look = {
-    c: u.c, skin: pick(SKINS, 0), h: pick(HAIRS, 3), style: pick(girl ? STYLES_GIRL : STYLES_BOY, 7), pants: pick(PANTS, 11),
-    cap: pick(CAPS, 15), stripe: (h >>> 23) % 3 === 0,
-  };
-  look.key = [look.c, look.skin, look.h, look.style, look.pants, look.cap, look.stripe].join('|');
-  return look;
-}
 
 // ---------- props & icons ----------
 
@@ -1408,8 +1378,7 @@ function setPile(s, count) {
 // ---------- characters ----------
 
 function makeWalker(u) {
-  const look = lookFor(u);
-  const p = makePerson(look);
+  const p = makePerson();
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
@@ -1418,7 +1387,7 @@ function makeWalker(u) {
   const halo = pixelSprite(PROPS.halo);
   halo.visible = false;
   charRoot.add(p.group, blob, marker, halo);
-  return { data: u, p, blob, marker, halo, look, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
+  return { data: u, p, blob, marker, halo, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
 }
 
 function removeWalker(e) {
@@ -2070,7 +2039,7 @@ function animateStalls(dt, t) {
     s.feet.visible = false;
     s.marker.visible = occId === meId;
     // the sitter: a 3D person with pants down, made for whoever is in here now
-    const key = occ ? `${occId}|${occ.look.key}` : '';
+    const key = occ ? String(occId) : '';
     if (key !== s.personFor) {
       if (s.person) {
         s.seatSpot.remove(s.person.group);
@@ -2078,7 +2047,7 @@ function animateStalls(dt, t) {
         s.person = null;
       }
       if (occ) {
-        s.person = makePerson(occ.look);
+        s.person = makePerson();
         setPantsDown(s.person, true);
         s.seatSpot.add(s.person.group);
       }
@@ -2478,7 +2447,7 @@ function feedChat(id, text, kind = '') {
   const row = document.createElement('div');
   row.className = `line${id === meId ? ' mine' : ''}${kind ? ` ${kind}` : ''}`;
   const dot = document.createElement('i');
-  dot.style.background = e ? e.look.c : '#ccc';
+  dot.style.background = e ? e.data.c : '#ccc';
   const where = document.createElement('b');
   where.textContent = id === meId ? `나 · ${placeOf(id)}` : placeOf(id);
   const msg = document.createElement('span');

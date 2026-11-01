@@ -1,5 +1,6 @@
-// 3D people: a chibi model from Blender (public/models/person.glb, made by tools/blender/person.py),
-// painted per visitor and posed in code: legs and arms swing on their joints, the face is a drawn decal.
+// 3D people: one chibi character from Blender (public/models/person.glb, made by tools/blender/person.py).
+// Everyone who comes as a person looks the same, like the monks on 산사; they are posed in code
+// (legs and arms swing on their joints) and the face is a drawn decal that changes with the mood.
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
 
@@ -22,10 +23,8 @@ export const peopleReady = new Promise((resolve) => {
   );
 });
 
-const HAIRS = ['hair_short', 'hair_bob', 'hair_long', 'hair_bun', 'hair_pigtails', 'cap'];
-const HAIR_FOR = { short: 'hair_short', buzz: 'hair_short', curly: 'hair_bob', bob: 'hair_bob', long: 'hair_long', ponytail: 'hair_long', bun: 'hair_bun', pigtails: 'hair_pigtails', cap: 'cap' };
-const SHOE = '#2c2630';
-const UNDIES = '#f7f4ee';
+// the one look: short brown hair, a 똥타-yellow tee, navy shorts
+const LOOK = { skin: '#ffd9b8', hair: '#3b2a20', shirt: '#ffcf3f', pants: '#2f4a7a', shoes: '#2c2630', undies: '#f7f4ee' };
 
 const mats = new Map();
 function matOf(color) {
@@ -190,22 +189,19 @@ function faceGeometry(head) {
 
 // ---------- one person ----------
 
-export function makePerson(look) {
+export function makePerson() {
   const root = template ? template.clone(true) : new THREE.Group();
   const parts = {};
   root.traverse((o) => {
     if (o.name) parts[o.name] = o;
     if (o.isMesh) o.frustumCulled = true;
   });
-  const hair = HAIR_FOR[look.style] || 'hair_short';
-  for (const n of HAIRS) if (parts[n]) parts[n].visible = n === hair;
   const paint = (names, color) => names.forEach((n) => parts[n] && (parts[n].material = matOf(color)));
-  paint(['head', 'hand_L', 'hand_R'], look.skin);
-  paint(HAIRS, look.h);
-  paint(['cap'], look.cap);
-  paint(['torso', 'arm_L', 'arm_R'], look.c);
-  paint(['hips', 'leg_L', 'leg_R', 'cuff_L', 'cuff_R'], look.pants);
-  paint(['shoe_L', 'shoe_R'], SHOE);
+  paint(['head', 'hand_L', 'hand_R'], LOOK.skin);
+  paint(['hair'], LOOK.hair);
+  paint(['torso', 'arm_L', 'arm_R'], LOOK.shirt);
+  paint(['hips', 'leg_L', 'leg_R', 'cuff_L', 'cuff_R'], LOOK.pants);
+  paint(['shoe_L', 'shoe_R'], LOOK.shoes);
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = false;
 
   let face = null;
@@ -220,7 +216,7 @@ export function makePerson(look) {
   group.add(spin);
   const rest = {};
   for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R']) if (parts[n]) rest[n] = parts[n].position.clone();
-  return { group, spin, root, parts, face, rest, look, expr: 'idle', down: false };
+  return { group, spin, root, parts, face, rest, expr: 'idle', down: false };
 }
 
 export function disposePerson(p) {
@@ -237,9 +233,9 @@ export function setFace(p, expr) {
 export function setPantsDown(p, down) {
   if (p.down === down) return;
   p.down = down;
-  const { parts, look } = p;
-  for (const n of ['leg_L', 'leg_R']) if (parts[n]) parts[n].material = matOf(down ? look.skin : look.pants);
-  if (parts.hips) parts.hips.material = matOf(down ? UNDIES : look.pants);
+  const { parts } = p;
+  for (const n of ['leg_L', 'leg_R']) if (parts[n]) parts[n].material = matOf(down ? LOOK.skin : LOOK.pants);
+  if (parts.hips) parts.hips.material = matOf(down ? LOOK.undies : LOOK.pants);
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = down;
 }
 

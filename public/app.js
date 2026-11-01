@@ -162,6 +162,7 @@ const ICONS = {
   wash: icon(['...B...', '..BBB..', '.BBBBB.', '.BBWBB.', '.BBBBB.', '..BBB..']),
   bench: icon(['DDDDDDDDD', 'DdddddddD', 'DDDDDDDDD', '.D.....D.', '.D.....D.']),
   jump: icon(['...A...', '..AAA..', '.AAAAA.', '...A...', '...A...', '...A...']),
+  pin: icon(['..xxx..', '.xxxxx.', 'xxWWxxx', 'xxWWxxx', '.xxxxx.', '..xxx..', '...x...']),
   poop: asIcon(PROPS.poop),
   // the push button: an empty (pale) poop that fills up with the real one
   poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
@@ -2489,6 +2490,58 @@ function renderActions() {
       if (i >= 0) walkToStall(i);
     }));
   }
+  if (mode !== 'inside' && mode !== 'rolling') {
+    const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
+    go.dataset.move = '1';
+    bar.append(go);
+  }
+  else setMoveMenu(false);
+}
+
+// ---------- 공간 이동: a shortcut to each place on the grounds (walking there still works) ----------
+
+const moveMenu = $('#moveMenu');
+function setMoveMenu(open) {
+  if (open && (!GROUNDS || me.s !== -1 || me.rolling)) return;
+  if (open) {
+    moveMenu.innerHTML = '';
+    for (const spot of GROUNDS.spots) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = spot.name;
+      b.addEventListener('click', () => moveTo(spot));
+      moveMenu.append(b);
+    }
+  }
+  moveMenu.hidden = !open;
+}
+
+let moving = false;
+function moveTo(spot) {
+  setMoveMenu(false);
+  if (moving || me.s !== -1 || me.rolling) return;
+  moving = true;
+  const fade = $('#fade');
+  fade.classList.add('on');
+  setTimeout(() => {
+    me.x = spot.x;
+    me.y = spot.y;
+    target = null;
+    pendingEnter = -1;
+    pendingBench = false;
+    pendingWash = false;
+    sendMove(true);
+    // look out over the place you arrived at, without the camera flying across the grounds
+    Object.assign(cam, { tYaw: spot.yaw, tPitch: 0.4, tDist: 9, tLook: 0 });
+    focusKey = '';
+    camBefore = null;
+    walkedYet = true;
+    manualCamAt = performance.now();
+    snapCam = true;
+    fade.classList.remove('on');
+    moving = false;
+  }, 240);
 }
 
 function mainBtn(ico, label, onClick, cls = '') {
@@ -2987,6 +3040,7 @@ soundMenu.addEventListener('click', (e) => {
 });
 document.addEventListener('pointerdown', (e) => {
   if (!soundMenu.hidden && !e.target.closest('#soundMenu, #soundBtn')) setSoundMenu(false);
+  if (!moveMenu.hidden && !e.target.closest('#moveMenu, [data-move]')) setMoveMenu(false);
 }, true);
 
 // ---------- keyboard ----------
@@ -3039,6 +3093,8 @@ window.addEventListener('keydown', (e) => {
     flush();
   } else if (e.code === 'KeyR') {
     recenterCam();
+  } else if (e.code === 'KeyM') {
+    setMoveMenu(moveMenu.hidden);
   } else if (e.code === 'KeyH') {
     setChatHidden(!chatHidden);
     toast(chatHidden ? '채팅 목록을 숨겼어요' : '채팅 목록을 다시 보여줘요');

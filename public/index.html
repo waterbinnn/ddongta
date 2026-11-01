@@ -59,6 +59,7 @@
   <div class="dock">
     <div class="push-pad" id="pushPad"></div>
     <nav class="actions" id="actions"></nav>
+    <div class="sound-menu move-menu" id="moveMenu" role="menu" hidden></div>
     <form class="chat" id="chatBox">
       <input id="chatInput" maxlength="80" placeholder="칸 너머로 한마디..." autocomplete="off" enterkeyhint="send">
       <button type="submit" aria-label="보내기">↵</button>
@@ -72,12 +73,15 @@
       </div>
       <div class="row">
         <span><kbd>Esc</kbd> 나가기</span>
+        <span><kbd>M</kbd> 공간 이동</span>
         <span><kbd>R</kbd> 내 시점</span>
         <span><kbd>H</kbd> 채팅 숨기기</span>
         <span>드래그 회전 · 휠 확대</span>
       </div>
     </div>
   </div>
+
+  <div class="fade" id="fade"></div>
 
   <div class="loading" id="loading">휴지 채우는 중...</div>
 

@@ -502,6 +502,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sound-menu button:hover { background: rgba(120, 72, 20, 0.07); }
 .sound-menu button.on { background: var(--accent); color: var(--accent-ink); }
 
+/* 공간 이동: the shortcut menu opens above the action buttons */
+.move-menu { top: auto; bottom: calc(100% + 6px); right: auto; left: 50%; transform: translateX(-50%); z-index: 2; }
+.dock .move-menu { position: absolute; }
+/* a short dip to dark while you're carried to the other place */
+.fade { position: fixed; inset: 0; background: #2a1d12; opacity: 0; pointer-events: none; transition: opacity 0.22s ease; z-index: 15; }
+.fade.on { opacity: 1; }
+
 /* phones: the top bar must fit in one row, so squeeze it */
 @media (max-width: 520px) {
   .top { left: 8px; right: 8px; gap: 6px; }

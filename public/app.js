@@ -2,6 +2,7 @@
 import * as THREE from '/vendor/three.module.js';
 import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
+import { buildPrivateRoom } from './room.js';
 
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
@@ -206,6 +207,19 @@ const stallRoot = new THREE.Group();
 const charRoot = new THREE.Group();
 const fxRoot = new THREE.Group();
 scene.add(worldRoot, stallRoot, charRoot, fxRoot);
+
+// the private room behind a 개인 화장실 door: built once, far off the grounds, shown only to whoever is inside
+const room = buildPrivateRoom({ SEAT_TOP, HIP_Y });
+room.group.position.set(20, 0, -40);
+scene.add(room.group);
+room.group.updateMatrixWorld(true);
+const roomWorld = (v) => room.group.localToWorld(v.clone());
+let inRoom = false; // am I sitting in my own private room right now
+let roomFor = -1;
+let roomPerson = null;
+let roomPersonFor = '';
+let roomShake = 0;
+let snapCam = false; // jump the camera instead of flying it (going into or out of the room)
 
 let W = 1;
 let H = 1;
@@ -925,6 +939,7 @@ function applyTimeOfDay() {
   sun.color.copy(mix(a[5], b[5]));
   const lampScale = lerp(a[6], b[6], f);
   for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
+  room.windowMat.color.copy(skyUniforms.mid.value).lerp(skyUniforms.horizon.value, 0.4);
 }
 setInterval(applyTimeOfDay, 60 * 1000);
 
@@ -1499,6 +1514,7 @@ const OG_VIEWS = {
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
 const DIST_MIN = 3.5;
+const ROOM_DIST = [2.4, 3.3]; // how near and far the camera can be inside the private room
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 26;
 
@@ -1512,7 +1528,10 @@ function focusCamera() {
   let key = '';
   let yaw = 0;
   let pitch = 0.45;
-  if (me.s !== -1 && LAYOUT[me.s]) {
+  if (inRoom) {
+    key = 'room';
+    pitch = 0.3;
+  } else if (me.s !== -1 && LAYOUT[me.s]) {
     key = `stall${me.s}`;
     yaw = LAYOUT[me.s].rot; // straight in front of the door
     pitch = 0.4;
@@ -1537,7 +1556,7 @@ function focusCamera() {
     cam.tLook = 0;
     // far enough back that about four stalls fit across the screen, so the neighbours show on a phone too
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    cam.tDist = clamp(Math.max(8, 4.4 / (2 * halfW)), DIST_MIN, 16);
+    cam.tDist = key === 'room' ? ROOM_DIST[1] : clamp(Math.max(8, 4.4 / (2 * halfW)), DIST_MIN, 16);
   } else if (camBefore) {
     cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;
@@ -1582,19 +1601,33 @@ function updateCamera(dt) {
   if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
   if (me.s !== -1 && LAYOUT[me.s]) {
-    // in a stall the camera only swings around the front, never behind it
+    // in a stall the camera only swings around the front, never behind it; in the private room it stays between the walls
     const off = cam.tYaw - LAYOUT[me.s].rot;
     const rel = Math.atan2(Math.sin(off), Math.cos(off));
-    cam.tYaw -= rel - clamp(rel, -1.1, 1.1);
+    const swing = inRoom ? 0.3 : 1.1;
+    cam.tYaw -= rel - clamp(rel, -swing, swing);
+  }
+  if (inRoom) {
+    cam.tPitch = clamp(cam.tPitch, 0.1, 0.45);
+    cam.tDist = clamp(cam.tDist, ROOM_DIST[0], ROOM_DIST[1]);
+    cam.tLook = 0;
   }
   const k = 1 - Math.exp(-dt * 7);
   cam.yaw = lerpAngle(cam.yaw, cam.tYaw, k);
   let fx = OG_VIEW ? OG_VIEW.fx : toX(me.x); // a preview frame holds its own spot
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
-  if (me.s !== -1) {
+  if (inRoom) {
+    const aim = roomWorld(room.aim);
+    fx = aim.x;
+    fz = aim.z;
+  } else if (me.s !== -1) {
     const door = stallWorld(me.s, STALL_M / 2, 0, 0.3);
     fx = door.x;
     fz = door.z;
+  }
+  if (snapCam) {
+    snapCam = false;
+    Object.assign(cam, { fx, fz, yaw: cam.tYaw, pitch: Math.min(0.95, cam.tPitch), dist: Math.max(DIST_MIN, cam.tDist), look: cam.tLook });
   }
   const kf = 1 - Math.exp(-dt * 5);
   cam.fx = lerp(cam.fx, fx, kf);
@@ -1610,6 +1643,12 @@ function updateCamera(dt) {
   const py = 0.9 + Math.sin(cam.pitch) * cam.dist;
   const pz = cam.fz + cy * cp * cam.dist;
   camera.position.set(px, py, pz);
+  if (roomShake > 0) {
+    // someone is knocking on my door: the room gives a little jolt
+    roomShake = Math.max(0, roomShake - dt);
+    camera.position.x += (Math.random() - 0.5) * 0.03 * (roomShake / 0.25);
+    camera.position.y += (Math.random() - 0.5) * 0.02 * (roomShake / 0.25);
+  }
   // the camera stays where it is and only raises its eyes, so looking at the sky never moves it:
   // the gaze tilts up from the usual downward angle by exactly cam.look
   const elev = Math.atan2(0.9 - py, Math.hypot(px - cam.fx, pz - cam.fz)) + cam.look;
@@ -1727,6 +1766,53 @@ function placeWalkers(dt, t) {
   }
 }
 
+// Going into my private room hides the grounds and shows the room; coming out puts everything back.
+// The stall's poop tower moves into the room with me, and I sit in there with my shorts down.
+const outdoorLights = () => [sun, lamps];
+function syncRoom(t) {
+  const want = me.s !== -1 && LAYOUT[me.s]?.type === 'private' && stallObjs[me.s] ? me.s : -1;
+  if (want !== roomFor) {
+    const was = roomFor >= 0 ? stallObjs[roomFor] : null;
+    if (was) {
+      was.pile = was.doorPile;
+      setPile(was, 0);
+    }
+    room.pile.clear();
+    roomFor = want;
+    inRoom = want >= 0;
+    if (inRoom) {
+      const s = stallObjs[want];
+      s.doorPile ??= s.pile;
+      s.pile = room.pile;
+      s.golds = new Set();
+      setPile(s, piles[want] ?? 0);
+    }
+    room.group.visible = inRoom;
+    worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
+    for (const o of outdoorLights()) o.visible = !inRoom;
+    camera.fov = inRoom ? 55 : 36; // a wider lens in the small room, so the whole room fits even on a phone
+    camera.updateProjectionMatrix();
+    snapCam = true;
+  }
+  if (!inRoom) return;
+  const u = users.get(meId)?.data;
+  if (roomPersonFor !== meId) {
+    if (roomPerson) {
+      room.seat.remove(roomPerson.group);
+      disposePerson(roomPerson);
+    }
+    roomPerson = makePerson(hairFor(meId));
+    setPantsDown(roomPerson, true);
+    room.seat.add(roomPerson.group);
+    roomPersonFor = meId;
+  }
+  if (u) {
+    setFace(roomPerson, exprOf(u, me.s));
+    pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
+    roomPerson.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
+  }
+}
+
 let hoverStall = -1;
 function animateStalls(dt, t) {
   stallObjs.forEach((s, i) => {
@@ -1805,15 +1891,16 @@ function onPoop(m) {
     s.pending++;
     const k = Math.min(m.pile, PILE_MAX) - 1;
     if (m.gold) (s.golds ||= new Set()).add(k);
-    const from = stallWorld(m.stall, STALL_M / 2, 0.6, -1.0);
-    const to = stallWorld(m.stall, 0.84, PART_TOP + 0.05 + k * 0.2, 0.02);
+    const mine = inRoom && m.stall === me.s;
+    const from = mine ? roomWorld(room.bowl) : stallWorld(m.stall, STALL_M / 2, 0.6, -1.0);
+    const to = mine ? room.pile.localToWorld(new THREE.Vector3(0, k * 0.2, 0)) : stallWorld(m.stall, 0.84, PART_TOP + 0.05 + k * 0.2, 0.02);
     const p = pixelSprite(m.gold ? PROPS.goldPoop : PROPS.poop, m.gold ? 0.05 : 0.035);
     p.position.copy(from);
     fxRoot.add(p);
-    flights.push({ p, from, to, t: 0, s, gold: m.gold });
-    const mine = m.id === meId;
-    const text = m.gold ? (mine ? '황금똥!! 대박' : '황금똥!') : mine ? `퐁당! 오늘 ${m.n}번째` : '퐁당';
-    pop(to.clone().add(new THREE.Vector3(0, 0.45, 0)), text);
+    flights.push({ p, from, to, t: 0, s, gold: m.gold, arc: mine ? 0.5 : 1.0 });
+    const byMe = m.id === meId;
+    const text = m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `퐁당! 오늘 ${m.n}번째` : '퐁당';
+    pop(to.clone().add(new THREE.Vector3(0, mine ? 0.3 : 0.45, 0)), text, mine);
     if (m.gold) sparkle(from);
   }
   if (m.gold) {
@@ -1840,11 +1927,15 @@ function onKnock(m) {
   s.knockStage = stage;
   s.shake = 0.2 + stage * 0.08;
   const now = performance.now();
-  const at = stallWorld(m.stall, STALL_M / 2 + (Math.random() - 0.5) * 0.4, 1.2, 0.2);
-  if (cracked) pop(at, '쩌적!');
+  const inside = inRoom && m.stall === me.s;
+  if (inside) roomShake = 0.25;
+  const at = inside
+    ? roomWorld(room.knock).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0, 0))
+    : stallWorld(m.stall, STALL_M / 2 + (Math.random() - 0.5) * 0.4, 1.2, 0.2);
+  if (cracked) pop(at, '쩌적!', inside);
   else if (now - (lastKnockPop.get(m.stall) || 0) > 500) {
     lastKnockPop.set(m.stall, now);
-    pop(at, KNOCK_POPS[stage]);
+    pop(at, KNOCK_POPS[stage], inside);
   }
   const mine = stalls[m.stall] === meId;
   if (!mine && m.by !== meId) return; // you only hear knocks on your door, or your own
@@ -1884,10 +1975,12 @@ function onBreak(m) {
 
 function onBell(m) {
   if (!document.hidden && stallObjs[m.stall]) {
-    pop(stallWorld(m.stall, STALL_M / 2, 2.3, -0.4), '♪ 에티켓벨');
+    const inside = inRoom && m.stall === me.s;
+    const spot = (lx, ly, lz) => (inside ? roomWorld(new THREE.Vector3(lx - 0.6, ly, lz - 1.5)) : stallWorld(m.stall, lx, ly, lz));
+    pop(spot(STALL_M / 2, 2.3, -0.4), '♪ 에티켓벨', inside);
     for (let k = 0; k < 4; k++) {
       const n = pixelSprite(PROPS.note, 0.04);
-      n.position.copy(stallWorld(m.stall, 0.3 + Math.random() * 0.5, 1.9, -0.4));
+      n.position.copy(spot(0.3 + Math.random() * 0.5, 1.9, -0.4));
       n.visible = false;
       fxRoot.add(n);
       notes.push({ n, t: -k * 0.6, sway: Math.random() * 0.3, x: n.position.x });
@@ -1987,7 +2080,7 @@ function updateEffects(dt) {
     const f = flights[k];
     f.t = Math.min(1, f.t + dt / 0.7);
     f.p.position.lerpVectors(f.from, f.to, f.t);
-    f.p.position.y += Math.sin(f.t * Math.PI) * 1.0;
+    f.p.position.y += Math.sin(f.t * Math.PI) * (f.arc ?? 1.0);
     f.p.material.rotation = f.t * Math.PI * 4;
     if (f.t >= 1) {
       fxRoot.remove(f.p);
@@ -2086,6 +2179,7 @@ function headOf(id) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
+  if (id === meId && inRoom) return roomWorld(room.head);
   if (seat !== -1) return stallWorld(seat, STALL_M / 2, 1.55, SEAT_Z);
   return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, HEIGHT + 0.15); // screen-up, like the markers
 }
@@ -2095,7 +2189,10 @@ const wishAt = new THREE.Vector3();
 function placeWishLink() {
   const link = $('#wishLink');
   const emblem = wishHits[0];
-  if (!emblem) return;
+  if (!emblem || inRoom) {
+    link.hidden = true;
+    return;
+  }
   emblem.getWorldPosition(wishAt);
   wishAt.y -= 0.72;
   wishAt.project(camera);
@@ -2118,8 +2215,9 @@ function updateLabels(dt) {
     const p = toScreen(pos);
     const fadeIn = Math.min(1, f.age / 0.15);
     const fadeOut = Math.min(1, (f.life - f.age) / 0.8);
+    const here = inRoom ? Boolean(f.room) || f.id === meId : !f.room; // the room and the grounds never see each other's labels
     f.el.style.opacity = String(Math.max(0, Math.min(fadeIn, fadeOut)));
-    f.el.style.display = p.on ? '' : 'none';
+    f.el.style.display = p.on && here ? '' : 'none';
     f.el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
     if (f.age >= f.life) {
       f.el.remove();
@@ -2178,13 +2276,13 @@ function feedChat(id, text, kind = '') {
   setTimeout(() => row.remove(), 10800);
 }
 
-function pop(anchor, text) {
+function pop(anchor, text, inside = false) {
   if (document.hidden) return;
   const el = document.createElement('div');
   el.className = 'pop';
   el.textContent = text;
   $('#labels').append(el);
-  floats.push({ id: 0, el, anchor, age: 0, life: 1.2, rise: 0.4 });
+  floats.push({ id: 0, el, anchor, age: 0, life: 1.2, rise: 0.4, room: inside });
 }
 
 // ---------- the push button doubles as the gauge ----------
@@ -2221,6 +2319,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastFrame) / 1000);
   lastFrame = t;
   if (me.ready && me.s === -1) moveMe(dt);
+  syncRoom(t);
   placeWalkers(dt, t);
   animateStalls(dt, t);
   updateEffects(dt);

@@ -3212,7 +3212,15 @@ function renderActions() {
   if (pickHere) rail.append(withKey(miniBtn('poop', '줍기', () => send({ t: 'pick' })), 'G'));
   if (mode === 'inside') rail.append(withKey(miniBtn('lunch', '도시락 먹기', () => send({ t: 'lunch' })), 'L'));
   // out walking about (the exercise lawn too): sit or lie down right where you are
-  if (mode === 'far' || mode === 'lawn') rail.append(withKey(miniBtn('bench', '앉기', sitHere), 'F'), withKey(miniBtn('lie', '눕기', lieDown), 'Z'));
+  // out walking about (the exercise lawn too): sit or lie down right where you are. Round buttons in the bottom right
+  // corner, across from the stick, always out (never folded away)
+  if (mode === 'far' || mode === 'lawn') {
+    for (const [ico, label, fn, key] of [['bench', '앉기', sitHere, 'F'], ['lie', '눕기', lieDown, 'Z']]) {
+      const b = withKey(miniBtn(ico, label, fn), key);
+      b.classList.add('pose');
+      rail.append(b);
+    }
+  }
   if (inRoom) {
     // first, sitting down (highlighted; Space works it too). To get up, tap anywhere or press the down arrow
     if (mode === 'standing') {
@@ -3237,7 +3245,7 @@ function renderActions() {
   labelKeys(rail);
   // (phones) the fold-away button shows only when there are small buttons to fold away
   const fold = $('#railToggle');
-  fold.hidden = !rail.querySelector('.act.mini');
+  fold.hidden = !rail.querySelector('.act.mini:not(.pose)');
   if (fold.hidden) setRailOpen(false);
   labelKeys(bar);
 }

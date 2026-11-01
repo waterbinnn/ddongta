@@ -308,7 +308,7 @@ export function buildGrounds(kit) {
     const m4 = new THREE.Matrix4();
     for (let k = 0; k < n; k++) {
       const a = rnd(k + 400) * Math.PI * 2;
-      const d = Math.sqrt(rnd(k + 500)) * (r - 0.4);
+      const d = 2.6 + Math.sqrt(rnd(k + 500)) * (r - 3.0); // a clearing in the middle, where people squat
       let s = 0.45 + rnd(k + 600) * 0.6;
       const x = bx + Math.cos(a) * d;
       const z = bz + Math.sin(a) * d;

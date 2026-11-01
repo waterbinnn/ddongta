@@ -1176,7 +1176,9 @@ function exprOf(u, seat) {
   if ((happyUntil.get(u.id) || 0) > Date.now()) return 'bliss';
   if (u.r) return 'dizzy';
   if (seat === -1 && u.pd) return 'shock';
-  if (seat === -1) return u.n ? 'relaxed' : 'urgent';
+  if (seat === -1 && u.q) return u.h ? 'strain' : 'idle';
+  if (seat === -1 && u.ex) return 'bliss';
+  if (seat === -1) return u.n && !u.sg ? 'relaxed' : 'urgent'; // 「신호가 왔다!」 shows on the face too
   if (u.p === 0) return u.h ? 'strain' : 'idle';
   if (u.p < 34) return 'strain';
   if (u.p < 67) return 'neutral';
@@ -1244,6 +1246,8 @@ function handle(m) {
     if (m.direct) toast(m.text);
   } else if (m.t === 'poop') {
     onPoop(m);
+  } else if (m.t === 'signal') {
+    onSignal(m);
   } else if (m.t === 'knock') {
     onKnock(m);
   } else if (m.t === 'break') {
@@ -1310,6 +1314,7 @@ function applyState(st) {
       me.rolling = Boolean(u.r);
       me.pd = Boolean(u.pd);
       me.b = Boolean(u.b);
+      me.q = Boolean(u.q);
       if (u.r) {
         me.x = u.x;
         me.y = u.y;
@@ -1584,6 +1589,10 @@ function focusCamera() {
     const space = sides.map((y) => clearDist(mx, mz, y, 0.4, 8));
     yaw = space[0] !== space[1] ? (space[0] > space[1] ? sides[0] : sides[1]) : side(sides[0]) < side(sides[1]) ? sides[0] : sides[1];
     pitch = 0.4;
+  } else if (me.q) {
+    key = 'squat'; // from above, over the bushes, so you can see yourself squatting in them
+    yaw = cam.tYaw;
+    pitch = 0.75;
   } else if (me.b) {
     key = 'bench';
     yaw = benchFacing(me.x, me.y) + Math.PI; // from behind the table, looking at me sitting at it
@@ -1805,6 +1814,8 @@ function placeWalkers(dt, t) {
     }
     const washing = (e.washUntil || 0) > performance.now();
     const benched = u.b && !rolling;
+    const squatting = Boolean(u.q) && !rolling;
+    const move = !rolling && !e.walking ? u.ex : '';
 
     // turn to where you walk; at the sink face the sink; standing still a while, turn to the camera
     let want = e.facing;
@@ -1812,11 +1823,12 @@ function placeWalkers(dt, t) {
       const sink = nearestSink(e.rx, e.ry);
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = benchFacing(e.rx, e.ry);
-    else if (!e.walking && e.idle > 1.5) want = cam.yaw;
+    else if (move) want = cam.yaw; // exercising: face the camera, so the moves show
+    else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
     setFace(p, face);
-    setPantsDown(p, pantsDown);
+    setPantsDown(p, pantsDown || squatting);
     p.group.rotation.y = e.turn;
     e.blob.position.set(X, 0.01, Z);
     const bob = (Math.floor(t / 300) % 2) * 0.04;
@@ -1827,8 +1839,13 @@ function placeWalkers(dt, t) {
       overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob);
       continue;
     }
-    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? 'wash' : e.walking ? 'walk' : 'stand';
-    pose(p, { mode, phase: e.phase, t: sec, seed: id });
+    const mode = rolling ? 'roll' : lift > 0 ? 'jump' : washing ? 'wash' : squatting ? 'squat' : move || (e.walking ? 'walk' : 'stand');
+    if (move !== e.exMove) {
+      e.exMove = move; // each move starts from its beginning
+      e.exStart = sec;
+    }
+    pose(p, { mode, phase: e.phase, t: move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h) });
+    if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
     e.halo.visible = face === 'bliss' && !rolling;
     overHead(e.halo, X, lift, Z, HEIGHT + 0.08);
@@ -1973,7 +1990,8 @@ const notes = [];
 
 function onPoop(m) {
   happyUntil.set(m.id, Date.now() + 1600);
-  const s = stallObjs[m.stall];
+  const s = m.bush ? null : stallObjs[m.stall];
+  if (m.bush) dropInBush(m);
   if (s) {
     s.pending++;
     const k = Math.min(m.pile, PILE_MAX) - 1;
@@ -2428,6 +2446,7 @@ function frame(t) {
   placeWalkers(dt, t);
   animateStalls(dt, t);
   updateEffects(dt);
+  updateBushPoops(dt);
   updateCamera(dt);
   clouds.rotation.y += dt * 0.004; // clouds drift slowly round
   renderer.render(scene, camera);
@@ -2447,15 +2466,16 @@ function renderActions() {
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
   const anyFree = stalls.some((_, i) => freeFor(i));
-  const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : nearSink() ? 'sink'
-    : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}` : anyFree ? 'far' : 'full';
+  const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : nearSink() ? 'sink'
+    : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
+      : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
   if (mode === actionMode) return;
   actionMode = mode;
   const bar = $('#actions');
   bar.innerHTML = '';
   const pad = $('#pushPad');
   pad.innerHTML = '';
-  if (mode === 'inside') {
+  if (mode === 'inside' || mode === 'squatting') {
     const push = document.createElement('button');
     push.type = 'button';
     push.className = 'act main push';
@@ -2470,7 +2490,8 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
-    bar.append(miniBtn('flush', '물 내리기', flush), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+    if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
+    else bar.append(miniBtn('flush', '물 내리기', flush), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -2486,6 +2507,11 @@ function renderActions() {
     bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
     bar.append(mainBtn('bench', '의자에 앉기', () => goSitOnBench(bench)));
+  } else if (mode === 'bush') {
+    bar.append(mainBtn('door', '쪼그려 앉아 누기', () => send({ t: 'squat', on: true })));
+  } else if (mode === 'lawn') {
+    // 쾌변 체조: any move, any time; a few of them and the signal comes
+    for (const [move, label] of EX_MOVES) bar.append(miniBtn(null, label, () => doExercise(move)));
   } else if (mode === 'full') {
     bar.append(mainBtn('knock', '만칸이에요 · 노크하러 가기', () => {
       const i = closestAnywhere((k) => stalls[k] && stalls[k] !== meId);
@@ -2501,12 +2527,63 @@ function renderActions() {
       if (i >= 0) walkToStall(i);
     }));
   }
-  if (mode !== 'inside' && mode !== 'rolling') {
+  if (mode !== 'inside' && mode !== 'rolling' && mode !== 'squatting') {
     const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
     go.dataset.move = '1';
     bar.append(go);
   }
   else setMoveMenu(false);
+}
+
+// ---------- the bushes and the 쾌변 체조 lawn ----------
+
+const EX_MOVES = [['rub', '배 문지르기'], ['deep', '쪼그려 앉기'], ['hug', '무릎 끌어안기'], ['twist', '허리 비틀기']];
+const inBushHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.bush.x, me.y - GROUNDS.bush.y) <= GROUNDS.bush.r;
+const onLawnHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.exercise.x, me.y - GROUNDS.exercise.y) <= GROUNDS.exercise.r;
+function doExercise(move) {
+  target = null;
+  sendMove(true);
+  send({ t: 'ex', move });
+}
+
+// poops left in the bushes: they sit there a while, then the grass takes them back
+const bushPoops = [];
+const BUSH_POOP_S = 45;
+function dropInBush(m) {
+  const e = users.get(m.id);
+  const turn = e ? e.turn : 0;
+  // just behind where they squat
+  const x = toX(m.x) - Math.sin(turn) * 0.12;
+  const z = toZ(m.y) - Math.cos(turn) * 0.12;
+  const p = pixelSprite(m.gold ? PROPS.goldPoop : PROPS.poop, m.gold ? 0.04 : 0.03);
+  p.position.set(x, 0.01, z);
+  p.material.transparent = true;
+  fxRoot.add(p);
+  bushPoops.push({ p, age: 0 });
+  if (bushPoops.length > 40) fxRoot.remove(bushPoops.shift().p);
+  const byMe = m.id === meId;
+  pop(new THREE.Vector3(x, 0.9, z), m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `뿌직! 오늘 ${m.n}번째` : '뿌직');
+  if (m.gold) sparkle(new THREE.Vector3(x, 0.3, z));
+}
+function updateBushPoops(dt) {
+  for (let k = bushPoops.length - 1; k >= 0; k--) {
+    const b = bushPoops[k];
+    b.age += dt;
+    b.p.material.opacity = Math.min(1, (BUSH_POOP_S - b.age) / 3);
+    if (b.age >= BUSH_POOP_S) {
+      fxRoot.remove(b.p);
+      bushPoops.splice(k, 1);
+    }
+  }
+}
+
+function onSignal(m) {
+  const h = headOf(m.id);
+  if (h) pop(h.clone(), '신호가 왔다!');
+  if (m.id === meId) {
+    toast('신호가 왔다! 화장실로 가 볼까요?');
+    buzz([40, 60, 40]);
+  }
 }
 
 // ---------- the name of the place you're in, shown for a moment when you walk into it ----------
@@ -2618,7 +2695,7 @@ function miniBtn(ico, label, onClick) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'act mini';
-  b.innerHTML = `${icoImg(ico)}<span>${label}</span>`;
+  b.innerHTML = `${ico ? icoImg(ico) : ''}<span>${label}</span>`;
   b.addEventListener('click', onClick);
   return b;
 }
@@ -3120,7 +3197,7 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'Space') {
     e.preventDefault();
     spaceHeld = true;
-    if (me.s !== -1) {
+    if (me.s !== -1 || me.q) {
       if (!e.repeat) setHold(true);
       return;
     }
@@ -3132,6 +3209,10 @@ window.addEventListener('keydown', (e) => {
     }
     if (nearSink()) {
       if (!e.repeat) washHands();
+      return;
+    }
+    if (inBushHere()) {
+      if (!e.repeat) send({ t: 'squat', on: true });
       return;
     }
     const bench = nearBench();
@@ -3172,6 +3253,10 @@ window.addEventListener('keydown', (e) => {
     manualCamAt = performance.now();
   } else if (e.key === 'Escape') {
     if (me.s !== -1) exitStall();
+    else if (me.q) {
+      setHold(false);
+      send({ t: 'squat', on: false });
+    }
   } else if (e.key === 'Enter') {
     e.preventDefault();
     openChat();

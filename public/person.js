@@ -238,7 +238,8 @@ function followLegs(p) {
   }
 }
 
-// mode: 'stand' | 'walk' | 'sit' | 'wash' | 'roll' | 'jump'
+// mode: 'stand' | 'walk' | 'sit' | 'wash' | 'roll' | 'jump' | 'squat' (in the bushes)
+//       and the 쾌변 체조 moves: 'rub' (belly rub) | 'deep' (deep squats) | 'hug' (hugging the knees) | 'twist' (waist twists)
 export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed = 0 }) {
   const { parts: P, rest } = p;
   if (!P.hips) return;
@@ -281,6 +282,56 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
       P.head.rotation.x = 0.12;
       P.torso.scale.y = 0.97;
     }
+  } else if (mode === 'squat') {
+    // squatting low in the bushes: bottom near the ground, knees out, hands on the knees
+    P.hips.position.y -= 0.12;
+    P.leg_L.rotation.set(-1.35, 0, 0.45);
+    P.leg_R.rotation.set(-1.35, 0, -0.45);
+    P.torso.rotation.x = 0.22;
+    P.arm_L.rotation.set(-0.9, 0, -0.2);
+    P.arm_R.rotation.set(-0.9, 0, 0.2);
+    P.head.rotation.z = Math.sin(t * 0.8 + seed) * 0.06; // glancing about
+    if (strain) {
+      const j = Math.sin(t * 60) * 0.02;
+      P.arm_L.rotation.set(-1.0, 0, -0.35);
+      P.arm_R.rotation.set(-1.0, 0, 0.35);
+      P.torso.rotation.x = 0.3 + j;
+      P.head.rotation.set(0.15, 0, 0);
+    }
+  } else if (mode === 'rub') {
+    // rubbing the belly round and round, clockwise, looking down at it
+    const a = t * 5;
+    P.arm_R.rotation.set(-0.75 + Math.sin(a) * 0.2, 0, 0.8 + Math.cos(a) * 0.2);
+    P.arm_L.rotation.set(-0.4, 0, -0.5);
+    P.head.rotation.x = 0.3;
+    P.torso.rotation.y = Math.sin(a) * 0.06;
+    P.torso.scale.y = 1 + breathe;
+  } else if (mode === 'deep') {
+    // deep squats: down and up, arms out in front for balance
+    const k = (1 - Math.cos(t * 3.2)) / 2; // 0 standing, 1 all the way down
+    P.hips.position.y -= 0.12 * k;
+    P.leg_L.rotation.set(-1.35 * k, 0, 0.35 * k);
+    P.leg_R.rotation.set(-1.35 * k, 0, -0.35 * k);
+    P.arm_L.rotation.x = -1.45 * k;
+    P.arm_R.rotation.x = -1.45 * k;
+    P.torso.rotation.x = 0.15 * k;
+  } else if (mode === 'hug') {
+    // sitting on the ground hugging the knees, rocking back and forth
+    const rock = Math.sin(t * 2.6) * 0.12;
+    P.hips.position.y -= 0.13;
+    P.leg_L.rotation.set(-2.0, 0, 0.12);
+    P.leg_R.rotation.set(-2.0, 0, -0.12);
+    P.torso.rotation.x = 0.3 + rock;
+    P.arm_L.rotation.set(-1.25, 0, -0.45);
+    P.arm_R.rotation.set(-1.25, 0, 0.45);
+    P.head.rotation.x = 0.1;
+  } else if (mode === 'twist') {
+    // arms out to the sides, twisting at the waist
+    const s = Math.sin(t * 3.4);
+    P.torso.rotation.y = s * 0.65;
+    P.arm_L.rotation.z = 1.35;
+    P.arm_R.rotation.z = -1.35;
+    P.head.rotation.y = -s * 0.3;
   } else if (mode === 'wash') {
     P.arm_L.rotation.x = -1.25 + Math.sin(t * 14) * 0.08;
     P.arm_R.rotation.x = -1.25 - Math.sin(t * 14) * 0.08;

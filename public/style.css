@@ -231,7 +231,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   z-index: 20;
 }
 
-.actions { display: flex; gap: 6px; justify-content: center; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 
 .act {
   display: flex;

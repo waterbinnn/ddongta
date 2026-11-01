@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { createWish } = require('./lib/wish');
-const { LAYOUT: GROUNDS, settle } = require('./lib/layout');
+const { LAYOUT: GROUNDS, settle, inBush, onLawn } = require('./lib/layout');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -133,10 +133,17 @@ function openRoom(theme) {
 }
 for (const theme of OPEN_THEMES) for (let k = 0; k < SERVERS_PER_THEME; k++) openRoom(theme);
 const isFull = (room) => room.users.size >= ROOM_CAP;
+// 쾌변 체조: free moves on the exercise lawn; a few of them and 「신호가 왔다!」
+const EX_MOVES = ['rub', 'deep', 'hug', 'twist'];
+const EX_MS = 2600;
+const EX_FOR_SIGNAL = 3;
+
 function sit(room, user, i) {
   room.stalls[i] = user;
   user.stall = i;
   user.bench = false;
+  user.squat = false;
+  user.ex = '';
   user.holding = false;
   room.meta[i].hp = DOOR_HP;
   room.dirty = true;
@@ -200,6 +207,7 @@ function snapshot(room) {
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
       r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
+      q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0,
     })),
   });
 }
@@ -230,17 +238,28 @@ setInterval(() => {
         u.pantsUntil = 0;
         room.dirty = true;
       }
-      if (!u.holding || u.stall === -1) continue;
+      if (u.ex && u.exUntil <= now) {
+        u.ex = '';
+        room.dirty = true;
+      }
+      if (!u.holding || (u.stall === -1 && !u.squat)) continue;
       u.progress += PUSH_PER_TICK;
       room.dirty = true;
       if (u.progress >= 100) {
         u.progress = 0;
         u.count++;
         countPoop();
-        const m = room.meta[u.stall];
-        m.pile++; // every stall keeps its own poop tower
         const gold = Math.random() < GOLD_CHANCE;
-        broadcast(room, { t: 'poop', id: u.id, n: u.count, stall: u.stall, pile: m.pile, ...(gold && { gold: 1 }) });
+        if (u.stall !== -1) {
+          const m = room.meta[u.stall];
+          m.pile++; // every stall keeps its own poop tower
+          broadcast(room, { t: 'poop', id: u.id, n: u.count, stall: u.stall, pile: m.pile, ...(gold && { gold: 1 }) });
+        } else {
+          // squatting in the bushes: it lands right there, and the grass takes it back after a while
+          broadcast(room, { t: 'poop', id: u.id, n: u.count, bush: 1, x: Math.round(u.x), y: Math.round(u.y), ...(gold && { gold: 1 }) });
+        }
+        u.signal = false; // the signal has been answered
+        u.exCount = 0;
         if (gold) wish.gild(); // a golden poop puts a little gold back on the wish page's poop
       }
     }
@@ -328,6 +347,12 @@ wss.on('connection', (ws, req) => {
     bench: false,
     roll: null,
     pantsUntil: 0,
+    squat: false, // squatting in the bushes
+    ex: '', // the exercise move being done, until exUntil
+    exUntil: 0,
+    exCount: 0,
+    lastEx: 0,
+    signal: false, // 「신호가 왔다!」 after a few moves, until the next poop
   };
   room.users.add(user);
   room.dirty = true;
@@ -359,6 +384,11 @@ wss.on('connection', (ws, req) => {
       settle(user);
       user.dir = m.d === -1 ? -1 : 1;
       user.bench = false; // moving gets you up off the bench
+      user.ex = '';
+      if (user.squat) {
+        user.squat = false; // and up out of a squat
+        user.holding = false;
+      }
       room.dirty = true;
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
       if (!validStall || room.stalls[i] || !nearStall(i)) return;
@@ -405,8 +435,28 @@ wss.on('connection', (ws, req) => {
       room.dirty = true;
       broadcast(room, { t: 'flush', id: user.id, stall: user.stall });
     } else if (m.t === 'hold') {
-      user.holding = Boolean(m.on) && user.stall !== -1;
+      user.holding = Boolean(m.on) && (user.stall !== -1 || user.squat);
       room.dirty = true;
+    } else if (m.t === 'squat' && user.stall === -1 && !user.roll) {
+      // only in the bushes; there's no squatting on the plaza
+      user.squat = Boolean(m.on) && inBush(user);
+      if (!user.squat) user.holding = false;
+      user.bench = false;
+      user.ex = '';
+      room.dirty = true;
+    } else if (m.t === 'ex' && user.stall === -1 && !user.roll && !user.squat && EX_MOVES.includes(m.move)) {
+      const now = Date.now();
+      if (!onLawn(user) || now - user.lastEx < 1200) return;
+      user.lastEx = now;
+      user.ex = m.move;
+      user.exUntil = now + EX_MS;
+      user.bench = false;
+      user.exCount++;
+      room.dirty = true;
+      if (user.exCount >= EX_FOR_SIGNAL && !user.signal) {
+        user.signal = true;
+        broadcast(room, { t: 'signal', id: user.id });
+      }
     } else if (m.t === 'chat') {
       const now = Date.now();
       if (now - user.lastChat < CHAT_GAP_MS) return;

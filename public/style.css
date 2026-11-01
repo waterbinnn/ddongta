@@ -130,12 +130,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .toast.out { opacity: 0; }
 .badge[hidden], .toast[hidden] { display: none; }
 
-/* the pocket: the drinks you carry, tap one to drink it */
-.status .pocket { gap: 2px; pointer-events: auto; }
-.status .pocket[hidden], .status .pocket-sep[hidden] { display: none; }
-.pocket button { width: 26px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
-.pocket img { width: 26px; height: 26px; display: block; }
-
 /* the beanstalk's height, pinned under it */
 .bean-label {
   position: fixed;

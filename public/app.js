@@ -37,12 +37,12 @@ const INK = '#2a1f2b';
 const OG = new URLSearchParams(location.search).has('og'); // ?og renders the link-preview frame
 
 const PAL = {
-  // calm natural materials, like a bathhouse: warm grey stone tiles, wooden doors, linen-white partitions, white bowls
+  // sky blue and white: sky-blue tiled walls and doors, ivory stall partitions, a cream-and-butter tiled floor, white bowls
   sky: '#f2d98a', band: '#4aa6dc', bandGlow: '#000000',
   tileA: '#d8d2c6', tileLine: '#c2bbad',
   floorA: '#cfc8ba', floorB: '#d8d2c6', floorLine: '#bcb4a5',
-  door: '#a88866', doorDark: '#86684b', doorLight: '#bb9d7a', number: '#f6efe2',
-  part: '#ebe6dc', partTop: '#f3efe7', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000', porcelain: '#fbfbfb',
+  door: '#5bb4e5', doorDark: '#3f98cc', doorLight: '#7cc6ee', number: '#ffffff',
+  part: '#f6f1e4', partTop: '#ffffff', partGlow: '#000000', rail: '#b9bec5', railGlow: '#000000', porcelain: '#fbfbfb',
   hemi: ['#fffaf0', '#d8dde6', 1.3], moon: ['#fff6e6', 1.25],
   lamps: ['#fff3dc'], lampPower: 3.5,
   water: ['#8fd0ec', '#1d4a5e'], bench: '#c9965e', stone: '#ffffff',
@@ -323,15 +323,15 @@ function drawDoorCanvas(c, n, crack) {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.drawImage(doorWood, 0, 0, c.width, c.height);
   g.setTransform(c.width / 20, 0, 0, c.height / 13, 0, 0);
-  g.strokeStyle = 'rgba(80, 58, 38, 0.55)';
+  g.strokeStyle = 'rgba(30, 90, 140, 0.55)';
   g.lineWidth = 0.25;
   g.strokeRect(0.4, 0.4, 19.2, 12.2);
   g.strokeRect(3, 7.5, 14, 4.2); // the lower panel
-  g.fillStyle = '#3e3328'; // the number plate
+  g.fillStyle = '#ffffff'; // the number plate
   g.beginPath();
   g.roundRect(7.2, 1.6, 5.6, 4, 0.6);
   g.fill();
-  g.fillStyle = '#efe6d4';
+  g.fillStyle = '#2f7fb8';
   g.font = 'bold 3.2px -apple-system, "Apple SD Gothic Neo", sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -420,6 +420,7 @@ const benchSeats = []; // the chairs round each table
 
 function buildRoom() {
   worldRoot.clear();
+  vendings.length = 0;
   lamps.clear();
   const { ground } = buildGrounds({
     L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, M, wishHits, vendingMachine, planter,
@@ -816,7 +817,7 @@ function withJosa(word, withFinal, without) {
   return word + (hasFinal ? withFinal : without);
 }
 
-// the drinks, as the vending machine and the pocket show them
+// the drinks, as the vending machines show them and as they're held in the hand
 const DRINK = {
   banana: { name: '바나나우유', sip: '쪼옥', color: '#f6d64a', cap: '#f7f3e6', shape: 'bottle' },
   latte: { name: '연유라떼', sip: '후루룩', color: '#c49a6c', cap: '#f3ece0', shape: 'cup' },
@@ -870,12 +871,10 @@ function drawDrink(g, kind, x, y, s) {
   }
   g.restore();
 }
-const drinkIcons = {};
-const drinkIcon = (kind) => (drinkIcons[kind] ??= canvas(32, 32, (g) => drawDrink(g, kind, 16, 15, 1.5)).toDataURL());
 
 // the vending machine on the terrace: a lit window of drinks, a little screen counting today's kicks, a pick-up slot.
 // Kicked, it shakes.
-let vending = null;
+const vendings = [];
 function vendingMachine(x, z, rotY, color) {
   const front = canvas(256, 512, (g) => {
     g.fillStyle = color;
@@ -943,7 +942,7 @@ function vendingMachine(x, z, rotY, color) {
   group.add(screenMesh);
   worldRoot.add(group);
   let shown = -1;
-  vending = {
+  const vending = {
     group,
     shake: 0,
     setKicks(n) {
@@ -965,6 +964,7 @@ function vendingMachine(x, z, rotY, color) {
     },
   };
   vending.setKicks(kicksToday);
+  vendings.push(vending);
 }
 
 // chunky low-poly leaves for the trees outside
@@ -1371,8 +1371,6 @@ function handle(m) {
     if (m.id === meId) toast('소원을 빌었어요');
   } else if (m.t === 'kick') {
     onKick(m);
-  } else if (m.t === 'order') {
-    onOrder(m);
   } else if (m.t === 'drink') {
     onDrink(m);
   } else if (m.t === 'stuck') {
@@ -1402,7 +1400,7 @@ function applyState(st) {
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
   if (st.kicks !== undefined && st.kicks !== kicksToday) {
     kicksToday = st.kicks;
-    vending?.setKicks(kicksToday);
+    for (const v of vendings) v.setKicks(kicksToday);
   }
   if (st.bean !== undefined && performance.now() > beanHoldUntil && st.bean !== beanTotal) {
     beanTotal = st.bean;
@@ -1451,10 +1449,7 @@ function applyState(st) {
       me.q = Boolean(u.q);
       me.pl = u.pl || 0;
       me.cn = Boolean(u.cn);
-      if (JSON.stringify(u.pk || []) !== JSON.stringify(me.pk || [])) {
-        me.pk = u.pk || [];
-        renderPocket();
-      }
+      me.pk = u.pk || [];
       if (u.r) {
         me.x = u.x;
         me.y = u.y;
@@ -1960,6 +1955,7 @@ function placeWalkers(dt, t) {
       const sink = nearestSink(e.rx, e.ry);
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = benchFacing(e.rx, e.ry);
+    else if (move === 'drink') want = cam.yaw;
     else if (move === 'rub' || move === 'pray') want = Math.atan2(GROUNDS.wish.x - e.rx, GROUNDS.wish.y - e.ry); // facing the golden poop
     else if (move) want = cam.yaw + Math.PI / 2; // exercising: side on to the camera, so the moves show
     else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
@@ -1978,6 +1974,7 @@ function placeWalkers(dt, t) {
     placeCup(e, u, X, Z);
     if (benched) {
       pose(p, { mode: 'sit', t: sec, seed: id });
+      handFor(p, id, u, false); // at the table the drink stands in front of you, as a cup
       p.group.position.set(X, BENCH_TOP - HIP_Y + lift, Z);
       overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob + towerHeight(u.pl));
       continue;
@@ -1992,6 +1989,7 @@ function placeWalkers(dt, t) {
       e.exStart = sec;
     }
     pose(p, { mode, phase: e.phase, t: mode === 'kick' ? e.kickT : move ? sec - e.exStart : sec, seed: id, strain: squatting && Boolean(u.h) });
+    handFor(p, id, u, true);
     if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
     overHead(e.marker, X, lift, Z, HEIGHT + 0.22 + bob + towerHeight(u.pl));
@@ -2055,6 +2053,7 @@ function syncRoom(t, dt) {
       pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
       g.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
     }
+    handFor(roomPerson, meId, u, !washing);
   }
 }
 
@@ -2109,6 +2108,7 @@ function animateStalls(dt, t) {
         syncUnder(s.person, occId, Boolean(u.un), false);
         setFace(s.person, face);
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
+        handFor(s.person, occId, u, true);
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
       }
       s.marker.position.y = (s.private ? 2.55 : 1.6 + towerHeight(occ.data.pl)) + (Math.floor(t / 300) % 2) * 0.04;
@@ -2765,9 +2765,9 @@ function frame(t) {
   updateCamera(dt);
   clouds.rotation.y += dt * 0.004; // clouds drift slowly round
   bean?.update(dt);
-  if (vending) {
-    vending.shake = Math.max(0, vending.shake - dt);
-    vending.group.rotation.z = vending.shake > 0 ? Math.sin(t / 25) * 0.04 * (vending.shake / 0.35) : 0;
+  for (const v of vendings) {
+    v.shake = Math.max(0, v.shake - dt);
+    v.group.rotation.z = v.shake > 0 ? Math.sin(t / 25) * 0.04 * (v.shake / 0.35) : 0;
   }
   renderer.render(scene, camera);
   updateLabels(dt);
@@ -2789,7 +2789,7 @@ function renderActions() {
   const bench = out && !me.b ? nearBench() : -1;
   const anyFree = stalls.some((_, i) => freeFor(i));
   const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
-    : nearVendingHere() ? 'vend' : nearCartHere() ? 'cafe' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
+    : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
   const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
@@ -2814,7 +2814,7 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
-    if (me.cn && (me.pk || []).length) bar.append(mainBtn('wash', `${DRINK[me.pk[0]].name} 마시기`, () => drinkNow(0), 'drink'));
+    if ((me.pk || []).length) bar.append(mainBtn('wash', '쾌변음료 마시기', drinkNow, 'drink'));
     if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
     else {
       if (inRoom) bar.append(miniBtn('bench', '일어나기', () => { setHold(false); roomStanding = true; }));
@@ -2843,8 +2843,6 @@ function renderActions() {
     bar.append(mainBtn('find', '문지르기', () => send({ t: 'rub' })), miniBtn(null, '합장하기', () => send({ t: 'pray' })));
   } else if (mode === 'vend') {
     bar.append(mainBtn('knock', '자판기 차기', () => send({ t: 'kick' })));
-  } else if (mode === 'cafe') {
-    bar.append(mainBtn('wash', '커피 주문', () => send({ t: 'order' })));
   } else if (mode === 'bean') {
     bar.append(mainBtn('sprout', `비료로 뿌리기 · ${me.pl}개`, fertilize));
   } else if (mode === 'bush') {
@@ -2867,6 +2865,7 @@ function renderActions() {
       if (i >= 0) walkToStall(i);
     }));
   }
+  if ((me.pk || []).length && !['inside', 'rolling', 'squatting'].includes(mode)) bar.append(miniBtn('wash', '쾌변음료 마시기', drinkNow)); // a drink in hand
   if (!['inside', 'standing', 'rolling', 'squatting'].includes(mode)) {
     const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
     go.dataset.move = '1';
@@ -2875,39 +2874,24 @@ function renderActions() {
   else setMoveMenu(false);
 }
 
-// ---------- the vending machine, the café, the pocket and 변비 ----------
+// ---------- the vending machines, the drink in your hand, and 변비 ----------
 
 const nearWishHere = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.wish.x, me.y - GROUNDS.wish.y) <= GROUNDS.wishRange;
-const nearVendingHere = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.terrace.vending.x, me.y - GROUNDS.terrace.vending.y) <= GROUNDS.vendRange;
-const nearCartHere = () => Boolean(GROUNDS) && me.s === -1 && Math.hypot(me.x - GROUNDS.terrace.cart.x, me.y - GROUNDS.terrace.cart.y) <= GROUNDS.cartRange;
+const nearVendingHere = () => Boolean(GROUNDS) && me.s === -1 && GROUNDS.terrace.vendings.some((v) => Math.hypot(me.x - v.x, me.y - v.y) <= GROUNDS.vendRange);
 
-// the drinks I carry, in the top bar: tap one to drink it
-function renderPocket() {
-  const el = $('#pocket');
-  const pk = me.pk || [];
-  el.hidden = !pk.length;
-  document.querySelector('.pocket-sep').hidden = !pk.length;
-  el.innerHTML = '';
-  pk.forEach((kind, k) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.title = `${DRINK[kind].name} 마시기`;
-    b.innerHTML = `<img src="${drinkIcon(kind)}" alt="${DRINK[kind].name}">`;
-    b.addEventListener('click', () => drinkNow(k));
-    el.append(b);
-  });
-}
-function drinkNow(k) {
+function drinkNow() {
   if (!(me.pk || []).length) {
-    toast('주머니에 음료가 없어요. 자판기에 다녀올까요?');
+    toast('손에 음료가 없어요. 자판기를 차러 가 볼까요?');
     return;
   }
-  send({ t: 'drink', k });
+  setHold(false);
+  send({ t: 'drink', k: 0 });
 }
 
 function onKick(m) {
   const e = users.get(m.id);
   if (e) e.kickT = 0.001;
+  const vending = vendings[m.v] || vendings[0];
   if (vending) vending.shake = 0.35;
   const at = vending ? vending.slot() : null;
   const byMe = m.id === meId;
@@ -2917,18 +2901,52 @@ function onKick(m) {
   if (at) pop(at.clone().add(new THREE.Vector3(0, 0.6, 0)), DRINK[m.drink].name);
   if (byMe) {
     plop(0.6);
-    toast(m.kept ? `${withJosa(DRINK[m.drink].name, '이', '가')} 나왔어요! 주머니에 넣었어요` : '음료가 나왔는데 주머니가 꽉 찼어요 (3개까지)');
+    toast(m.kept ? `${withJosa(DRINK[m.drink].name, '이', '가')} 나왔어요!` : '음료가 나왔는데 손에 이미 하나 들고 있어요');
     if (m.drink === 'gold') playDing();
   }
 }
 
-function onOrder(m) {
-  const h = headOf(m.id);
-  if (h) pop(h.clone(), `${DRINK[m.drink].name} 한 잔`);
-  if (m.id === meId) toast(`${DRINK[m.drink].name} 나왔습니다. 주머니에 넣었어요`);
+// the drink in someone's hand: a little bottle or cup held in the right hand
+const drinking = new Map(); // person id -> { until, kind }: tipping it back right now
+const drinkingNow = (id) => {
+  const d = drinking.get(id);
+  return d && d.until > performance.now() ? d.kind : '';
+};
+function syncHand(p, kind) {
+  if (!p.parts.hand_R) return;
+  if (p.handKind !== kind) {
+    if (p.hand) p.parts.hand_R.remove(p.hand);
+    p.hand = null;
+    p.handKind = kind;
+    if (kind) {
+      const d = DRINK[kind];
+      const g = new THREE.Group();
+      const shape = d.shape === 'cup' ? new THREE.CylinderGeometry(0.035, 0.028, 0.1, 12) : d.shape === 'small' ? new THREE.CylinderGeometry(0.022, 0.022, 0.07, 10) : new THREE.CylinderGeometry(0.028, 0.03, 0.11, 12);
+      const body = mesh(shape, mat(d.color), { cast: true });
+      const cap = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 10), mat(d.cap));
+      cap.position.y = 0.06;
+      g.add(body, cap);
+      g.scale.setScalar(1.6); // big enough to read on a chibi hand
+      g.position.set(0, -0.06, 0.06);
+      p.parts.hand_R.add(g);
+      p.hand = g;
+    }
+  }
+}
+// tipping it back: the hand up at the mouth, the head back
+function drinkPose(p) {
+  p.parts.arm_R?.rotation.set(-1.85, 0, 0.8); // forward, up and in, to the mouth
+  p.parts.head?.rotation.set(-0.35, 0, 0);
+}
+// what someone holds and whether they're drinking it, after their pose for this frame
+function handFor(p, id, u, free) {
+  const now = drinkingNow(id);
+  syncHand(p, now || (free ? (u.pk || [])[0] || '' : ''));
+  if (now) drinkPose(p);
 }
 
 function onDrink(m) {
+  drinking.set(m.id, { until: performance.now() + 1600, kind: m.drink });
   const h = headOf(m.id);
   const inside = m.id === meId && inRoom;
   if (h) pop(h.clone(), DRINK[m.drink].sip, inside);
@@ -2946,11 +2964,11 @@ function onStuck(m) {
   const h = headOf(m.id);
   if (m.id === meId) {
     buzz([60, 40, 60]);
-    toast((me.pk || []).length ? '변비에 걸렸어요! 음료를 마셔 볼까요?' : '변비에 걸렸어요! 주머니에 음료가 없어요. 자판기에 다녀올까요?');
+    toast((me.pk || []).length ? '변비에 걸렸어요! 쾌변음료를 마셔 볼까요?' : '변비에 걸렸어요! 손에 음료가 없어요. 자판기를 차러 가 볼까요?');
   } else if (h) pop(h.clone(), '끄으응…');
 }
 
-// a cup on the table in front of you when you sit at the terrace with a drink in your pocket
+// a cup on the table in front of you when you sit at the terrace with a drink in hand
 function placeCup(e, u, X, Z) {
   const want = u.b && (u.pk || []).length ? u.pk[0] : '';
   if (!want) {

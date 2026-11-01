@@ -6,7 +6,7 @@ import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
 import {
   leafTexture, grassTuftTexture, stoneTexture, cardsGeometry, stoneGeometry, crownGeometry,
-  wallTileTexture, floorSlabTexture, plasterTexture, timberTexture, roofTexture,
+  wallTileTexture, floorSlabTexture, plasterTexture, brickTexture,
 } from './nature.js';
 const rep = (t, x, y) => {
   t.repeat.set(x, y);
@@ -167,103 +167,27 @@ export function buildGrounds(kit) {
     bulbs.setMatrixAt(k, new THREE.Matrix4().makeTranslation(lx0 + (lx1 - lx0) * t, 2.6 - 0.6 * Math.sin(Math.PI * t), lz));
   }
   root.add(bulbs);
-  // the café: a little wooden kiosk facing the terrace, with a striped awning, a counter, a menu board and an espresso machine
+  // two vending machines, facing the middle of the terrace
   {
-    const [x, z] = P(L.terrace.cart);
     const [tx, tz] = P(L.terrace);
-    const k = new THREE.Group();
-    k.position.set(x, 0, z);
-    k.rotation.y = Math.atan2(tx - x, tz - z); // its counter (+z) toward the tables
-    const wood = mat('#c4a07a'); // light oak boards
-    const darkWood = mat('#6b5038');
-    const part = (w, h, d, material, px, py, pz) => {
-      const m = mesh(new THREE.BoxGeometry(w, h, d), material, { cast: true, receive: true });
-      m.position.set(px, py, pz);
-      k.add(m);
-      return m;
-    };
-    part(2.1, 1.05, 0.7, wood, 0, 0.525, 0.2);             // the counter
-    part(2.2, 0.06, 0.8, darkWood, 0, 1.08, 0.22);          // its top
-    part(2.1, 2.5, 0.12, wood, 0, 1.25, -0.55);            // the back wall
-    for (const sx of [-1.02, 1.02]) part(0.1, 2.5, 1.2, wood, sx, 1.25, -0.05); // side walls
-    part(2.4, 0.08, 1.5, darkWood, 0, 2.54, 0.05);          // the roof
-    // a striped canvas awning sloping out over the counter
-    const stripes = document.createElement('canvas');
-    stripes.width = 256;
-    stripes.height = 64;
-    const sg = stripes.getContext('2d');
-    for (let i = 0; i < 8; i++) {
-      sg.fillStyle = i % 2 ? '#f3ecdc' : '#8fae8c';
-      sg.fillRect(i * 32, 0, 32, 64);
-    }
-    const awnTex = new THREE.CanvasTexture(stripes);
-    awnTex.colorSpace = THREE.SRGBColorSpace;
-    const awning = mesh(new THREE.PlaneGeometry(2.4, 0.8), new THREE.MeshLambertMaterial({ map: awnTex, side: THREE.DoubleSide }), { cast: true });
-    awning.position.set(0, 2.3, 0.85);
-    awning.rotation.x = -Math.PI / 2 + 0.55;
-    k.add(awning);
-    // the menu board on the back wall
-    const menu = document.createElement('canvas');
-    menu.width = 256;
-    menu.height = 160;
-    const mg = menu.getContext('2d');
-    mg.fillStyle = '#2f3330';
-    mg.fillRect(0, 0, 256, 160);
-    mg.strokeStyle = '#a98a68';
-    mg.lineWidth = 8;
-    mg.strokeRect(4, 4, 248, 152);
-    mg.fillStyle = '#f2ede2';
-    mg.font = 'bold 26px -apple-system, "Apple SD Gothic Neo", sans-serif';
-    mg.textAlign = 'center';
-    mg.fillText('똥타 커피', 128, 38);
-    mg.font = '18px -apple-system, "Apple SD Gothic Neo", sans-serif';
-    mg.textAlign = 'left';
-    ['아이스 아메리카노', '연유라떼', '바나나우유'].forEach((t, i) => mg.fillText(`· ${t}`, 30, 74 + i * 28));
-    const menuTex = new THREE.CanvasTexture(menu);
-    menuTex.colorSpace = THREE.SRGBColorSpace;
-    const board = mesh(new THREE.PlaneGeometry(1.1, 0.7), new THREE.MeshLambertMaterial({ map: menuTex }));
-    board.position.set(0, 1.85, -0.48);
-    k.add(board);
-    // an espresso machine, a stack of cups, a little plant
-    part(0.5, 0.36, 0.34, new THREE.MeshPhongMaterial({ color: '#c9ced3', shininess: 90 }), -0.55, 1.29, -0.05);
-    part(0.42, 0.06, 0.3, metal, -0.55, 1.14, 0.05);
-    for (let i = 0; i < 4; i++) {
-      const cup = mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.1, 12), white);
-      cup.position.set(0.35, 1.16 + i * 0.09, 0.15);
-      k.add(cup);
-    }
-    const pot = mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.16, 12), mat('#b9886a'));
-    pot.position.set(0.8, 1.19, 0.3);
-    k.add(pot);
-    const leaves = mesh(new THREE.SphereGeometry(0.14, 12, 10), mat('#5f9a4a'));
-    leaves.position.set(0.8, 1.36, 0.3);
-    k.add(leaves);
-    // a small hanging sign under the awning
-    const cs = sign('COFFEE', 0, 0, 0, 0, [0.9, 0.24], { bg: '#f3ecdc', ink: '#4a3a2e', font: 72 });
-    root.remove(cs);
-    cs.position.set(0, 2.62, 0.82);
-    k.add(cs);
-    root.add(k);
-  }
-  // the vending machine, facing the middle of the terrace
-  {
-    const [x, z] = P(L.terrace.vending);
-    const [tx, tz] = P(L.terrace);
-    vendingMachine(x, z, Math.atan2(tx - x, tz - z), '#b8463e', 2);
+    L.terrace.vendings.forEach((v, k) => {
+      const [x, z] = P(v);
+      vendingMachine(x, z, Math.atan2(tx - x, tz - z), k ? '#3f7fb5' : '#b8463e');
+    });
   }
   // the golden poop: a statue on a stone plinth, like the ones in a park. Tap it to go and make a wish
   {
     const [x, z] = P(L.wish);
     const stone = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), 1, 1), color: '#d8d2c6' }); // pale granite
-    const base = mesh(new THREE.BoxGeometry(1.1, 0.2, 1.1), stone, { cast: true, receive: true });
-    base.position.set(x, 0.1, z);
-    const plinth = mesh(new THREE.BoxGeometry(0.85, 0.85, 0.85), stone, { cast: true, receive: true });
-    plinth.position.set(x, 0.62, z);
-    const cap = mesh(new THREE.BoxGeometry(1.0, 0.1, 1.0), stone, { cast: true, receive: true });
-    cap.position.set(x, 1.1, z);
+    const base = mesh(new THREE.BoxGeometry(1.1, 0.12, 1.1), stone, { cast: true, receive: true });
+    base.position.set(x, 0.06, z);
+    const plinth = mesh(new THREE.BoxGeometry(0.85, 0.3, 0.85), stone, { cast: true, receive: true });
+    plinth.position.set(x, 0.27, z);
+    const cap = mesh(new THREE.BoxGeometry(1.0, 0.08, 1.0), stone, { cast: true, receive: true });
+    cap.position.set(x, 0.46, z); // a low plinth: the golden poop sits about at head height
     root.add(base, plinth, cap);
-    const hit = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 1.2), M.hit);
-    hit.position.set(x, 1.6, z);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.9, 1.2), M.hit);
+    hit.position.set(x, 1.0, z);
     hit.userData.wish = true;
     root.add(hit);
     wishHits.push(hit);
@@ -276,7 +200,7 @@ export function buildGrounds(kit) {
         }
       });
       poop.scale.setScalar(0.8);
-      poop.position.set(x, 1.15, z);
+      poop.position.set(x, 0.5, z);
       root.add(poop);
       kit.onSignPoop?.(poop);
     });
@@ -295,8 +219,8 @@ export function buildGrounds(kit) {
     const WH = L.wallH * U; // walls well over head height, so the building towers over you
     block(x1 - x0 + 0.4, WH, 0.2, tile(x1 - x0, WH), (x0 + x1) / 2, WH / 2, z0 - 0.1);    // back wall
     for (const x of [x0, x1]) block(0.2, WH, z1 - z0, tile(z1 - z0, WH), x, WH / 2, (z0 + z1) / 2); // side walls
-    for (const x of [x0, x1]) block(0.34, 0.16, z1 - z0 + 0.1, mat('#bfb7a8'), x, WH + 0.08, (z0 + z1) / 2); // stone copings
-    block(x1 - x0 + 0.5, 0.16, 0.34, mat('#bfb7a8'), (x0 + x1) / 2, WH + 0.08, z0 - 0.1);
+    for (const x of [x0, x1]) block(0.34, 0.16, z1 - z0 + 0.1, mat('#ffffff'), x, WH + 0.08, (z0 + z1) / 2); // white copings
+    block(x1 - x0 + 0.5, 0.16, 0.34, mat('#ffffff'), (x0 + x1) / 2, WH + 0.08, z0 - 0.1);
     // the sink counter along the east wall, with a long mirror above it
     const sc = L.sinkCounter;
     const cx = ((sc.x0 + sc.x1) / 2) * U;
@@ -318,7 +242,7 @@ export function buildGrounds(kit) {
     planter(x0 + 0.8, z1 - 0.6, 1.1, 3, 'snake');
   }
 
-  // ---------- the private restroom: a closed, warmer building; each door opens into a room of its own ----------
+  // ---------- the private restroom: a closed, warmer brick cottage; each door opens into a room of its own ----------
   {
     const p = L.private;
     const x0 = p.x0 * U;
@@ -326,23 +250,21 @@ export function buildGrounds(kit) {
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
     const WH = L.wallH * U;
-    const wall = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), (x1 - x0) / 1.6, WH / 1.6) });
+    const bricks = brickTexture();
+    bricks.repeat.set((x1 - x0) / 0.8, WH / 0.4);
+    const wall = new THREE.MeshLambertMaterial({ map: bricks, color: '#ffe9d6' });
     block(x1 - x0, WH, z1 - z0, wall, (x0 + x1) / 2, WH / 2, (z0 + z1) / 2);
     // a pitched roof, like a cottage: a long triangular prism, eaves hanging over the walls
     const depth = z1 - z0 + 0.9;
-    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), new THREE.MeshLambertMaterial({ map: rep(roofTexture(), 3, 10) }), { cast: true, receive: true }); // dark grey roof tiles
+    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), mat('#c4694a'), { cast: true, receive: true });
     roof.rotation.set(-Math.PI / 2, 0, Math.PI / 2); // lying along the building, one flat face down, the ridge up
     roof.scale.set(1, 1, 0.7);
     add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
-    const timber = new THREE.MeshLambertMaterial({ map: rep(timberTexture(), 1, 2) });
-    block(x1 - x0 + 0.3, 0.32, 0.2, timber, (x0 + x1) / 2, 2.6, z1 + 0.1);                  // a dark timber beam over the doors
-    // timber posts between the doors and at the corners, like a bathhouse front
-    for (let k = 0; k <= 8; k++) block(0.14, 2.6, 0.16, timber, x0 + 0.2 + k * L.stallW * U - 0.01, 1.3, z1 + 0.08);
-    block(x1 - x0 + 0.3, 0.12, 0.22, timber, (x0 + x1) / 2, 0.06, z1 + 0.1); // and a sill along the bottom
+    block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1); // a wooden fascia over the doors
     // little warm lamps between the doors
     const glow = new THREE.MeshBasicMaterial({ color: '#ffe3a6' });
     for (let k = 0; k <= 8; k++) {
-      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.3, z1 + 0.18);
+      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.3, z1 + 0.08);
     }
     planter(x0 - 0.5, z1 + 0.5, 1.1, 5);
     planter(x1 + 0.5, z1 + 0.5, 1.1, 6);

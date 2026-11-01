@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { createWish } = require('./lib/wish');
-const { LAYOUT: GROUNDS, settle, inBush, nearBean, nearVending, nearCart, nearWish, onLawn } = require('./lib/layout');
+const { LAYOUT: GROUNDS, settle, inBush, nearBean, nearVending, nearWish, onLawn } = require('./lib/layout');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -144,11 +144,10 @@ const EX_FOR_SIGNAL = 3;
 
 // 변비 and the drinks that cure it (PLAN.md 4장, 6장)
 const STUCK_CHANCE = Number(process.env.STUCK_CHANCE) || 0.1; // about one poop in ten gets stuck
-const POCKET_MAX = 3;
+const POCKET_MAX = 1; // one drink, held in your hand
 const DRINKS = ['banana', 'latte', 'americano', 'yogurt', 'prune'];
 const KICK_DROP = 0.3; // about one kick in three drops a drink
 const GOLD_CAN = 0.01;
-const ORDER_GAP_MS = 90 * 1000; // the café makes you one coffee every minute and a half
 
 function poopNow(room, u) {
   u.progress = 0;
@@ -382,11 +381,10 @@ wss.on('connection', (ws, req) => {
     signal: false, // 「신호가 왔다!」 after a few moves, until the next poop
     pile: 0, // the poops stacked on your head
     under: false, // a poop under you, where you sit or squat
-    pocket: [], // drinks you carry (up to 3)
+    pocket: [], // the drink in your hand (one at most)
     stuck: false, // 변비: halfway and going nowhere
     checked: false, // whether this poop has already had its chance of getting stuck
     lastKick: 0,
-    lastOrder: 0,
   };
   room.users.add(user);
   room.dirty = true;
@@ -490,7 +488,7 @@ wss.on('connection', (ws, req) => {
       if (!text) return;
       user.lastChat = now;
       broadcast(room, { t: 'wished', id: user.id, text });
-    } else if (m.t === 'kick' && user.stall === -1 && !user.roll && nearVending(user)) {
+    } else if (m.t === 'kick' && user.stall === -1 && !user.roll && nearVending(user) >= 0) {
       // kicking the vending machine: now and then a drink drops out
       const now = Date.now();
       if (now - user.lastKick < 700) return;
@@ -501,27 +499,16 @@ wss.on('connection', (ws, req) => {
       const drink = r < GOLD_CAN ? 'gold' : r < KICK_DROP ? DRINKS[Math.floor(Math.random() * DRINKS.length)] : '';
       const kept = drink ? giveDrink(user, drink) : false;
       for (const rm of rooms) rm.dirty = true; // every machine's screen counts the kicks
-      broadcast(room, { t: 'kick', id: user.id, ...(drink && { drink, kept: kept ? 1 : 0 }) });
-    } else if (m.t === 'order' && user.stall === -1 && !user.roll && nearCart(user)) {
-      // the café: a coffee to take away, now and then
-      const now = Date.now();
-      if (now - user.lastOrder < ORDER_GAP_MS) {
-        send(ws, { t: 'toast', direct: 1, text: '커피는 조금 있다가 다시 주문할 수 있어요' });
-        return;
-      }
-      const drink = Math.random() < 0.5 ? 'americano' : 'latte';
-      if (!giveDrink(user, drink)) {
-        send(ws, { t: 'toast', direct: 1, text: '주머니가 꽉 찼어요 (3개까지)' });
-        return;
-      }
-      user.lastOrder = now;
-      room.dirty = true;
-      broadcast(room, { t: 'order', id: user.id, drink });
+      broadcast(room, { t: 'kick', id: user.id, v: nearVending(user), ...(drink && { drink, kept: kept ? 1 : 0 }) });
     } else if (m.t === 'drink' && user.pocket.length && !user.roll) {
       // drinking: if you're stuck, a gurgle, and a moment later it all comes out
       const k = Number.isInteger(m.k) && m.k >= 0 && m.k < user.pocket.length ? m.k : 0;
       const [drink] = user.pocket.splice(k, 1);
       const wasStuck = user.stuck;
+      if (user.stall === -1 && !user.squat) {
+        user.ex = 'drink'; // the drinking scene: tipping it back
+        user.exUntil = Date.now() + 1600;
+      }
       room.dirty = true;
       broadcast(room, { t: 'drink', id: user.id, drink, cure: wasStuck ? 1 : 0 });
       if (wasStuck) {

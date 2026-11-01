@@ -239,7 +239,7 @@ function followLegs(p) {
 }
 
 // mode: 'stand' | 'walk' | 'sit' | 'wash' | 'pondwash' | 'roll' | 'jump' | 'squat' (in the bushes)
-//       and the 쾌변 체조 moves: 'rub' (belly rub) | 'deep' (deep squats) | 'hug' (hugging the knees) | 'twist' (waist twists)
+//       and the 쾌변 체조 moves: 'bridge' | 'boat' | 'wind' (knees to the chest) | 'escape' (the toilet squat) | 'bow'
 export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed = 0 }) {
   const { parts: P, rest } = p;
   if (!P.hips) return;
@@ -307,40 +307,52 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.arm_L.rotation.set(-1.1 + Math.sin(t * 14) * 0.1, 0, -0.2);
     P.arm_R.rotation.set(-1.1 - Math.sin(t * 14) * 0.1, 0, 0.2);
     P.head.rotation.x = 0.25;
-  } else if (mode === 'rub') {
-    // rubbing the belly round and round, clockwise, looking down at it
-    const a = t * 5;
-    P.arm_R.rotation.set(-0.75 + Math.sin(a) * 0.2, 0, 0.8 + Math.cos(a) * 0.2);
-    P.arm_L.rotation.set(-0.4, 0, -0.5);
+  } else if (mode === 'bridge') {
+    // 엉덩이 조이며 브릿지: lying on the back, lifting the hips and lowering them again
+    const k = (1 - Math.cos(t * 2.4)) / 2; // 0 down, 1 hips up
+    p.spin.rotation.x = -Math.PI / 2 - 0.4 * k;
+    p.spin.position.set(0, 0.12 + 0.3 * k, 0.45);
+    P.leg_L.rotation.set(1.3 * k, 0, 0.12);
+    P.leg_R.rotation.set(1.3 * k, 0, -0.12);
+    P.arm_L.rotation.set(0, 0, 0.2);
+    P.arm_R.rotation.set(0, 0, -0.2);
+  } else if (mode === 'boat') {
+    // 보트 자세: sitting on the bottom, leaning back, legs and arms up in a V, wobbling a little
+    const w = Math.sin(t * 3) * 0.05;
+    P.hips.position.y -= 0.17;
+    P.torso.rotation.x = -0.55 + w;
+    P.leg_L.rotation.set(-2.0 - w, 0, 0.08);
+    P.leg_R.rotation.set(-2.0 - w, 0, -0.08);
+    P.arm_L.rotation.set(-1.5, 0, -0.1);
+    P.arm_R.rotation.set(-1.5, 0, 0.1);
+  } else if (mode === 'wind') {
+    // 바람 빼는 자세: lying on the back hugging the knees to the chest, rocking side to side
+    p.spin.rotation.set(-Math.PI / 2, 0, Math.sin(t * 2.2) * 0.22);
+    p.spin.position.set(0, 0.14, 0.45);
+    P.leg_L.rotation.set(-2.3, 0, 0.1);
+    P.leg_R.rotation.set(-2.3, 0, -0.1);
+    P.arm_L.rotation.set(-1.5, 0, -0.35);
+    P.arm_R.rotation.set(-1.5, 0, 0.35);
     P.head.rotation.x = 0.3;
-    P.torso.rotation.y = Math.sin(a) * 0.06;
-    P.torso.scale.y = 1 + breathe;
-  } else if (mode === 'deep') {
-    // deep squats: down and up, arms out in front for balance
-    const k = (1 - Math.cos(t * 3.2)) / 2; // 0 standing, 1 all the way down
-    P.hips.position.y -= 0.12 * k;
-    P.leg_L.rotation.set(-1.35 * k, 0, 0.35 * k);
-    P.leg_R.rotation.set(-1.35 * k, 0, -0.35 * k);
-    P.arm_L.rotation.x = -1.45 * k;
-    P.arm_R.rotation.x = -1.45 * k;
-    P.torso.rotation.x = 0.15 * k;
-  } else if (mode === 'hug') {
-    // sitting on the ground hugging the knees, rocking back and forth
-    const rock = Math.sin(t * 2.6) * 0.12;
-    P.hips.position.y -= 0.13;
-    P.leg_L.rotation.set(-2.0, 0, 0.12);
-    P.leg_R.rotation.set(-2.0, 0, -0.12);
-    P.torso.rotation.x = 0.3 + rock;
-    P.arm_L.rotation.set(-1.25, 0, -0.45);
-    P.arm_R.rotation.set(-1.25, 0, 0.45);
-    P.head.rotation.x = 0.1;
-  } else if (mode === 'twist') {
-    // arms out to the sides, twisting at the waist
-    const s = Math.sin(t * 3.4);
-    P.torso.rotation.y = s * 0.65;
-    P.arm_L.rotation.z = 1.35;
-    P.arm_R.rotation.z = -1.35;
-    P.head.rotation.y = -s * 0.3;
+  } else if (mode === 'escape') {
+    // 변비 탈출 자세: knees up high, leaning forward, elbows on the knees, breathing slowly
+    P.hips.position.y -= 0.12;
+    P.leg_L.rotation.set(-1.65, 0, 0.3);
+    P.leg_R.rotation.set(-1.65, 0, -0.3);
+    P.torso.rotation.x = 0.55 + Math.sin(t * 1.4) * 0.04;
+    P.arm_L.rotation.set(-0.7, 0, -0.15);
+    P.arm_R.rotation.set(-0.7, 0, 0.15);
+    P.head.rotation.x = -0.2; // looking ahead
+  } else if (mode === 'bow') {
+    // 활 자세: on the belly, reaching back for the ankles, chest and legs up, rocking
+    p.spin.rotation.x = Math.PI / 2 + Math.sin(t * 2.5) * 0.15;
+    p.spin.position.set(0, 0.16, -0.45);
+    P.torso.rotation.x = -0.35;
+    P.head.rotation.x = -0.3;
+    P.leg_L.rotation.set(1.5, 0, 0.1);
+    P.leg_R.rotation.set(1.5, 0, -0.1);
+    P.arm_L.rotation.set(2.5, 0, -0.15);
+    P.arm_R.rotation.set(2.5, 0, 0.15);
   } else if (mode === 'wash') {
     P.arm_L.rotation.x = -1.25 + Math.sin(t * 14) * 0.08;
     P.arm_R.rotation.x = -1.25 - Math.sin(t * 14) * 0.08;

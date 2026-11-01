@@ -48,13 +48,6 @@ export function buildGrounds(kit) {
     m.rotation.x = -Math.PI / 2;
     return add(m, x, y, z);
   };
-  // a straight path from one point to another, any direction
-  const lane = (ax, az, bx, bz, w, material, y = 0.008) => {
-    const len = Math.hypot(bx - ax, bz - az);
-    const m = mesh(new THREE.PlaneGeometry(w, len), material, { receive: true });
-    m.rotation.set(-Math.PI / 2, 0, Math.atan2(bx - ax, bz - az)); // its length lies along a to b
-    return add(m, (ax + bx) / 2, y, (az + bz) / 2);
-  };
   const strip = (x0, z0, x1, z1, material, y = 0.009) => {
     const m = mesh(new THREE.PlaneGeometry(Math.abs(x1 - x0), Math.abs(z1 - z0)), material, { receive: true });
     m.rotation.x = -Math.PI / 2;
@@ -72,7 +65,7 @@ export function buildGrounds(kit) {
     }
   }
   function picketArc(cx, cz, r, a0, a1) {
-    const n = Math.max(2, Math.round(((a1 - a0) * r) / 0.32));
+    const n = Math.max(2, Math.round(((a1 - a0) * r) / 1.1)); // posts a metre or so apart, two rails between
     let prev = null;
     for (let k = 0; k <= n; k++) {
       const a = a0 + ((a1 - a0) * k) / n;
@@ -122,33 +115,16 @@ export function buildGrounds(kit) {
   gg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   gg.setIndex(idx);
   gg.computeVertexNormals();
-  const ground = add(mesh(gg, new THREE.MeshLambertMaterial({ map: pixelTex(tex.grass, true) }), { receive: true }), C, 0, C);
-
-  // ---------- the walking path: a loop round everything, and spokes in from the plaza ----------
-  const dirt = new THREE.MeshLambertMaterial({ color: '#dcc596' });
-  const PR = L.pathR * U;
-  const PW = L.pathW * U;
-  const ring = mesh(new THREE.RingGeometry(PR - PW / 2, PR + PW / 2, 160), dirt, { receive: true });
-  ring.rotation.x = -Math.PI / 2;
-  add(ring, C, 0.006, C);
-  const PZ = L.plazaR * U; // the plaza is grass round the beanstalk; the trails start at its edge
-  const ex = P(L.exercise);
-  const bushIn = (L.center - L.bush.x - L.bush.r) * U; // how far west the bushes start
-  strip(C - 0.75, C + PZ - 0.2, C + 0.75, C + PR - PW / 2, dirt);              // south, to the gate
-  strip(C + PZ - 0.2, ex[1] - 0.75, ex[0] - L.exercise.r * U + 0.3, ex[1] + 0.75, dirt); // east, to the exercise lawn
-  strip(C - bushIn - 0.1, C - 0.75, C - PZ + 0.2, C + 0.75, dirt);              // west, to the bushes
-  // to the café terrace and to the pond, on the diagonals
-  for (const p of [L.terrace, L.pond]) {
-    const [tx, tz] = P(p);
-    const a = Math.atan2(tx - C, tz - C);
-    const r = p === L.terrace ? L.terraceR * U : L.pond.r * U + 0.4;
-    lane(C + Math.sin(a) * (PZ - 0.2), C + Math.cos(a) * (PZ - 0.2), tx - Math.sin(a) * (r - 0.2), tz - Math.cos(a) * (r - 0.2), 1.4, dirt);
-  }
+  const grassMap = new THREE.CanvasTexture(tex.grass);
+  grassMap.colorSpace = THREE.SRGBColorSpace;
+  grassMap.wrapS = grassMap.wrapT = THREE.RepeatWrapping;
+  grassMap.anisotropy = 8;
+  const ground = add(mesh(gg, new THREE.MeshLambertMaterial({ map: grassMap }), { receive: true }), C, 0, C);
 
   // ---------- the café terrace, on the grass: tables, a coffee cart, a vending machine ----------
   const white = mat('#fffaf0');
   const metal = mat('#3b3a36');
-  const shades = ['#9fd8c7', '#ffc2a8', '#ffe28a'];
+  const shades = ['#e6dcc6', '#d8c8a8', '#cbb894']; // linen and khaki parasols
   L.terrace.tables.forEach((t, k) => {
     const [x, z] = P(t);
     add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 28), white, { cast: true, receive: true }), x, 0.74, z);
@@ -191,7 +167,7 @@ export function buildGrounds(kit) {
   // the coffee cart
   {
     const [x, z] = P(L.terrace.cart);
-    block(1.3, 1.0, 0.8, mat('#7cc6b2'), x, 0.6, z);
+    block(1.3, 1.0, 0.8, mat('#8a6b4c'), x, 0.6, z); // a wooden cart
     block(1.5, 0.06, 1.0, white, x, 1.75, z);
     for (const sx of [-0.6, 0.6]) add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.65, 6), white), x + sx, 1.42, z + 0.4);
     for (const sx of [-0.45, 0.45]) {
@@ -294,8 +270,8 @@ export function buildGrounds(kit) {
   {
     const [x, z] = P(L.exercise);
     const r = L.exercise.r * U;
-    disc(r, new THREE.MeshLambertMaterial({ color: '#b9e08a' }), x, z, 0.008, 64);
-    const matColors = ['#ffc2a8', '#9fd8c7', '#ffe28a', '#c9b8f0', '#a9d2ec', '#ffd6e0'];
+    disc(r, new THREE.MeshLambertMaterial({ color: '#8ea66c' }), x, z, 0.008, 64);
+    const matColors = ['#c9b9a0', '#a7b49c', '#c4a58c', '#b6ae9f', '#9fae9b', '#cdbfa6']; // natural cotton and linen
     L.mats.forEach((m, k) => {
       block(m.w * U, 0.03, m.d * U, mat(matColors[k % matColors.length]), m.x * U, 0.02, m.y * U, { receive: true });
     });
@@ -309,14 +285,10 @@ export function buildGrounds(kit) {
   {
     const [bx, bz] = P(L.bush);
     const r = L.bush.r * U;
-    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#94c461' }), bx, bz, 0.004, 48); // under the walking path
-    const onPath = (x, z) => {
-      const d = Math.hypot(x - C, z - C);
-      return d > PR - PW / 2 - 0.4 && d < PR + PW / 2 + 0.4;
-    };
+    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#7d975b' }), bx, bz, 0.004, 48);
     const n = 80;
     const balls = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshLambertMaterial({ color: '#ffffff' }), n); // soft round shrubs
-    const colors = ['#5fae57', '#4b9446', '#7cc26a'];
+    const colors = ['#55704a', '#4b6542', '#617a52'];
     const m4 = new THREE.Matrix4();
     for (let k = 0; k < n; k++) {
       const a = rnd(k + 400) * Math.PI * 2;
@@ -324,14 +296,13 @@ export function buildGrounds(kit) {
       let s = 0.45 + rnd(k + 600) * 0.6;
       const x = bx + Math.cos(a) * d;
       const z = bz + Math.sin(a) * d;
-      if (onPath(x, z)) s = 0; // keep the walking path clear
       m4.compose(new THREE.Vector3(x, s * 0.2, z), new THREE.Quaternion(), new THREE.Vector3(s * 0.65, s * 0.45, s * 0.65)); // about waist high: you hide in it, but still show
       balls.setMatrixAt(k, m4);
       balls.setColorAt(k, new THREE.Color(colors[k % 3]));
     }
     balls.castShadow = true;
     root.add(balls);
-    const blades = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.5, 5), new THREE.MeshLambertMaterial({ color: '#6dbb4f' }), 160);
+    const blades = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.5, 5), new THREE.MeshLambertMaterial({ color: '#6b8a50' }), 160);
     for (let k = 0; k < 160; k++) {
       const a = rnd(k + 700) * Math.PI * 2;
       const d = Math.sqrt(rnd(k + 800)) * r;
@@ -368,11 +339,11 @@ export function buildGrounds(kit) {
   L.trees.forEach((t, n) => treeSpots.push({ x: t.x * U, z: t.y * U, y: 0, s: t.s * 1.5, cedar: false, k: 600 + n }));
   const round = treeSpots.filter((t) => !t.cedar);
   const cedars = treeSpots.filter((t) => t.cedar);
-  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.2, 1, 8), mat('#9a6a44'), treeSpots.length);
+  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.2, 1, 8), mat('#5b4636'), treeSpots.length);
   const crowns = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: '#ffffff' }), round.length * 3);
   const tiers = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 12), new THREE.MeshLambertMaterial({ color: '#ffffff' }), cedars.length * 3);
-  const crownColors = ['#5dbb63', '#4fae5a', '#6cc46c', '#58b55f'];
-  const cedarColors = ['#3f9a62', '#368d58'];
+  const crownColors = ['#56724a', '#4d6943', '#5f7b51', '#506c46'];
+  const cedarColors = ['#3e5a40', '#36503a'];
   const m4 = new THREE.Matrix4();
   const q0 = new THREE.Quaternion();
   const v = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -420,9 +391,9 @@ export function buildGrounds(kit) {
   {
     const [x, z] = P(L.pond);
     const r = L.pond.r * U;
-    disc(r + 0.35, mat('#ead9aa'), x, z, 0.009, 48);
-    disc(r, new THREE.MeshPhongMaterial({ color: '#79c6e6', shininess: 90, specular: '#ffffff', emissive: '#1d4a60', emissiveIntensity: 0.25 }), x, z, 0.02, 48);
-    const pebbles = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#c9c2b2'), 14);
+    disc(r + 0.35, mat('#a39a86'), x, z, 0.009, 48); // a rim of grey stones
+    disc(r, new THREE.MeshPhongMaterial({ color: '#4f7f80', shininess: 90, specular: '#cfe3e0', emissive: '#10292c', emissiveIntensity: 0.3 }), x, z, 0.02, 48);
+    const pebbles = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#8f8a80'), 14);
     for (let k = 0; k < 14; k++) {
       const a = (k / 14) * Math.PI * 2 + rnd(k + 70) * 0.3;
       const sz = 0.14 + rnd(k + 80) * 0.14;
@@ -430,7 +401,7 @@ export function buildGrounds(kit) {
     }
     pebbles.castShadow = true;
     root.add(pebbles);
-    const pad = mat('#6dbb5a');
+    const pad = mat('#5f7d4c');
     for (let k = 0; k < 4; k++) {
       const a = rnd(k + 40) * Math.PI * 2;
       const d = r * (0.3 + rnd(k + 50) * 0.45);
@@ -448,16 +419,16 @@ export function buildGrounds(kit) {
 
   // ---------- build the flowers and fences gathered above ----------
   {
-    const petals = ['#ffffff', '#ff9ec4', '#ffe066', '#ff7a7a', '#c59cf0', '#ffb36b'];
+    const petals = ['#f1eee4', '#e6dfc4', '#cdc5d8', '#ded3b8', '#f1eee4', '#d6cfc0']; // small, pale wild flowers
     const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 10, 6), new THREE.MeshLambertMaterial({ color: '#ffffff' }), flowers.length);
-    const leafs = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.2, 5), mat('#4f9e45'), flowers.length);
+    const leafs = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.2, 5), mat('#5d7a49'), flowers.length);
     flowers.forEach((f, k) => {
-      heads.setMatrixAt(k, m4.compose(v(f.x, 0.2 * f.s, f.z), q0, v(f.s, f.s * 0.6, f.s)));
+      heads.setMatrixAt(k, m4.compose(v(f.x, 0.2 * f.s, f.z), q0, v(f.s * 0.6, f.s * 0.4, f.s * 0.6)));
       heads.setColorAt(k, new THREE.Color(petals[f.c]));
       leafs.setMatrixAt(k, m4.compose(v(f.x, 0.1 * f.s, f.z), q0, v(f.s, f.s, f.s)));
     });
     root.add(heads, leafs);
-    const white = mat('#fbf8f0');
+    const white = mat('#6b5844'); // weathered dark wood, not a white picket fence
     const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.62, 0.05), white, pickets.length);
     pickets.forEach((p, k) => posts.setMatrixAt(k, m4.compose(v(p.x, 0.31, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -p.a, 0)), v(1, 1, 1))));
     const bars = new THREE.InstancedMesh(new THREE.BoxGeometry(0.04, 0.05, 1), white, rails.length * 2);
@@ -471,7 +442,7 @@ export function buildGrounds(kit) {
   }
 
   // mountains far off, blue in the haze, so the place has a horizon round it
-  const peakMat = new THREE.MeshLambertMaterial({ color: '#8fb3c4', flatShading: true });
+  const peakMat = new THREE.MeshLambertMaterial({ color: '#8a9aa3', flatShading: true });
   for (let k = 0; k < 18; k++) {
     const a = (k / 18) * Math.PI * 2 + rnd(k + 800) * 0.25;
     const r = 175 + rnd(k + 810) * 25;
@@ -479,7 +450,7 @@ export function buildGrounds(kit) {
     add(peak, C + Math.cos(a) * r, groundY(r) + 8, C + Math.sin(a) * r);
   }
   // low hills on the far rim, softened by the haze
-  const hillMat = new THREE.MeshLambertMaterial({ color: '#8fbf78', flatShading: true });
+  const hillMat = new THREE.MeshLambertMaterial({ color: '#7d9268', flatShading: true });
   for (let k = 0; k < 14; k++) {
     const a = (k / 14) * Math.PI * 2 + rnd(k + 300) * 0.3;
     const r = 120 + rnd(k + 400) * 30;

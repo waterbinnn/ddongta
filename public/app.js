@@ -293,20 +293,37 @@ const brickCanvas = canvas(16, 8, (g) => {
     }
   }
 });
-const grassCanvas = canvas(16, 16, (g) => {
-  g.fillStyle = '#86c45c';
-  g.fillRect(0, 0, 16, 16);
-  const tufts = ['#94d066', '#79b552', '#9cd872'];
+// natural grass: soft mottled greens and fine blades, drawn smooth (not pixel blocks); 1.6 m per tile
+const grassCanvas = canvas(256, 256, (g) => {
+  g.fillStyle = '#7a9558';
+  g.fillRect(0, 0, 256, 256);
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // big soft patches of lighter and darker green, wrapping round the edges so the tiles don't show
   for (let k = 0; k < 40; k++) {
-    g.fillStyle = tufts[k % 3];
-    g.fillRect((k * 7 + (k >> 2) * 3) % 16, (k * 11 + (k >> 1)) % 16, 1, 1);
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const r = 20 + rand() * 50;
+    const light = rand() < 0.5;
+    for (const [ox, oy] of [[0, 0], [256, 0], [-256, 0], [0, 256], [0, -256]]) {
+      const grad = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      grad.addColorStop(0, light ? 'rgba(150, 170, 105, 0.35)' : 'rgba(80, 100, 60, 0.3)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = grad;
+      g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+    }
   }
-  // little light tufts in a V, like the grass in 동물의 숲
-  g.fillStyle = '#a8de7c';
-  for (const [x, y] of [[3, 4], [11, 11]]) {
-    g.fillRect(x, y, 1, 1);
-    g.fillRect(x + 2, y, 1, 1);
-    g.fillRect(x + 1, y + 1, 1, 1);
+  // fine blades
+  for (let k = 0; k < 2200; k++) {
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const shade = rand();
+    g.strokeStyle = shade < 0.5 ? 'rgba(95, 120, 70, 0.55)' : shade < 0.85 ? 'rgba(140, 160, 100, 0.5)' : 'rgba(170, 180, 125, 0.45)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + (rand() - 0.5) * 3, y - 2 - rand() * 4);
+    g.stroke();
   }
 });
 
@@ -1801,7 +1818,7 @@ function placeWalkers(dt, t) {
       const sink = nearestSink(e.rx, e.ry);
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
     } else if (benched) want = benchFacing(e.rx, e.ry);
-    else if (move) want = cam.yaw; // exercising: face the camera, so the moves show
+    else if (move) want = LYING.has(move) ? cam.yaw + Math.PI / 2 : cam.yaw; // exercising: face the camera (lying down: side on), so the moves show
     else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
@@ -2659,7 +2676,8 @@ function renderActions() {
 
 // ---------- the bushes and the 쾌변 체조 lawn ----------
 
-const EX_MOVES = [['rub', '배 문지르기'], ['deep', '쪼그려 앉기'], ['hug', '무릎 끌어안기'], ['twist', '허리 비틀기']];
+const LYING = new Set(['bridge', 'wind', 'bow']); // moves done lying down
+const EX_MOVES = [['bridge', '엉덩이 브릿지'], ['boat', '보트 자세'], ['wind', '바람 빼기'], ['escape', '변비 탈출'], ['bow', '활 자세']];
 const inBushHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.bush.x, me.y - GROUNDS.bush.y) <= GROUNDS.bush.r;
 const onLawnHere = () => Boolean(GROUNDS) && Math.hypot(me.x - GROUNDS.exercise.x, me.y - GROUNDS.exercise.y) <= GROUNDS.exercise.r;
 function doExercise(move) {
@@ -2690,7 +2708,6 @@ function placeAt(x, y) {
   if (near(L.pond, L.pond.r + 160)) return '연못';
   if (near(L.bush, L.bush.r)) return '풀숲';
   if (near(L.gate, 420)) return '똥타'; // coming in: the name of the place itself
-  if (Math.abs(Math.hypot(x - L.center, y - L.center) - L.pathR) < L.pathW / 2 + 40) return '산책로';
   return '';
 }
 

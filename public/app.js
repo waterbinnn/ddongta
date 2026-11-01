@@ -3268,6 +3268,7 @@ function renderActions() {
     // a round button like 앉기 and 눕기, always out (never folded behind the +)
     const b = miniBtn('drink', '쾌변음료', drinkNow);
     b.classList.add('pose');
+    b.setAttribute('aria-label', '쾌변음료 마시기');
     if (me.pk.length > 1) b.insertAdjacentHTML('beforeend', `<span class="count">${me.pk.length}</span>`); // how many you have
     if (me.cn) b.classList.add('urge'); // stuck: this is the way out
     rail.append(b);
@@ -3284,6 +3285,7 @@ function renderActions() {
     for (const [ico, label, fn] of [['bench', '앉기', sitHere], ['lie', '눕기', lieDown]]) {
       const b = miniBtn(ico, label, fn);
       b.classList.add('pose');
+      b.setAttribute('aria-label', label);
       rail.append(b);
     }
   }

@@ -269,10 +269,13 @@ body:not(.wish-near) .chat { display: none; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .actions .break { flex-basis: 100%; height: 0; } /* starts a new line of buttons */
 @media (max-width: 420px) { .actions .act.mini { padding: 0 11px; gap: 6px; } } /* the three restroom choices fit on one line on a phone */
-/* 앉기 and 눕기: round buttons, the icon over a small word */
-.rail .act.pose { position: relative; flex-direction: column; justify-content: center; gap: 2px; width: 54px; height: 54px; padding: 0; border-radius: 50%; font-size: 11px; }
-.rail .act.pose img { width: 22px; height: auto; }
-.rail .act.pose kbd { position: absolute; top: -4px; right: -4px; }
+/* 앉기, 눕기, 쾌변음료: ordinary side buttons with their key on a computer; round icon buttons on a phone (below) */
+.rail .act.pose { position: relative; }
+@media (hover: none) and (pointer: coarse) {
+  .rail .act.pose { justify-content: center; width: 50px; height: 50px; padding: 0; border-radius: 50%; }
+  .rail .act.pose img { width: 24px; height: auto; }
+  .rail .act.pose > span:not(.count) { display: none; } /* just the icon (the button keeps its name for screen readers) */
+}
 .rail .act.pose .count { position: absolute; top: -5px; left: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: var(--shadow-sm); } /* how many drinks */
 
 /* the side rail: a column of small buttons in the bottom right corner, just above the main bar and out of the way
@@ -518,7 +521,7 @@ body:not(.wish-near) .chat { display: none; }
 .loading-cat svg { position: absolute; display: block; image-rendering: pixelated; }
 .loading-cat .cat { left: 0; top: 40px; animation: cat-strain 2.8s ease-in-out infinite; transform-origin: 50% 100%; }
 .loading-cat .drop { left: 8px; top: 84px; opacity: 0; animation: poop-drop 2.8s ease-in infinite; }
-.loading-grunt { position: absolute; right: -6px; top: 10px; font-size: 14px; font-weight: 700; color: #ffd34e; animation: grunt 2.8s ease-in-out infinite; }
+.loading-grunt { position: absolute; right: -6px; top: 10px; font-size: 14px; font-weight: 700; color: #ffd34e; animation: loading-grunt 2.8s ease-in-out infinite; }
 .loading-text { font-size: 13px; color: rgba(255, 250, 240, 0.6); }
 @keyframes cat-strain {
   0%, 6% { transform: translate(0, 0) scale(1, 1); }
@@ -535,7 +538,7 @@ body:not(.wish-near) .chat { display: none; }
   76%, 92% { opacity: 1; transform: translateY(18px) scale(1); }
   100% { opacity: 0; transform: translateY(18px) scale(1); }
 }
-@keyframes grunt {
+@keyframes loading-grunt {
   0%, 4% { opacity: 0; transform: translateY(4px) scale(0.9); }
   12%, 46% { opacity: 1; transform: translateY(0) scale(1); }
   20%, 36% { transform: translateY(0) scale(1.12); }

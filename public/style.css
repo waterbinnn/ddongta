@@ -283,6 +283,7 @@ body:not(.wish-near) .chat { display: none; }
   z-index: 20;
 }
 .rail:empty { display: none; }
+.rail-toggle { display: none; } /* phones only (below) */
 
 .rail .act { height: 38px; }
 /* stuck with 변비 and a drink in hand: the drink is the way out */
@@ -599,7 +600,43 @@ body.typing .keys { display: none; }
     touch-action: none;
     z-index: 12;
   }
-  .rail { bottom: calc(150px + env(safe-area-inset-bottom)); } /* level with the stick */
+  /* the small rail buttons fold away behind one round button, level with the stick, so they don't cover the scene;
+     a tap opens them above it. The highlighted one (sit, wash …) always stays out */
+  .rail { bottom: calc(206px + env(safe-area-inset-bottom)); }
+  .rail:not(.open) .act.mini { display: none; }
+  .rail-toggle:not([hidden]) {
+    display: block;
+    position: fixed;
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--glass);
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    box-shadow: var(--shadow-sm);
+    z-index: 20;
+    cursor: pointer;
+  }
+  /* a plus that turns into a cross while open */
+  .rail-toggle::before, .rail-toggle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--text);
+    transform: translate(-50%, -50%);
+    transition: transform 0.2s ease;
+  }
+  .rail-toggle::after { transform: translate(-50%, -50%) rotate(90deg); }
+  .rail-toggle[aria-expanded='true']::before { transform: translate(-50%, -50%) rotate(45deg); }
+  .rail-toggle[aria-expanded='true']::after { transform: translate(-50%, -50%) rotate(135deg); }
   .joy .knob {
     position: absolute;
     left: 50%;

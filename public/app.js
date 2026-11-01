@@ -1721,6 +1721,8 @@ const roomWalk = { x: 0, z: 0, turn: 0, walking: false, phase: 0 };
 let leavingRoom = false; // walked out through the door, waiting for the server to say so
 // the seat (stool or sofa) I'm standing by, or -1
 const nearSeat = () => (inRoom && roomStanding && roomSeat < 0 ? room.seats.findIndex((st) => Math.hypot(roomWalk.x - st.at.x, roomWalk.z - st.at.z) < st.near) : -1);
+// standing at the basin in my room
+const nearBasin = () => inRoom && roomStanding && roomSeat < 0 && Math.hypot(roomWalk.x - room.washSpot.x, roomWalk.z - room.washSpot.z) < 0.85;
 let partyLit = false;
 // holding the book open in both hands, looking down into it
 function readFor(p, on) {
@@ -1992,7 +1994,7 @@ function updateCamera(dt) {
     // walking about the room: the camera keeps to the middle of the room and looks out at me, so by a wall
     // (or at the door) you see the wall, not the top of your head. Turning it by hand pauses this for a moment.
     const dx = -roomWalk.x;
-    const dz = -1.0 - roomWalk.z;
+    const dz = (ROOM.FRONT - ROOM.D) / 2 - roomWalk.z;
     if (Math.hypot(dx, dz) > 0.7 && performance.now() - manualCamAt > 2500) {
       const want = Math.atan2(dx, dz);
       cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
@@ -3099,7 +3101,7 @@ function renderActions() {
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}seat${nearSeat()}${choosingToilet ? 'choose' : ''}${bookOpen ? 'book' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}seat${nearSeat()}${nearBasin() ? 'basin' : ''}${choosingToilet ? 'choose' : ''}${bookOpen ? 'book' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -3193,7 +3195,9 @@ function renderActions() {
       // sit on the stool or the sofa when you're by it, or back on the toilet whenever
       const by = nearSeat();
       const toilet = () => { roomStanding = false; danceUntil = 0; };
-      if (by >= 0) rail.append(mainBtn('bench', room.seats[by].label, () => { roomSeat = by; danceUntil = 0; }), withKey(miniBtn('bench', '변기에 앉기', toilet), 'F'));
+      // at the basin, washing your hands comes first (highlighted, Space or H)
+      if (nearBasin()) rail.append(withKey(mainBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('bench', '변기에 앉기', toilet), 'F'));
+      else if (by >= 0) rail.append(mainBtn('bench', room.seats[by].label, () => { roomSeat = by; danceUntil = 0; }), withKey(miniBtn('bench', '변기에 앉기', toilet), 'F'));
       else rail.append(withKey(mainBtn('bench', '변기에 앉기', toilet), 'F'));
     }
     // then my own room's little things, standing or sitting: read, dance, the lights, wash, go
@@ -3201,14 +3205,28 @@ function renderActions() {
       withKey(miniBtn('read', bookOpen ? '책 덮기' : '책 읽기', toggleBook), 'N'),
       withKey(miniBtn('dance', '춤추기', dance), 'K'),
       withKey(miniBtn('lamp', '조명 바꾸기', nextMood), 'T'),
-      withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'),
     );
+    if (!nearBasin()) rail.append(withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'));
   }
   if (mode === 'inside' || mode === 'standing' || mode === 'resting') rail.append(withKey(miniBtn('bird', '에티켓벨', ringBell), 'B'));
   if (inRoom) rail.append(withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   labelKeys(rail);
+  // (phones) the fold-away button shows only when there are small buttons to fold away
+  const fold = $('#railToggle');
+  fold.hidden = !rail.querySelector('.act.mini');
+  if (fold.hidden) setRailOpen(false);
   labelKeys(bar);
 }
+
+// Phones: the rail's small buttons fold away behind one round button (CSS hides them while it's shut). A tap on it
+// opens them; picking one, or tapping anywhere else, folds them away again.
+function setRailOpen(on) {
+  $('#rail').classList.toggle('open', on);
+  $('#railToggle').setAttribute('aria-expanded', String(on));
+}
+$('#railToggle').addEventListener('click', () => setRailOpen(!$('#rail').classList.contains('open')));
+$('#rail').addEventListener('click', (e) => e.target.closest('.act.mini') && setRailOpen(false));
+addEventListener('pointerdown', (e) => !e.target.closest?.('#rail, #railToggle') && setRailOpen(false));
 
 // a button that always answers to the same key, wherever it shows up
 function withKey(b, key) {

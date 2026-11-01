@@ -6,8 +6,10 @@
 // closed on the other sides so the camera sits inside it.
 import * as THREE from '/vendor/three.module.js';
 
-export const ROOM = { W: 4.0, D: 3.6, FRONT: 1.7, H: 3.0 }; // width, depth to the back wall, room in front of the origin, height
-const TOILET = { x: 1.35, z: -3.15 };
+export const ROOM = { W: 5.6, D: 4.4, FRONT: 1.7, H: 3.0 }; // width, depth to the back wall, room in front of the origin, height
+const SCREEN_X = 0.55; // the slatted screen that closes off the toilet's corner
+const TOILET = { x: (SCREEN_X + ROOM.W / 2) / 2, z: -ROOM.D + 0.45 }; // in the middle of its own wide corner, plenty of floor before it
+const WIN = { z: -1.6, w: 4.2 }; // the glass along the left wall: its middle and its length
 
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas');
@@ -137,14 +139,14 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   };
   wall(W, 0, 0, -D);                       // back
   // the left wall is mostly glass (below): solid only either side of it
-  for (const [z0, z1] of [[-D, -3.1], [0.5, FRONT]]) wall(z1 - z0, Math.PI / 2, -W / 2, (z0 + z1) / 2, lime(z1 - z0));
+  for (const [z0, z1] of [[-D, WIN.z - WIN.w / 2], [WIN.z + WIN.w / 2, FRONT]]) wall(z1 - z0, Math.PI / 2, -W / 2, (z0 + z1) / 2, lime(z1 - z0));
   wall(depth, -Math.PI / 2, W / 2, midZ);  // right
   wall(W, Math.PI, 0, FRONT);              // front, behind the camera
   for (const x of [-W / 2 + 0.02, W / 2 - 0.02]) box(0.04, 0.08, depth, wood, x, 0.04, midZ, { cast: false }); // teak skirting
   for (const z of [-D + 0.02, FRONT - 0.02]) box(W, 0.08, 0.04, wood, 0, 0.04, z, { cast: false });
 
   // the ceiling: light teak battens over a cream ground, a skylight in the middle
-  const SKY = { hw: 0.65, hd: 0.65, z: -1.0, well: 0.3 };
+  const SKY = { hw: 0.65, hd: 0.65, z: -1.3, well: 0.3 };
   const ceilingMat = lambert('#efe6d6');
   const ceilingPart = (x0, x1, z0, z1) => {
     const part = add(new THREE.PlaneGeometry(x1 - x0, z1 - z0), ceilingMat, (x0 + x1) / 2, H, (z0 + z1) / 2);
@@ -166,15 +168,15 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   const pane = add(new THREE.PlaneGeometry(SKY.hw * 2, SKY.hd * 2), new THREE.MeshBasicMaterial({ color: '#dff0fa', transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }), 0, H + SKY.well, SKY.z, { cast: false, receive: false });
   pane.rotation.x = Math.PI / 2;
   const cove = glow('#fff1d6'); // little downlights between the battens
-  for (const [x, z] of [[-1.0, -3.0], [1.0, 0.7], [-1.0, 0.7], [0.4, -2.6]]) {
+  for (const [x, z] of [[-1.3, -3.4], [1.4, 0.7], [-1.3, 0.7], [1.6, -3.3]]) {
     const d = add(new THREE.CircleGeometry(0.045, 16), cove, x, H - 0.09, z, { cast: false, receive: false });
     d.rotation.x = Math.PI / 2;
   }
 
   // ---------- the left wall: glass, floor to ceiling, onto the back garden, in light teak frames ----------
   const windowMat = new THREE.MeshBasicMaterial({ color: '#e8f4fa', transparent: true, opacity: 0.06, depthWrite: false }); // clear glass
-  const wz = -1.3;
-  const ww = 3.6;
+  const wz = WIN.z;
+  const ww = WIN.w;
   const glass = add(new THREE.PlaneGeometry(ww, H - 0.3), windowMat, -W / 2 + 0.01, (H - 0.3) / 2 + 0.12, wz, { cast: false, receive: false });
   glass.rotation.y = Math.PI / 2;
   for (const z of [wz - ww / 2, wz - ww / 6, wz + ww / 6, wz + ww / 2]) box(0.1, H - 0.1, 0.08, wood, -W / 2 + 0.04, H / 2, z); // mullions
@@ -188,7 +190,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
 
   // ---------- the back wall: a sage marble feature wall behind a low floating vanity in light teak,
   // two pale stone basins at a height little hands can reach, brass taps, two mirrors in brass, sconces ----------
-  const vx = -0.45; // the vanity's middle
+  const vx = -1.0; // the vanity's middle
   const vz = -D + 0.27;
   const VTOP = 0.42; // the counter, low (everyone here is about a metre tall)
   wall(2.0, 0, vx, -D + 0.01, greenMarble(2, 2.4));
@@ -215,12 +217,19 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   group.add(mirrorLight);
   block(vx, vz, 1.95, 0.55);
 
-  // ---------- the toilet in the back right corner, behind a slatted light teak screen, a shelf over it ----------
+  // ---------- the toilet in the back right corner, its own wide corner behind a slatted light teak screen, a shelf
+  // over it and a rug before it ----------
   const porcelain = phong('#fbfaf6', { shininess: 80 });
   const tx = TOILET.x;
   const tz = TOILET.z;
-  for (let k = 0; k < 9; k++) box(0.04, 2.1, 0.07, wood, 0.72, 1.05, -D + 0.08 + k * 0.12); // the screen
-  block(0.72, -D + 0.55, 0.12, 1.1);
+  // the screen stands well off from it, so the toilet has a whole corner of the room to itself
+  for (let k = 0; k < 11; k++) box(0.04, 2.1, 0.07, wood, SCREEN_X, 1.05, -D + 0.08 + k * 0.12); // the screen
+  block(SCREEN_X, -D + 0.66, 0.12, 1.32);
+  // a round woven rug on the floor before the toilet
+  const rug = add(new THREE.CircleGeometry(0.6, 40), lambert('#d9c39a'), tx, 0.004, tz + 1.0, { cast: false });
+  rug.rotation.x = -Math.PI / 2;
+  const rugRim = add(new THREE.RingGeometry(0.52, 0.56, 40), lambert('#b99a68'), tx, 0.005, tz + 1.0, { cast: false });
+  rugRim.rotation.x = -Math.PI / 2;
   box(0.9, 0.04, 0.22, wood, tx, 1.4, -D + 0.12); // a shelf
   cyl(0.06, 0.05, 0.12, stoneBowl, tx - 0.25, 1.48, -D + 0.12, 16); // a stone pot with an orchid
   for (let k = 0; k < 3; k++) {
@@ -233,9 +242,13 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   cyl(0.2, 0.17, 0.38, porcelain, tx, 0.19, tz + 0.08);
   cyl(0.23, 0.23, 0.05, porcelain, tx, 0.42, tz + 0.12);
   box(0.1, 0.02, 0.05, brass, tx, 0.85, tz - 0.2);
-  const roll = cyl(0.06, 0.06, 0.11, lambert('#ffffff'), W / 2 - 0.1, 0.72, tz + 0.15, 20);
+  // the paper on a slim brass stand beside it
+  const rollX = tx + 0.42;
+  cyl(0.012, 0.012, 0.7, brass, rollX, 0.35, tz + 0.05, 8);
+  cyl(0.09, 0.09, 0.015, brass, rollX, 0.008, tz + 0.05, 20);
+  const roll = cyl(0.06, 0.06, 0.11, lambert('#ffffff'), rollX + 0.06, 0.6, tz + 0.05, 20);
   roll.rotation.z = Math.PI / 2;
-  box(0.03, 0.02, 0.16, brass, W / 2 - 0.03, 0.79, tz + 0.15);
+  block(rollX, tz + 0.05, 0.2, 0.2);
   block(tx, tz, 0.6, 0.9);
 
   // ---------- the door out, at the front of the right wall: light teak slats, a brass pull ----------
@@ -406,7 +419,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
 
   // ---------- light: bright and warm; daylight through the glass; a fill from behind the camera ----------
   const lamp = new THREE.PointLight('#ffe9cc', 4.2, 11, 1.3);
-  lamp.position.set(0.3, H - 0.5, -1.4);
+  lamp.position.set(0.2, H - 0.5, -1.6);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.bias = -0.004;
@@ -468,9 +481,9 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     // past you, so you're small at the side of the picture and the garden fills the rest (local)
     seats: [
       { label: '스툴에 앉기', at: new THREE.Vector3(stoolAt.x, seatTop - HIP_Y, stoolAt.z), turn: -Math.PI / 2, up: { x: stoolAt.x + 0.55, z: stoolAt.z }, near: 0.95,
-        view: { cam: new THREE.Vector3(W / 2 - 0.25, 1.9, FRONT - 0.25), aim: new THREE.Vector3(-1.6, 0, 0.2) } },
+        view: { cam: new THREE.Vector3(W / 2 - 0.25, 1.9, FRONT - 0.25), aim: new THREE.Vector3(-W / 2 + 0.4, 0, 0.2) } },
       { label: '소파에 앉기', at: new THREE.Vector3(sofaAt.x - 0.05, 0.42 - HIP_Y, sofaAt.z), turn: -Math.PI / 2, up: { x: sofaAt.x - 0.7, z: sofaAt.z }, near: 1.2,
-        view: { cam: new THREE.Vector3(W / 2 - 0.25, 1.9, FRONT - 0.25), aim: new THREE.Vector3(-0.4, 0, -0.5) } },
+        view: { cam: new THREE.Vector3(W / 2 - 0.25, 1.9, FRONT - 0.25), aim: new THREE.Vector3(sofaAt.x - 1.3, 0, sofaAt.z + 0.1) } },
     ],
     mood,
     // a hardback, open: a red cloth cover and two cream pages either side of the spine

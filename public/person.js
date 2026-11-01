@@ -24,8 +24,8 @@ export const peopleReady = new Promise((resolve) => {
   );
 });
 
-// the one look: fair skin, soft brown hair, a butter-yellow tee, sky-blue shorts, white sneakers
-export const LOOK = { skin: '#fff1e8', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffc9d6' }; // pale pink briefs, so they show against the fair skin
+// the one look: warm peach skin, soft brown hair, a butter-yellow tee, sky-blue shorts, white sneakers
+export const LOOK = { skin: '#ffd8bf', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffc9d6' }; // pale pink briefs, so they show against the skin
 
 // the only thing that differs between people: hair colour, picked from their id so it stays the same
 const HAIR_COLORS = ['#6b4630', '#2b2226', '#8a4b2a', '#d9814a', '#e8c26a'];
@@ -37,7 +37,7 @@ export function hairFor(id) {
 
 // soft cartoon shading: three flat tones instead of a smooth gradient
 const toonRamp = (() => {
-  const t = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255, 210, 210, 210, 255, 255, 255, 255, 255]), 3, 1);
+  const t = new THREE.DataTexture(new Uint8Array([178, 178, 178, 255, 222, 222, 222, 255, 255, 255, 255, 255]), 3, 1);
   t.minFilter = t.magFilter = THREE.NearestFilter;
   t.needsUpdate = true;
   return t;

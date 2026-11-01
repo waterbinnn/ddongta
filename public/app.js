@@ -1141,7 +1141,6 @@ function applyTimeOfDay() {
   for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
   const dark = clamp((lampScale - 1) / 1.6, 0, 1); // 0 by day, 1 at night
   for (const glow of glows) glow(dark);
-  room.windowMat.color.setScalar(lerp(1, 0.2, clamp((lampScale - 1) / 1.6, 0, 1))); // the view outside darkens at night
 }
 setInterval(applyTimeOfDay, 60 * 1000);
 
@@ -1160,38 +1159,43 @@ const wishHits = []; // the golden poop statue: tapping it walks you up to it
 // what a stall is called: "공중화장실 3번 칸" or "프리미엄 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
 
-// A premium room's spot: a bay of the open pavilion. There is no door; only the room's number is on a plaque on the
-// beam above, with a small light beside it (green free, red in use). Whoever is inside is in their own
-// room, so nobody shows out here.
+// A premium room's door: a teak door in the villa's front, louvres in its upper half, a brass number and handle,
+// a small light beside it (green free, red in use). Whoever is inside is in their own room, so nobody shows out here.
 function makePrivateDoor(i) {
   const L = LAYOUT[i];
   const g = new THREE.Group();
   g.position.set(toX(L.cx), 0, toZ(L.cy));
-  const doorCanvas = canvas(48, 112, () => {}); // (no door to draw; kept so the stall code can treat every stall alike)
-  const doorTex = new THREE.CanvasTexture(doorCanvas);
-  doorTex.colorSpace = THREE.SRGBColorSpace;
-  // the number, on a small plaque on the beam above this bay of the pavilion
-  const archY = GROUNDS.wallH * U - 0.64;
-  const plate = canvas(64, 36, (c) => {
-    c.fillStyle = '#e8d6b0'; // pale wood
-    c.fillRect(0, 0, 64, 36);
-    c.fillStyle = '#4a3220';
-    c.font = '600 24px Georgia, "Times New Roman", serif';
+  const doorCanvas = canvas(48, 112, (c) => {
+    c.fillStyle = '#8a5a32'; // teak
+    c.fillRect(0, 0, 48, 112);
+    c.fillStyle = '#7a4e2a';
+    for (let y = 8; y < 52; y += 4) c.fillRect(5, y, 38, 2); // louvres in the upper half
+    c.fillStyle = '#9a6a3e'; // a raised panel below
+    c.fillRect(6, 62, 36, 42);
+    c.fillStyle = '#6e4626';
+    for (let y = 64; y < 104; y += 7) c.fillRect(8, y, 32, 1); // its grain
+    c.fillStyle = '#c9a15a'; // the brass number plate
+    c.fillRect(15, 54, 18, 7);
+    c.fillStyle = '#3a2a1c';
+    c.font = 'bold 7px -apple-system, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(String(L.no), 32, 19);
+    c.fillText(String(L.no), 24, 58);
+    c.fillStyle = '#d8b46a'; // the handle
+    c.fillRect(38, 60, 3, 9);
   });
-  const plateTex = new THREE.CanvasTexture(plate);
-  plateTex.colorSpace = THREE.SRGBColorSpace;
-  const face = new THREE.MeshLambertMaterial({ map: plateTex }); // (lights up under the pointer)
-  const tablet = mesh(new THREE.PlaneGeometry(0.34, 0.19), face);
-  tablet.position.set(0.55, archY, 0.53);
-  g.add(tablet);
+  const doorTex = new THREE.CanvasTexture(doorCanvas);
+  doorTex.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.MeshLambertMaterial({ map: doorTex }); // (lights up under the pointer)
+  const edge = mat('#5e3d22');
+  const hinge = new THREE.Group();
+  hinge.position.set(0.12, 0, 0.03);
+  const door = mesh(new THREE.BoxGeometry(0.86, 2.1, 0.05), [edge, edge, edge, edge, face, face], { cast: true });
+  door.position.set(0.43, 1.05, 0);
+  hinge.add(door);
   const lock = mesh(G.lock, M.lockGreen);
-  lock.position.set(0.8, archY, 0.535);
+  lock.position.set(0.86, 1.35, 0.06);
   g.add(lock);
-  const hinge = new THREE.Group(); // no door to swing any more
-  hinge.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.visible = false;
   const hit = new THREE.Mesh(G.hit, M.hit);
@@ -1303,7 +1307,7 @@ function syncStalls() {
   stallObjs.forEach((s, i) => {
     s.lock.material = stalls[i] ? M.lockRed : M.lockGreen;
     const crack = stalls[i] ? (hp[i] < 25 ? 3 : hp[i] < 55 ? 2 : hp[i] < 85 ? 1 : 0) : 0;
-    if (crack !== s.crack) {
+    if (crack !== s.crack && !s.private) { // (the villa's doors are locked: they never crack)
       s.crack = crack;
       drawDoorCanvas(s.doorCanvas, LAYOUT[i].no, crack);
       s.doorTex.needsUpdate = true;
@@ -2175,6 +2179,30 @@ function placeWalkers(dt, t) {
 // Going into my private room hides the grounds and shows the room; coming out puts everything back.
 // I sit in there with my shorts down, my poop tower still on my head.
 const outdoorLights = () => [sun, lamps];
+
+// The private room's big window looks out on the real grounds: a camera stands on the villa's front step looking out
+// over the garden, and what it sees (people, animals, the sky, day and night) is drawn onto the window's glass.
+const windowRT = new THREE.WebGLRenderTarget(512, 512);
+const windowCam = new THREE.PerspectiveCamera(55, 1, 0.1, 420);
+room.windowMat.map = windowRT.texture;
+room.windowMat.color.set('#ffffff');
+room.windowMat.needsUpdate = true;
+let frameNo = 0;
+function renderWindowView() {
+  const V = GROUNDS.private;
+  windowCam.position.set(toX((V.x0 + V.x1) / 2), 1.7, toZ(V.y1 + 140));
+  windowCam.lookAt(toX((V.x0 + V.x1) / 2 + 500), 2.4, toZ(V.y1 + 2400));
+  // just for this picture: the grounds on, the room off
+  worldRoot.visible = stallRoot.visible = charRoot.visible = true;
+  for (const o of outdoorLights()) o.visible = true;
+  room.group.visible = false;
+  renderer.setRenderTarget(windowRT);
+  renderer.render(scene, windowCam);
+  renderer.setRenderTarget(null);
+  worldRoot.visible = stallRoot.visible = charRoot.visible = false;
+  for (const o of outdoorLights()) o.visible = false;
+  room.group.visible = true;
+}
 function syncRoom(t, dt) {
   const want = me.s !== -1 && LAYOUT[me.s]?.type === 'private' && stallObjs[me.s] ? me.s : -1;
   if (want !== roomFor) {
@@ -2272,7 +2300,7 @@ function animateStalls(dt, t) {
   stallObjs.forEach((s, i) => {
     const occId = stalls[i];
     s.open = lerp(s.open, occId ? 0 : 1, Math.min(1, dt * 8));
-    let rot = s.open * 1.3;
+    let rot = s.private ? 0 : s.open * 1.3; // the villa's doors stay shut
     if (s.shake > 0) {
       s.shake -= dt;
       rot += (Math.floor(t / 40) % 2 ? 1 : -1) * 0.04;
@@ -2994,6 +3022,7 @@ function frame(t) {
     v.shake = Math.max(0, v.shake - dt);
     v.group.rotation.z = v.shake > 0 ? Math.sin(t / 25) * 0.04 * (v.shake / 0.35) : 0;
   }
+  if (inRoom && GROUNDS && frameNo++ % 2 === 0) renderWindowView(); // every other frame is plenty for a view
   renderer.render(scene, camera);
   updateLabels(dt);
   placeBeanLabel();

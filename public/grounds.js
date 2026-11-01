@@ -261,9 +261,9 @@ export function buildGrounds(kit) {
     add(mirror, x1 - 0.12, 1.55, cz);
   }
 
-  // ---------- the premium restroom: an open resort pavilion, like a Balinese bale. Teak posts all round with nothing
-  // between them, a deep, steep thatched roof hanging low over the eaves, a slate floor edged in teak, tiki torches
-  // at the front corners and palms leaning over it all ----------
+  // ---------- the premium restroom: a resort villa. White lime walls on a dark lava-stone base, a teak door for each
+  // room, teak posts along the front holding up deep, steep thatched eaves (a woven lantern on each), a slate apron
+  // before the doors, tiki torches at the front corners and palms leaning over it all ----------
   {
     const p = L.private;
     const x0 = p.x0 * U;
@@ -304,12 +304,14 @@ export function buildGrounds(kit) {
         g.fillRect(tx * 128, ty * 128, 2, 128);
       }
     });
-    slate.map.repeat.set((W + 1.2) / 1.2, (D + 1.2) / 1.2);
-    block(W + 1.2, 0.05, D + 1.2, slate, cx, 0.025, cz, { receive: true });
-    for (const s of [-1, 1]) {
-      block(W + 1.3, 0.07, 0.08, teak, cx, 0.035, cz + s * (D + 1.2) / 2);
-      block(0.08, 0.07, D + 1.3, teak, cx + s * (W + 1.2) / 2, 0.035, cz);
-    }
+    slate.map.repeat.set((W + 1.2) / 1.2, 1);
+    block(W + 1.2, 0.04, 1.3, slate, cx, 0.02, z1 + 0.65, { receive: true }); // a slate apron before the doors
+    block(W + 1.3, 0.06, 0.08, teak, cx, 0.03, z1 + 1.3);
+    // the walls: white lime plaster on a dark lava-stone base, a teak band under the eaves
+    const WALL = WH - 0.4; // up to the eaves
+    block(W, WALL, D, mat('#efe7da'), cx, WALL / 2, cz);
+    block(W + 0.12, 0.45, D + 0.06, mat('#4a4846'), cx, 0.225, cz - 0.03); // the lava stone (flush at the front)
+    block(W + 0.06, 0.22, D + 0.06, teak, cx, WALL - 0.11, cz);
     // the posts: square teak on stone footings, a carved collar near the top
     const posts = L.templeColumns.map((c) => [c.x * U, c.y * U]);
     const POST_H = WH - 0.8;
@@ -325,14 +327,15 @@ export function buildGrounds(kit) {
       im.castShadow = im.receiveShadow = true;
       root.add(im);
     }
-    // the ring beam the roof sits on (its front carries the room numbers)
+    // a beam along the post tops, the roof resting on it and the wall
     const ow = W + 0.5;
     const od = D + 0.82;
-    for (const s of [-1, 1]) {
-      block(ow, 0.3, 0.22, teak, cx, POST_H + 0.15, cz + (s * od) / 2);
-      block(0.22, 0.3, od, teak, cx + (s * ow) / 2, POST_H + 0.15, cz);
-    }
-    for (let k = 1; k < 6; k++) block(0.12, 0.12, od, teak, cx - ow / 2 + (k * ow) / 6, POST_H + 0.36, cz); // cross beams
+    block(ow, 0.3, 0.22, teak, cx, POST_H + 0.15, cz + od / 2);
+    // a woven lantern on each post, glowing at night
+    const lantern = new THREE.MeshLambertMaterial({ color: '#d6b07a', emissive: '#ffb860', emissiveIntensity: 0.05 });
+    const lanterns = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.1, 0.12, 0.26, 12), lantern, posts.length);
+    posts.forEach(([x, z], k) => lanterns.setMatrixAt(k, m4.makeTranslation(x, 2.25, z + 0.16)));
+    root.add(lanterns);
     // a warm light hidden under the front beam, for the room spots at night
     const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
     block(ow - 0.2, 0.02, 0.04, strip, cx, POST_H - 0.01, cz + od / 2 - 0.02);
@@ -392,6 +395,7 @@ export function buildGrounds(kit) {
     glows.push((dark) => {
       strip.emissiveIntensity = 0.2 + 0.9 * dark;
       fire.emissiveIntensity = 0.3 + 0.9 * dark;
+      lantern.emissiveIntensity = 0.05 + 1.0 * dark;
     });
     // the palms: a ringed trunk curving up, a crown of drooping fronds, a few coconuts
     const trunkMat = mat('#8a7458');

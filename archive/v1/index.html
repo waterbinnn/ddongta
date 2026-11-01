@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>똥타 · 온라인 뒷간</title>
+  <meta name="description" content="똥 누면서 쉬는 온라인 뒷간, 똥타. 가끔은 황금똥이 나올지도 몰라요.">
+  <meta name="theme-color" content="#f2d98a">
+  <!-- link previews (KakaoTalk, Slack, X, iMessage...) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="똥타">
+  <meta property="og:title" content="같이 똥 싸러 갈래…?">
+  <meta property="og:description" content="똥 누면서 쉬는 온라인 뒷간, 똥타. 가끔은 황금똥이 나올지도 몰라요.">
+  <meta property="og:url" content="https://ddongta.com/">
+  <meta property="og:image" content="https://ddongta.com/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="하늘색 타일 화장실에서 사람들이 볼일을 보며 수다 떠는 픽셀아트 화면">
+  <meta property="og:locale" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="같이 똥 싸러 갈래…?">
+  <meta name="twitter:description" content="똥 누면서 쉬는 온라인 뒷간, 똥타. 가끔은 황금똥이 나올지도 몰라요.">
+  <meta name="twitter:image" content="https://ddongta.com/og.png">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💩</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene" id="scene"></div>
+  <div class="labels" id="labels"></div>
+
+  <header class="top">
+    <div class="chip status">
+      <span class="item"><span id="peopleIcon"></span><span id="online">문 여는 중</span></span>
+      <span class="sep"></span>
+      <span class="item"><span id="busyIcon"></span><span id="busy">0칸</span></span>
+      <span class="sep"></span>
+      <span class="item"><span id="todayIcon"></span><span class="today-word">오늘</span><b id="todayCount">0</b></span>
+    </div>
+    <div class="right">
+      <button class="chip sound" id="chatToggle" type="button" aria-label="채팅 목록 숨기기"></button>
+      <button class="chip sound" id="recenterBtn" type="button" aria-label="내 시점으로" title="내 시점으로 (R)"></button>
+      <button class="chip sound" id="soundBtn" type="button" aria-label="소리 설정" aria-haspopup="true" aria-expanded="false"></button>
+      <div class="sound-menu" id="soundMenu" role="menu" hidden>
+        <button type="button" role="menuitemradio" data-mode="fx"></button>
+        <button type="button" role="menuitemradio" data-mode="all"></button>
+        <button type="button" role="menuitemradio" data-mode="off"></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="chip badge" id="queue" hidden></div>
+  <div class="chip toast" id="toast" hidden></div>
+
+  <div class="feed" id="feed" aria-live="polite"></div>
+
+  <div class="joy" id="joy" aria-hidden="true"><div class="knob"></div></div>
+
+  <div class="dock">
+    <div class="push-pad" id="pushPad"></div>
+    <nav class="actions" id="actions"></nav>
+    <form class="chat" id="chatBox">
+      <input id="chatInput" maxlength="80" placeholder="칸 너머로 한마디..." autocomplete="off" enterkeyhint="send">
+      <button type="submit" aria-label="보내기">↵</button>
+    </form>
+    <div class="keys" id="hint">
+      <div class="row">
+        <span><kbd>Space</kbd> 앉기·힘주기·노크·손 씻기·벤치</span>
+        <span><kbd>J</kbd> 점프</span>
+        <span><kbd>F</kbd> 물 내리기</span>
+        <span><kbd>B</kbd> 에티켓벨</span>
+      </div>
+      <div class="row">
+        <span><kbd>Esc</kbd> 나가기</span>
+        <span><kbd>R</kbd> 내 시점</span>
+        <span><kbd>H</kbd> 채팅 숨기기</span>
+        <span>드래그 회전 · 휠 확대</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">휴지 채우는 중...</div>
+
+  <div class="down" id="down" role="alert" hidden>
+    <div class="down-card">
+      <div class="down-ico" id="downIcon"></div>
+      <b>서버가 터졌어요!</b>
+      <p>조치 중이니 잠시만 기다려 주세요.<br>다시 연결되면 바로 들어가져요.</p>
+      <span class="down-retry">다시 연결하는 중<i>.</i><i>.</i><i>.</i></span>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

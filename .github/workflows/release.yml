@@ -25,7 +25,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="v1.0.${{ github.run_number }}"
+          tag="v2.0.${{ github.run_number }}"
           prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
           # notes: one line per commit since the last release (we push straight to main, so there are no PRs)
           {

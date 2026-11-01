@@ -1,0 +1,620 @@
+/* Galmuri pixel fonts by Lee Minseo, SIL Open Font License 1.1 (see fonts/OFL.md) */
+@font-face { font-family: Galmuri11; src: url('fonts/Galmuri11.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: Galmuri11; font-weight: 700; src: url('fonts/Galmuri11-Bold.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: Galmuri9; src: url('fonts/Galmuri9.woff2') format('woff2'); font-display: swap; }
+
+/* soft, airy UI over a pixel world: frosted white chips, gentle shadows, pastel accents */
+:root {
+  --bg: #f2d98a;
+  --glass: rgba(255, 252, 242, 0.84);
+  --glass-strong: rgba(255, 252, 242, 0.95);
+  --glass-soft: rgba(255, 252, 242, 0.55); /* see-through: chat and notices let the room show */
+  --line: rgba(120, 72, 20, 0.14);
+  --text: #4a3520;
+  --muted: #9a7d58;
+  --accent: #ffd34e;
+  --accent-ink: #5b3a0c;
+  --coral: #ff8a76;
+  --coral-ink: #6a2a22;
+  --poop: #c69466;
+  --poop-light: #f4e9dc;
+  --emph: #8a4a12; /* deep poop brown for emphasised text */
+  --shadow: 0 6px 18px rgba(120, 72, 20, 0.16);
+  --shadow-sm: 0 2px 6px rgba(120, 72, 20, 0.14);
+  /* where the top of the screen really starts: below a phone's notch, and below the keyboard's scroll */
+  --top-edge: calc(env(safe-area-inset-top, 0px) + var(--vv-top, 0px));
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Galmuri11, "Apple SD Gothic Neo", sans-serif;
+  font-size: 13px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: none;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* the 3D scene is rendered small and scaled up, so keep it pixelated */
+.scene { position: fixed; inset: 0; touch-action: none; }
+.scene canvas { display: block; image-rendering: pixelated; cursor: grab; }
+.scene canvas.grabbing { cursor: grabbing; }
+
+/* pixel icons at exactly 2x */
+.ico {
+  display: block;
+  width: calc(var(--w) * 2px);
+  height: calc(var(--h) * 2px);
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.chip {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+}
+
+/* ---------- top ---------- */
+
+.top {
+  position: fixed;
+  top: calc(12px + var(--top-edge));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.top > * { pointer-events: auto; }
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  white-space: nowrap;
+}
+
+.status .item { display: flex; align-items: center; gap: 6px; }
+.status .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
+.status .sep { width: 1px; height: 12px; background: var(--line); }
+.status b { color: var(--emph); font-weight: 700; display: inline-block; }
+.status b.bump { animation: bump 0.4s ease-out; }
+
+@keyframes bump {
+  30% { transform: translateY(-3px) scale(1.25); }
+}
+
+.sound {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  color: var(--muted);
+}
+
+.sound .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
+
+.badge,
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  white-space: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge { top: calc(62px + var(--top-edge)); z-index: 19; background: rgba(255, 211, 78, 0.72); color: var(--accent-ink); border-color: transparent; }
+.toast { top: calc(62px + var(--top-edge)); z-index: 18; background: var(--glass-soft); box-shadow: var(--shadow); transition: opacity 0.5s; }
+.badge:not([hidden]) ~ .toast { top: calc(102px + var(--top-edge)); }
+.toast.out { opacity: 0; }
+.badge[hidden], .toast[hidden] { display: none; }
+
+/* ---------- labels over the scene ---------- */
+
+.labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+
+.bubble,
+.pop { position: absolute; left: 0; top: 0; will-change: transform; }
+
+.bubble {
+  max-width: 200px;
+  width: max-content;
+  padding: 6px 10px;
+  background: rgba(255, 252, 242, 0.62); /* see-through, so bubbles never hide the room */
+  color: var(--text);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(120, 72, 20, 0.12);
+  line-height: 1.45;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: inherit;
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+/* my own bubble: solid yellow, so it stands out from the see-through ones */
+.bubble.mine { background: var(--accent); color: var(--accent-ink); }
+
+.pop {
+  white-space: nowrap;
+  font-family: Galmuri9;
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 1px 0 0 #10141c, -1px 0 0 #10141c, 0 1px 0 #10141c, 0 -1px 0 #10141c;
+}
+
+/* ---------- bottom dock: actions, chat, key hints ---------- */
+
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(10px + env(safe-area-inset-bottom) + var(--kb, 0px));
+  transform: translateX(-50%);
+  width: min(460px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 20;
+}
+
+.actions { display: flex; gap: 6px; justify-content: center; }
+
+.act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass); /* the same frosted glass as the top bar's buttons */
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  transition: transform 0.15s ease-out, box-shadow 0.15s;
+}
+
+/* hover just grows a little; pressing shrinks it */
+.act:hover { transform: scale(1.06); }
+.act:active, .act.on { transform: scale(0.95); box-shadow: none; }
+.act .ico { width: calc(var(--w) * 2px); height: calc(var(--h) * 2px); }
+
+.act.main { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; padding: 0 20px; font-size: 14px; }
+.act.main.knock { background: var(--coral); color: var(--coral-ink); }
+/* the knock button gets angrier as the door weakens */
+.act.main.knock.k1 { background: #ff7a5c; color: #4a160c; }
+.act.main.knock.k2 { background: #f0503a; color: #fff4ec; }
+.act.main.knock.k3 { background: #c62a1e; color: #ffffff; animation: rattle 0.35s ease-in-out infinite; }
+@keyframes rattle {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25% { transform: translateX(-2px) rotate(-1.5deg); }
+  75% { transform: translateX(2px) rotate(1.5deg); }
+}
+.act.main:disabled { opacity: 0.7; cursor: default; }
+
+.act.mini { padding: 0 14px; font-size: 12px; color: var(--text); }
+
+/* ---------- the poop button: a big pixel poop that fills up from the bottom ---------- */
+
+/* a little air between the poop and the buttons below, so it sits higher up */
+.push-pad:not(:empty) { margin-bottom: 36px; }
+
+.push-pad .act.main.push {
+  position: relative;
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.push-pad .act.main.push .gauge {
+  position: relative;
+  display: block;
+  width: 90px;
+  height: 90px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  transition: transform 0.1s;
+}
+
+.push-pad .act.main.push .gauge img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* the real poop shows only up to the current progress */
+.push-pad .act.main.push .gauge .full {
+  clip-path: inset(calc(100% - var(--p, 0%)) 0 0 0);
+  transition: clip-path 0.15s linear;
+}
+
+/* the status ("끄응...") sits beside it */
+.push-pad .act.main.push .label {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--emph); /* poop brown, like the poop it belongs to */
+  color: #fff4e2;
+  box-shadow: var(--shadow-sm);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.push-pad .act.main.push:active .gauge, .push-pad .act.main.push.on .gauge { transform: scale(0.95); }
+.push-pad .act.main.push.on .gauge { animation: grunt 0.18s steps(2) infinite; }
+.push-pad .act.main.push.done .gauge { filter: drop-shadow(0 0 14px rgba(255, 217, 120, 0.9)); animation: plopped 0.5s ease-out; }
+
+@keyframes plopped {
+  30% { transform: translateY(-8px) scale(1.12); }
+}
+
+@keyframes grunt {
+  from { transform: translate(-1px, 1px) scale(1); }
+  to { transform: translate(1px, -1px) scale(1.06); }
+}
+
+@media (max-width: 520px) {
+  .push-pad .act.main.push .gauge { width: 76px; height: 76px; }
+  /* no room beside it on a phone: the status sits centred above the poop instead */
+  .push-pad .act.main.push .label {
+    left: 50%;
+    top: auto;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    font-size: 12px;
+  }
+}
+
+.chat {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 46px;
+  padding: 0 5px 0 18px;
+  background: var(--glass); /* frosted glass, like the top bar */
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+}
+
+/* while typing: a yellow ring, matching the send button */
+.chat:focus-within { background: var(--glass-strong); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+
+.chat input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* prevents iOS zoom */
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.chat input::placeholder { color: var(--muted); }
+
+.chat button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 0;
+  width: max-content; /* may run wider than the chat box, still centred */
+  max-width: calc(100vw - 24px);
+  text-shadow: 0 0 2px rgba(255, 252, 242, 0.85), 0 0 1px rgba(255, 252, 242, 0.85); /* no box: a soft halo keeps it readable over the floor */
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 11px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* two rows: what you do, then how you look around */
+.keys { flex-direction: column; }
+.keys .row { display: flex; align-items: center; }
+
+/* each key as a small keycap, a thin divider between hints */
+.keys span { display: inline-flex; align-items: center; }
+.keys span + span::before { content: ''; width: 1px; height: 9px; margin: 0 8px; background: var(--line); }
+.keys kbd {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  border: 1px solid rgba(120, 72, 20, 0.22);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 4px;
+  line-height: 14px;
+}
+
+@media (hover: none) {
+  .keys { display: none; }
+}
+
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--text);
+  z-index: 50;
+  transition: opacity 0.5s;
+}
+
+.loading.done { opacity: 0; pointer-events: none; }
+
+/* ---------- room-wide chat feed, top-left ---------- */
+.chat-hidden .feed { display: none; }
+.feed {
+  position: fixed;
+  top: calc(62px + var(--top-edge));
+  left: 12px;
+  width: min(340px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 17;
+  pointer-events: none;
+}
+
+.feed .line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px 5px 8px;
+  border-radius: 999px;
+  background: var(--glass-soft);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  font-size: 12px;
+  animation: fly-in 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
+  transition: opacity 0.8s, transform 0.8s;
+}
+
+.feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
+.feed .line b { flex-shrink: 0; font-weight: 400; color: var(--muted); font-size: 11px; }
+.feed .line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* my own lines: more solid, with "나" in brown, so they read on the yellow room */
+.feed .line.mine { background: rgba(255, 252, 242, 0.72); border-color: rgba(138, 74, 18, 0.4); }
+.feed .line.mine b { color: var(--emph); }
+.feed .line.out { opacity: 0; transform: translateY(-8px); }
+
+@keyframes fly-in {
+  from { opacity: 0; transform: translateX(-40px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+
+.top .right { position: relative; display: flex; gap: 6px; flex-shrink: 0; }
+.sound:hover { color: var(--text); }
+
+/* sound menu: effects only / with music / off */
+.sound-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--glass-strong);
+  box-shadow: var(--shadow);
+}
+.sound-menu[hidden] { display: none; }
+.sound-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  white-space: nowrap;
+  text-align: left;
+}
+.sound-menu button:hover { background: rgba(120, 72, 20, 0.07); }
+.sound-menu button.on { background: var(--accent); color: var(--accent-ink); }
+
+/* phones: the top bar must fit in one row, so squeeze it */
+@media (max-width: 520px) {
+  .top { left: 8px; right: 8px; gap: 6px; }
+  .status { gap: 7px; padding: 0 10px; min-width: 0; overflow: hidden; }
+  .status .item { gap: 4px; }
+  .status .unit { display: none; } /* the people and door icons already say it */
+  .top .right { gap: 4px; }
+  .sound { width: 36px; padding: 0; justify-content: center; }
+}
+@media (max-width: 400px) {
+  .status { gap: 9px; }
+  .status .sep, .status .today-word, .status .cap { display: none; } /* "3" instead of "3/50" */
+  .sound { width: 34px; }
+}
+
+
+/* golden poop announcements stand out in the feed */
+.feed .line.gold { background: rgba(255, 214, 80, 0.55); border-color: #e0a91c; }
+.feed .line.gold span { color: #7a4d00; font-weight: 700; }
+
+/* no "save image" callout or dragging when you hold a button on a phone */
+img { -webkit-touch-callout: none; -webkit-user-drag: none; pointer-events: none; }
+button, .act { -webkit-touch-callout: none; }
+
+/* while typing, only the chat box stays down by the keyboard */
+body.typing .push-pad,
+body.typing .actions,
+body.typing .keys { display: none; }
+
+/* on-screen stick, phones only, while walking around */
+.joy { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .joy {
+    display: block;
+    position: fixed;
+    left: 18px;
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    background: rgba(255, 252, 242, 0.45);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+    touch-action: none;
+    z-index: 12;
+  }
+  .joy .knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 46px;
+    margin: -23px 0 0 -23px;
+    border-radius: 50%;
+    background: var(--glass-strong);
+    box-shadow: var(--shadow);
+    transition: transform 0.12s;
+  }
+  .joy.on .knob { transition: none; }
+  body.typing .joy, body.seated .joy { display: none; }
+}
+
+/* ?og: the link-preview frame */
+.og .top, .og .dock, .og .feed, .og .toast, .og .badge, .og .joy, .og .loading { display: none !important; }
+
+/* ---------- the server is down ---------- */
+.down {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(242, 217, 138, 0.82);
+  backdrop-filter: blur(3px);
+  z-index: 60;
+}
+.down[hidden] { display: none; }
+.down-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 320px;
+  padding: 26px 28px 22px;
+  text-align: center;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}
+.down-ico .ico { width: 64px; height: 64px; animation: rattle 0.4s ease-in-out infinite; }
+.down-card b { font-size: 20px; color: #d8382e; }
+.down-card p { margin: 0; line-height: 1.6; color: var(--text); }
+.down-retry { font-size: 12px; color: var(--muted); }
+.down-retry i { font-style: normal; animation: blink 1.2s infinite; }
+.down-retry i:nth-child(2) { animation-delay: 0.2s; }
+.down-retry i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }
+
+/* golden poops drifting across the top of the screen */
+.gold-float {
+  position: fixed;
+  left: 0;
+  width: 34px;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 15;
+  filter: drop-shadow(0 0 6px rgba(255, 214, 80, 0.9));
+  animation: goldDrift 8s linear forwards;
+}
+.gold-float.rtl { animation-name: goldDriftBack; }
+@keyframes goldDrift {
+  0% { transform: translate(-60px, 0) rotate(-8deg); opacity: 0; }
+  8% { opacity: 1; }
+  25% { transform: translate(25vw, -12px) rotate(8deg); }
+  50% { transform: translate(50vw, 6px) rotate(-6deg); }
+  75% { transform: translate(75vw, -10px) rotate(6deg); }
+  92% { opacity: 1; }
+  100% { transform: translate(calc(100vw + 20px), 0) rotate(-4deg); opacity: 0; }
+}
+@keyframes goldDriftBack {
+  0% { transform: translate(calc(100vw + 20px), 0) rotate(8deg); opacity: 0; }
+  8% { opacity: 1; }
+  25% { transform: translate(75vw, -12px) rotate(-8deg); }
+  50% { transform: translate(50vw, 6px) rotate(6deg); }
+  75% { transform: translate(25vw, -10px) rotate(-6deg); }
+  92% { opacity: 1; }
+  100% { transform: translate(-60px, 0) rotate(4deg); opacity: 0; }
+}
+
+/* phones: no blur behind the chat feed, so it doesn't cover the room */
+@media (max-width: 600px) {
+  .feed .line { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

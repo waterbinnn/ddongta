@@ -600,15 +600,15 @@ body.typing .keys { display: none; }
     touch-action: none;
     z-index: 12;
   }
-  /* the small rail buttons fold away behind one round button, level with the stick, so they don't cover the scene;
-     a tap opens them above it. The highlighted one (sit, wash …) always stays out */
-  .rail { bottom: calc(206px + env(safe-area-inset-bottom)); }
+  /* the small rail buttons fold away behind one round button down in the bottom right corner, level with the main
+     button, so they don't cover the scene; a tap opens them above it. The highlighted one (sit, wash …) always stays out */
+  .rail { bottom: calc(66px + env(safe-area-inset-bottom) + var(--kb, 0px)); }
   .rail:not(.open) .act.mini { display: none; }
   .rail-toggle:not([hidden]) {
     display: block;
     position: fixed;
     right: calc(12px + env(safe-area-inset-right));
-    bottom: calc(150px + env(safe-area-inset-bottom));
+    bottom: calc(8px + env(safe-area-inset-bottom) + var(--kb, 0px));
     width: 46px;
     height: 46px;
     padding: 0;
@@ -618,7 +618,7 @@ body.typing .keys { display: none; }
     backdrop-filter: blur(10px) saturate(1.2);
     -webkit-backdrop-filter: blur(10px) saturate(1.2);
     box-shadow: var(--shadow-sm);
-    z-index: 20;
+    z-index: 21; /* over the dock's (empty) sides */
     cursor: pointer;
   }
   /* a plus that turns into a cross while open */

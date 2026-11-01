@@ -1856,8 +1856,8 @@ const OG_VIEWS = {
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
 const DIST_MIN = 3.5;
-const ROOM_DIST = [2.6, 6.0]; // how near and far the camera can be inside the private room
-const ROOM_VIEW = 4.2; // where it starts; past this the walls stop it, so zooming out further widens the lens instead
+const ROOM_DIST = [2.6, 9.0]; // how near and far the camera can be inside the private room
+const ROOM_VIEW = 6.5; // where it starts; past this the walls stop it, so zooming out further widens the lens instead
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 12; // zooming out stops before the place shrinks to a toy
 const BENCH_DIST = 2.6; // sitting at a terrace table: close, as if across the table from you
@@ -1874,7 +1874,8 @@ function focusCamera() {
   let pitch = 0.45;
   if (inRoom) {
     key = 'room';
-    pitch = 0.3;
+    pitch = 0.65; // coming in: from up high (the room is open to the sky) behind me, so you see the whole of it
+    yaw = Math.atan2(room.entry.x, room.entry.z - (ROOM.FRONT - ROOM.D) / 2);
   } else if (me.s !== -1 && LAYOUT[me.s]) {
     key = `stall${me.s}`;
     yaw = LAYOUT[me.s].rot; // straight in front of the door
@@ -1991,10 +1992,10 @@ function updateCamera(dt) {
       cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
     }
   } else if (inRoom && roomStanding && roomSeat < 0) {
-    // walking about the room: the camera keeps to the middle of the room and looks out at me, so by a wall
-    // (or at the door) you see the wall, not the top of your head. Turning it by hand pauses this for a moment.
-    const dx = -roomWalk.x;
-    const dz = (ROOM.FRONT - ROOM.D) / 2 - roomWalk.z;
+    // walking about the room: the camera stands behind me, up high, looking past me into the room, so the whole
+    // room is the backdrop with me in front of it. Turning it by hand pauses this for a moment.
+    const dx = roomWalk.x;
+    const dz = roomWalk.z - (ROOM.FRONT - ROOM.D) / 2;
     if (Math.hypot(dx, dz) > 0.7 && performance.now() - manualCamAt > 2500) {
       const want = Math.atan2(dx, dz);
       cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
@@ -2007,7 +2008,7 @@ function updateCamera(dt) {
     cam.tYaw -= rel - clamp(rel, -swing, swing);
   }
   if (inRoom) {
-    cam.tPitch = clamp(cam.tPitch, 0.1, 0.45);
+    cam.tPitch = clamp(cam.tPitch, 0.1, 1.0);
     cam.tDist = clamp(cam.tDist, ROOM_DIST[0], ROOM_DIST[1]);
     // dragging up raises your eyes, as outside: up to the skylight and the sky through it
   }
@@ -2017,8 +2018,9 @@ function updateCamera(dt) {
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
   if (inRoom) {
     const seat = room.seats[roomSeat];
-    // resting, the camera looks past you out of the window; walking about, at you; on the toilet, at it
-    const aim = seat ? roomWorld(seat.view.aim) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim);
+    // resting, the camera looks past you out of the window; walking about, halfway between you and the room's middle;
+    // on the toilet, at it
+    const aim = seat ? roomWorld(seat.view.aim) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x * 0.5, 0, (roomWalk.z + (ROOM.FRONT - ROOM.D) / 2) * 0.5)) : roomWorld(room.aim);
     fx = aim.x;
     fz = aim.z;
   } else if (me.s !== -1) {
@@ -2053,18 +2055,24 @@ function updateCamera(dt) {
     }
   }
   if (inRoom) {
-    // never through the room's walls or ceiling
+    // never through the room's walls; but it has no ceiling, so once the camera is up above them it may stand back
+    // outside them and look down in, like into a doll's house (the near walls don't show from outside)
     const local = room.group.worldToLocal(roomCamAt.set(px, py, pz));
-    local.x = clamp(local.x, -ROOM.W / 2 + 0.15, ROOM.W / 2 - 0.15);
-    local.z = clamp(local.z, -ROOM.D + 0.15, ROOM.FRONT - 0.12);
-    local.y = Math.min(local.y, ROOM.H - 0.2);
+    const over = clamp((local.y - ROOM.H - 0.2) * 1.5, 0, 4.5); // (the trees round about stand further off than this)
+    local.x = clamp(local.x, -ROOM.W / 2 + 0.15 - over, ROOM.W / 2 - 0.15 + over);
+    local.z = clamp(local.z, -ROOM.D + 0.15 - over, ROOM.FRONT - 0.12 + over);
+    // standing back outside a wall: that wall's cap and door would hang in the way, so they go
+    const outside = { right: local.x > ROOM.W / 2, left: local.x < -ROOM.W / 2, front: local.z > ROOM.FRONT, back: local.z < -ROOM.D };
+    for (const side in room.sides) for (const m of room.sides[side]) m.visible = !outside[side];
     room.group.localToWorld(local);
     ({ x: px, y: py, z: pz } = local);
   }
   camera.position.set(px, py, pz);
   if (inRoom) {
-    // zoomed out past where the walls let the camera go: a wider lens, so you still see more of the room
-    const fov = 55 + clamp((cam.dist - ROOM_VIEW) / (ROOM_DIST[1] - ROOM_VIEW), 0, 1) * 17;
+    // a lens wide enough that a narrow phone screen still takes in the room (about 48° across at least), and wider
+    // still when zoomed out past where the walls let the camera go
+    const base = clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(24)) / camera.aspect)), 55, 75);
+    const fov = Math.min(85, base + clamp((cam.dist - ROOM_VIEW) / (ROOM_DIST[1] - ROOM_VIEW), 0, 1) * 17);
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
@@ -2262,7 +2270,8 @@ function syncRoom(t, dt) {
   if (want !== roomFor) {
     roomFor = want;
     inRoom = want >= 0;
-    roomStanding = true; // you come in standing, just inside the door
+    roomStanding = !sitOnArrival; // you come in standing, just inside the door (or, sent by 똥 누러 가기, on the toilet)
+    sitOnArrival = false;
     roomSeat = -1;
     bookOpen = false;
     danceUntil = 0;
@@ -3266,24 +3275,49 @@ function sitHere() {
   send({ t: 'bench', on: true });
 }
 
-// 똥 누러 가기: off to the nearest free stall, or to the bushes when every stall is taken
-// 똥 누러 가기 asks which: the public restroom or the premium one (they don't look like restrooms from afar)
+// 똥 누러 가기 asks which: the public restroom, the premium one or the bushes, and then takes you straight there (a
+// quick dip to dark, as with 공간 이동) and sits you down: on the toilet in the nearest free stall, or squatting in the
+// bushes. When every stall of that kind is taken, the bushes it is.
 let choosingToilet = false;
+let sitOnArrival = false; // (set while warping into a premium room: you arrive on the toilet, not standing by the door)
 function goPoop() {
   choosingToilet = !choosingToilet;
+}
+function warpThen(x, y, then) {
+  if (moving || me.s !== -1 || me.rolling) return;
+  moving = true;
+  const fade = $('#fade');
+  fade.classList.add('on');
+  setTimeout(() => {
+    me.x = x;
+    me.y = y;
+    target = null;
+    pendingEnter = -1;
+    pendingBench = false;
+    pendingWash = false;
+    sendMove(true);
+    then();
+    focusKey = '';
+    camBefore = null;
+    walkedYet = true;
+    snapCam = true;
+    fade.classList.remove('on');
+    moving = false;
+  }, 240);
 }
 function goPoopTo(type) {
   choosingToilet = false;
   const i = type === 'bush' ? -1 : closestAnywhere((k) => freeFor(k) && LAYOUT[k].type === type);
   if (i >= 0) {
-    walkToStall(i);
+    sitOnArrival = true;
+    setTimeout(() => (sitOnArrival = false), 2500); // (in case the stall was taken just then)
+    warpThen(LAYOUT[i].x, LAYOUT[i].y, () => tryEnter(i));
     return;
   }
   const b = GROUNDS.bushes.reduce((a, c) => (Math.hypot(c.x - me.x, c.y - me.y) < Math.hypot(a.x - me.x, a.y - me.y) ? c : a));
-  target = settleLocal({ x: b.x, y: b.y });
-  pendingEnter = -1;
-  showTapMark(toX(target.x), toZ(target.y));
-  if (type !== 'bush') toast(`${type === 'private' ? '프리미엄 화장실' : '공중화장실'}이 다 찼어요. 가까운 풀숲으로 가요`);
+  const at = settleLocal({ x: b.x, y: b.y });
+  warpThen(at.x, at.y, () => send({ t: 'squat', on: true }));
+  if (type !== 'bush') toast(`${type === 'private' ? '프리미엄 화장실' : '공중화장실'}이 다 찼어요. 가까운 풀숲으로 왔어요`);
 }
 
 // ---------- the vending machines, the drink in your hand, and 변비 ----------

@@ -467,20 +467,15 @@ export function buildGrounds(kit) {
       flame.emissiveIntensity = 0.2 + 1.0 * dark;
       glowStone.emissiveIntensity = 0.05 + 0.9 * dark;
     });
-    // the walled back garden behind the villa (what the rooms' windows look out on): a low cream wall with a stone
-    // cap, a soft lawn, a lotus pond in a stone edge, banana plants, bird-of-paradise, rocks and a frangipani
+    // the back garden behind the villa, open, with no wall round it: a soft lawn, a lotus pond in a stone edge,
+    // banana plants, bird-of-paradise, rocks and a frangipani
     {
       const G = L.villaGarden;
       const [gx0, gx1, gz0, gz1] = [G.x0 * U, G.x1 * U, G.y0 * U, G.y1 * U];
       const gcx = (gx0 + gx1) / 2;
       const gcz = (gz0 + gz1) / 2;
-      const wallMat = mat('#f4ecdd');
       const capMat = mat('#d8cfbf');
       block(gx1 - gx0, 0.03, gz1 - gz0, mat('#8fbf6a'), gcx, 0.015, gcz, { receive: true }); // the lawn, greener
-      for (const [w, d, x, z] of [[gx1 - gx0, 0.2, gcx, gz0], [0.2, gz1 - gz0, gx0, gcz], [0.2, gz1 - gz0, gx1, gcz]]) {
-        block(w, 0.95, d, wallMat, x, 0.475, z);
-        block(w + 0.06, 0.08, d + 0.06, capMat, x, 0.99, z);
-      }
       // the lotus pond, toward the back, pink flowers on the pads
       const pondX = gcx - 1.2;
       const pondZ = gz0 + 2.2;

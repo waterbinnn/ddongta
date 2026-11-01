@@ -8,7 +8,7 @@ its pivot at its joint, so the page can swing legs and arms and turn the head in
 Colours are not set here: the page paints each part by name (skin, hair, shirt, pants, shoes), and draws the face.
 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
-  hips (shorts, one block) > torso (tee) > head (skin) > hair, ear_L / ear_R
+  hips (joint) > briefs (hidden), torso (tee) > head (skin) > hair, ear_L / ear_R
                               > arm_L / arm_R (sleeves) > hand_L / hand_R
                 > leg_L / leg_R (bare legs) > shoe_L / shoe_R, cuff_L / cuff_R (shorts round the ankles, hidden by default)
 """
@@ -137,8 +137,13 @@ def bean_bm(center, radii, flare=0.12):
 
 
 # ---------- body ----------
-# the shorts: one soft block fixed to the hips (the thin legs swing inside it); its top hides under the tee
-hips = new_object('hips', rounded_box_bm((0, 0, HIP_Z + 0.01), (0.13, 0.068, 0.07)), Vector((0, 0, HIP_Z)))
+# the hips: an empty joint that carries the legs and the body (the shorts are skinned, see below)
+hips = bpy.data.objects.new('hips', None)
+hips.location = (0, 0, HIP_Z)
+scene.collection.objects.link(hips)
+bpy.context.view_layer.update()  # so parts parented to it keep their place
+# white briefs, shown only when the shorts are pulled down
+new_object('briefs', rounded_box_bm((0, 0, HIP_Z + 0.03), (0.124, 0.062, 0.04)), Vector((0, 0, HIP_Z)), hips)
 # an A-line tee: narrow at the round shoulders, flaring a little to a hem that hangs over the top of the shorts
 tee = squircle_bm(NECK_Z - 0.01, HIP_Z + 0.035, (0, 0), 0.098, 0.084, n=3.0, rx_bottom=0.136, ry_bottom=0.106)
 made = bmesh.ops.create_uvsphere(tee, u_segments=24, v_segments=12, radius=1.0)
@@ -230,6 +235,69 @@ def hair_bm():
 
 new_object('hair', hair_bm(), Vector((0, 0, NECK_Z)), head)
 
+# ---------- shorts: one smooth piece with two legs, skinned so each leg of the shorts follows its leg ----------
+def join(objs, name):
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    objs[0].name = objs[0].data.name = name
+    return objs[0]
+
+
+def smoothstep(e0, e1, x):
+    t = max(0.0, min(1.0, (x - e0) / (e1 - e0)))
+    return t * t * (3 - 2 * t)
+
+
+# the rig: a pelvis bone and a thigh bone per leg, at the same joints the page swings the legs on
+rig = bpy.data.objects.new('rig', bpy.data.armatures.new('rig'))
+scene.collection.objects.link(rig)
+bpy.ops.object.select_all(action='DESELECT')
+rig.select_set(True)
+bpy.context.view_layer.objects.active = rig
+bpy.ops.object.mode_set(mode='EDIT')
+bones = rig.data.edit_bones
+pelvis_bone = bones.new('pelvis')
+pelvis_bone.head, pelvis_bone.tail = (0, 0, HIP_Z), (0, 0, HIP_Z + 0.08)
+for side, tag in ((1, 'L'), (-1, 'R')):
+    b = bones.new(f'thigh_{tag}')
+    b.head, b.tail = (side * LEG_X, 0, HIP_Z), (side * LEG_X, 0, HIP_Z - 0.12)
+    b.parent = pelvis_bone
+bpy.ops.object.mode_set(mode='OBJECT')
+
+# seat + two leg tubes, fused and smoothed into one surface (a soft crotch, no seams, no hard rims)
+origin = Vector((0, 0, 0))
+pieces = [new_object('shorts', rounded_box_bm((0, 0, HIP_Z + 0.04), (0.126, 0.064, 0.045)), origin)]
+for side, tag in ((1, 'L'), (-1, 'R')):
+    pieces.append(new_object(f'tube_{tag}', capsule_bm((side * 0.062, 0, HIP_Z + 0.035), (side * 0.064, 0, HIP_Z - 0.04), 0.062, 0.06), origin))
+shorts = join(pieces, 'shorts')
+remesh = shorts.modifiers.new('fuse', 'REMESH')
+remesh.mode = 'VOXEL'
+remesh.voxel_size = 0.006
+soften = shorts.modifiers.new('soften', 'CORRECTIVE_SMOOTH')
+soften.factor, soften.iterations, soften.use_only_smooth = 0.5, 8, True
+lighten = shorts.modifiers.new('lighten', 'DECIMATE')
+lighten.ratio = 0.06
+for m in ('fuse', 'soften', 'lighten'):
+    bpy.ops.object.modifier_apply(modifier=m)
+shorts.data.validate()
+for poly in shorts.data.polygons:
+    poly.use_smooth = True
+
+# weights: the waist follows the pelvis, each leg of the shorts its thigh, blending through the crotch
+groups = {n: shorts.vertex_groups.new(name=n) for n in ('pelvis', 'thigh_L', 'thigh_R')}
+for v in shorts.data.vertices:
+    x, z = v.co.x, v.co.z
+    leg = smoothstep(HIP_Z + 0.04, HIP_Z - 0.015, z)       # 0 at the waist, 1 down the legs
+    left = smoothstep(-0.025, 0.025, x)                    # which leg, softly across the middle
+    groups['pelvis'].add([v.index], 1 - leg, 'REPLACE')
+    groups['thigh_L'].add([v.index], leg * left, 'REPLACE')
+    groups['thigh_R'].add([v.index], leg * (1 - left), 'REPLACE')
+shorts.parent = rig
+shorts.modifiers.new('rig', 'ARMATURE').object = rig
+
 # ---------- export ----------
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 bpy.ops.object.select_all(action='SELECT')
@@ -257,12 +325,12 @@ if PREVIEW:
         return m
 
     skin, hair, shirt, pants, shoe = mat('skin', (1, 0.9, 0.84)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
-    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'cuff': pants, 'shoe': shoe}
+    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'shorts': pants, 'briefs': skin, 'cuff': pants, 'shoe': shoe}
     for o in scene.objects:
         if o.type == 'MESH':
             o.data.materials.append(next(v for k, v in paint.items() if o.name.startswith(k)))
     for o in scene.objects:
-        if o.name.startswith('cuff'):
+        if o.name.startswith(('cuff', 'briefs')):
             o.hide_render = True
 
     world = bpy.data.worlds.new('w')

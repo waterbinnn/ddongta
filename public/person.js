@@ -3,6 +3,7 @@
 // (legs and arms swing on their joints) and the face is a drawn decal that changes with the mood.
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
+import { clone as cloneRigged } from '/vendor/jsm/utils/SkeletonUtils.js';
 
 export const HIP_Y = 0.21; // hip joints above the feet (matches the Blender script)
 export const HEIGHT = 1.04;
@@ -24,7 +25,7 @@ export const peopleReady = new Promise((resolve) => {
 });
 
 // the one look: fair skin, soft brown hair, a butter-yellow tee, sky-blue shorts, white sneakers
-export const LOOK = { skin: '#fff1e8', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffffff' };
+export const LOOK = { skin: '#fff1e8', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffc9d6' }; // pale pink briefs, so they show against the fair skin
 
 // the only thing that differs between people: hair colour, picked from their id so it stays the same
 const HAIR_COLORS = ['#6b4630', '#2b2226', '#8a4b2a', '#d9814a', '#e8c26a'];
@@ -162,7 +163,7 @@ function faceGeometry(head) {
 // ---------- one person ----------
 
 export function makePerson(hair = LOOK.hair) {
-  const root = template ? template.clone(true) : new THREE.Group();
+  const root = template ? cloneRigged(template) : new THREE.Group(); // keeps the shorts bound to their own bones
   const parts = {};
   root.traverse((o) => {
     if (o.name) parts[o.name] = o;
@@ -172,7 +173,10 @@ export function makePerson(hair = LOOK.hair) {
   paint(['head', 'ear_L', 'ear_R', 'hand_L', 'hand_R', 'leg_L', 'leg_R'], LOOK.skin);
   if (parts.hair) parts.hair.material = matOf(hair, true); // an open shell: its inside can show at the edge
   paint(['torso', 'arm_L', 'arm_R'], LOOK.shirt);
-  paint(['hips', 'cuff_L', 'cuff_R'], LOOK.pants);
+  paint(['shorts', 'cuff_L', 'cuff_R'], LOOK.pants);
+  paint(['briefs'], LOOK.undies);
+  if (parts.briefs) parts.briefs.visible = false;
+  if (parts.shorts) parts.shorts.frustumCulled = false; // skinned: its bounds move with the legs
   paint(['shoe_L', 'shoe_R'], LOOK.shoes);
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = false;
 
@@ -187,8 +191,17 @@ export function makePerson(hair = LOOK.hair) {
   spin.add(root);
   group.add(spin);
   const rest = {};
-  for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R']) if (parts[n]) rest[n] = parts[n].position.clone();
-  return { group, spin, root, parts, face, rest, expr: 'idle', down: false };
+  for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R', 'rig']) if (parts[n]) rest[n] = parts[n].position.clone();
+  // each thigh bone of the shorts turns with its leg; keep how the bone sits at rest to turn it the same way
+  root.updateMatrixWorld(true);
+  const bones = {};
+  for (const n of ['thigh_L', 'thigh_R']) {
+    const b = parts[n];
+    if (!b?.isBone) continue;
+    const world = b.getWorldQuaternion(new THREE.Quaternion());
+    bones[n] = { bone: b, local: b.quaternion.clone(), world, worldInv: world.clone().invert() };
+  }
+  return { group, spin, root, parts, face, rest, bones, expr: 'idle', down: false };
 }
 
 export function disposePerson(p) {
@@ -201,17 +214,28 @@ export function setFace(p, expr) {
   p.face.material.map = faceTex(expr);
 }
 
-// pants round the ankles: bare legs, white undies, the pants bunched at the feet
+// shorts pulled down: white briefs, bare legs, the shorts bunched round the ankles
 export function setPantsDown(p, down) {
   if (p.down === down) return;
   p.down = down;
   const { parts } = p;
-  if (parts.hips) {
-    // pulled down, the shorts block shrinks up into a pair of white briefs
-    parts.hips.material = matOf(down ? LOOK.undies : LOOK.pants);
-    parts.hips.scale.y = down ? 0.55 : 1;
-  }
+  if (parts.shorts) parts.shorts.visible = !down;
+  if (parts.briefs) parts.briefs.visible = down;
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = down;
+}
+
+// turn each thigh bone of the shorts exactly as its leg turned, so the shorts follow the legs
+const qLeg = new THREE.Quaternion();
+function followLegs(p) {
+  const { parts: P, bones, rest } = p;
+  if (P.rig) P.rig.position.copy(rest.rig).add(P.hips.position).sub(rest.hips); // bob with the hips
+  for (const [leg, name] of [['leg_L', 'thigh_L'], ['leg_R', 'thigh_R']]) {
+    const b = bones[name];
+    if (!b) continue;
+    qLeg.setFromEuler(P[leg].rotation);
+    // the leg's turn, seen from the bone's own frame
+    b.bone.quaternion.copy(b.local).multiply(b.worldInv.clone().multiply(qLeg).multiply(b.world));
+  }
 }
 
 // mode: 'stand' | 'walk' | 'sit' | 'wash' | 'roll' | 'jump'
@@ -230,8 +254,8 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
   const breathe = Math.sin(t * 1.9 + seed) * 0.015;
   if (mode === 'walk') {
     const s = Math.sin(phase);
-    P.leg_L.rotation.x = s * 0.45; // small steps, so the legs stay inside the shorts
-    P.leg_R.rotation.x = -s * 0.45;
+    P.leg_L.rotation.x = s * 0.55;
+    P.leg_R.rotation.x = -s * 0.55;
     P.arm_L.rotation.x = -s * 0.55;
     P.arm_R.rotation.x = s * 0.55;
     P.arm_L.rotation.z = 0.12;
@@ -284,4 +308,5 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.arm_R.rotation.z = -0.1 - breathe;
     P.head.rotation.z = Math.sin(t * 0.7 + seed) * 0.05;
   }
+  followLegs(p);
 }

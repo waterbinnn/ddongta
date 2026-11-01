@@ -184,19 +184,25 @@ export function buildGrounds(kit) {
       vendingMachine(x, z, Math.atan2(tx - x, tz - z), k ? '#3f7fb5' : '#b8463e');
     });
   }
-  // the golden poop: a statue as big as a temple's Buddha, on a broad two-tier stone plinth.
+  // the golden poop: a statue as big as a temple's Buddha, on a round pale-stone pedestal like a park monument's.
   // Rub it, put your palms together, make a wish (all right there; tapping it walks you up to it)
   {
     const [x, z] = P(L.wish);
-    const stone = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), 2, 1), color: '#d8d2c6' }); // pale granite
-    const slab = (w, h, y) => {
-      const m = mesh(new THREE.BoxGeometry(w, h, w), stone, { cast: true, receive: true });
-      m.position.set(x, y, z);
+    const stone = new THREE.MeshPhongMaterial({ map: rep(plasterTexture(), 2, 1), color: '#e6e0d4', shininess: 25 }); // pale, smooth stone
+    const disc = (rTop, rBottom, h, y) => {
+      const m = mesh(new THREE.CylinderGeometry(rTop, rBottom, h, 64), stone, { cast: true, receive: true });
+      m.position.set(x, y + h / 2, z);
       root.add(m);
     };
-    slab(2.8, 0.25, 0.125); // the lower step
-    slab(2.2, 0.45, 0.475); // the plinth
-    slab(2.35, 0.08, 0.74); // its cap
+    disc(1.45, 1.45, 0.14, 0); // two low round steps
+    disc(1.24, 1.24, 0.14, 0.14);
+    disc(1.06, 1.0, 0.06, 0.28); // a moulding at the foot of the drum
+    disc(0.98, 0.98, 0.34, 0.34); // the drum
+    disc(1.14, 1.0, 0.1, 0.68); // a cornice it sits on
+    // a brass plaque on the front, facing the way in
+    const plaque = mesh(new THREE.BoxGeometry(0.62, 0.16, 0.02), new THREE.MeshPhongMaterial({ color: '#c9a15a', shininess: 90, specular: '#fff1c8' }));
+    plaque.position.set(x, 0.51, z + 0.985);
+    root.add(plaque);
     const hit = new THREE.Mesh(new THREE.BoxGeometry(2.6, 4.8, 2.6), M.hit);
     hit.position.set(x, 2.4, z);
     hit.userData.wish = true;
@@ -394,7 +400,6 @@ export function buildGrounds(kit) {
             [cyl(0.05, 0.055, 0.42), iron, 0.29],
             [cyl(0.075, 0.07, 0.03), iron, 0.515],
             [cyl(0.065, 0.065, 0.13), paper, 0.6],
-            ...[0, 1, 2, 3].map((k) => [new THREE.BoxGeometry(0.012, 0.13, 0.012).translate(Math.cos((k * Math.PI) / 2) * 0.066, 0, Math.sin((k * Math.PI) / 2) * 0.066), iron, 0.6]),
             [cyl(0.03, 0.1, 0.05), iron, 0.69],
             [new THREE.SphereGeometry(0.022, 8, 6), iron, 0.73],
           ]
@@ -406,7 +411,6 @@ export function buildGrounds(kit) {
             [cyl(0.07, 0.07, 0.05), iron, 2.4],
             [cyl(0.03, 0.06, 0.08), iron, 2.46],
             [cyl(0.14, 0.135, 0.34, 4).rotateY(Math.PI / 4), paper, 2.67], // the glass
-            ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => [new THREE.BoxGeometry(0.018, 0.36, 0.018).translate(a * 0.096, 0, b * 0.096), iron, 2.67]), // the frame's corners
             [new THREE.BoxGeometry(0.27, 0.03, 0.27), iron, 2.855],
             [cyl(0.02, 0.2, 0.14, 4).rotateY(Math.PI / 4), iron, 2.94],
             [cyl(0.012, 0.012, 0.08, 6), iron, 3.04],

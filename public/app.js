@@ -3,7 +3,7 @@ import * as THREE from '/vendor/three.module.js';
 import { peopleReady, makeCharacter, crownOf, hairFor, disposePerson, setFace, setFlush, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
 import { RoomEnvironment } from '/vendor/jsm/environments/RoomEnvironment.js';
-import { buildPrivateRoom } from './room.js';
+import { buildPrivateRoom, ROOM } from './room.js';
 import { makeBeanstalk, beanHeight, heightText } from './beanstalk.js';
 import { doorWoodCanvas } from './nature.js';
 
@@ -1474,7 +1474,7 @@ function applyState(st) {
       }
       if (me.s === -1 && u.s !== -1) setHold(false);
       me.s = u.s;
-      document.body.classList.toggle('seated', me.s !== -1);
+      document.body.classList.toggle('seated', me.s !== -1 && !(inRoom && roomStanding)); // the stick shows when you can walk
       me.p = u.p;
       me.rolling = Boolean(u.r);
       me.pd = Boolean(u.pd);
@@ -1631,9 +1631,8 @@ function waypoint(from, to) {
   return { x: clamp(from.x, P.x0 + 90, P.x1 - 90), y: edge + 40 };
 }
 
-function moveMe(dt) {
-  if (me.rolling) return;
-  // keys move relative to where the camera looks
+// the way you're asking to go, from the keys or the on-screen stick, turned to where the camera looks
+function readMoveInput() {
   let ix = 0;
   let iz = 0;
   if (keys.has('ArrowLeft') || keys.has('KeyA')) ix -= 1;
@@ -1653,8 +1652,41 @@ function moveMe(dt) {
     vx = Math.cos(cam.yaw) * ix - Math.sin(cam.yaw) * iz;
     vy = -Math.sin(cam.yaw) * ix - Math.cos(cam.yaw) * iz;
   }
+  return { vx, vy, held: Boolean(ix || iz), joyRun };
+}
+
+// walking about my own private room (only I see it, so it stays on this page): round the furniture, inside the walls
+const roomWalk = { x: 0, z: 0, turn: 0, walking: false, phase: 0 };
+function moveInRoom(dt) {
+  const { vx, vy, joyRun } = readMoveInput();
+  roomWalk.walking = Boolean(vx || vy);
+  if (!roomWalk.walking) return;
+  const len = Math.hypot(vx, vy);
+  const running = spaceHeld || joyRun;
+  const step = (running ? 2.6 : 1.4) * dt;
+  let x = roomWalk.x + (vx / len) * step;
+  let z = roomWalk.z + (vy / len) * step;
+  const b = room.bounds;
+  x = clamp(x, b.x0, b.x1);
+  z = clamp(z, b.z0, b.z1);
+  const R = 0.24; // about a body's width
+  for (const [x0, x1, z0, z1] of room.blockers) {
+    if (x <= x0 - R || x >= x1 + R || z <= z0 - R || z >= z1 + R) continue;
+    const out = [[x0 - R - x, 0], [x1 + R - x, 0], [0, z0 - R - z], [0, z1 + R - z]].reduce((a, c) => (Math.hypot(...c) < Math.hypot(...a) ? c : a));
+    x += out[0];
+    z += out[1];
+  }
+  roomWalk.x = x;
+  roomWalk.z = z;
+  roomWalk.turn = lerpAngle(roomWalk.turn, Math.atan2(vx, vy), Math.min(1, dt * 12));
+  roomWalk.phase += dt * (running ? 14 : 9);
+}
+
+function moveMe(dt) {
+  if (me.rolling) return;
+  let { vx, vy, held, joyRun } = readMoveInput();
   // arrows + Space, or a double-tapped destination
-  const running = !me.pd && (ix || iz ? spaceHeld || joyRun : Boolean(target?.run));
+  const running = !me.pd && (held ? spaceHeld || joyRun : Boolean(target?.run));
   me.running = running;
   let step = SPEED * (me.pd ? 0.45 : running ? 2 : 1) * dt;
   if (vx || vy) {
@@ -1709,6 +1741,7 @@ function sendMove(force) {
 
 // starts low and far back, looking in through the entrance at the whole plaza
 let skyView = 0; // 0 the usual view, 1 lying in the grass looking up
+const roomCamAt = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 const skyAt = new THREE.Vector3();
 const cam = { yaw: 0, pitch: 0.24, dist: 9, tYaw: 0, tPitch: 0.24, tDist: 9, fx: 20, fz: 48, look: 0, tLook: 0 }; // look: tilting the view up at the sky
@@ -1725,7 +1758,7 @@ const OG_VIEWS = {
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
 if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
 const DIST_MIN = 3.5;
-const ROOM_DIST = [2.4, 3.3]; // how near and far the camera can be inside the private room
+const ROOM_DIST = [2.6, 4.2]; // how near and far the camera can be inside the private room
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
 const DIST_MAX = 12; // zooming out stops before the place shrinks to a toy
 const BENCH_DIST = 2.6; // sitting at a terrace table: close, as if across the table from you
@@ -1847,7 +1880,7 @@ function updateCamera(dt) {
     // in a stall the camera only swings around the front, never behind it; in the private room it stays between the walls
     const off = cam.tYaw - LAYOUT[me.s].rot;
     const rel = Math.atan2(Math.sin(off), Math.cos(off));
-    const swing = inRoom ? 0.3 : 1.1;
+    const swing = inRoom ? (roomStanding ? 1.4 : 0.35) : 1.1; // up and about in your room, you can look round more
     cam.tYaw -= rel - clamp(rel, -swing, swing);
   }
   if (inRoom) {
@@ -1860,7 +1893,7 @@ function updateCamera(dt) {
   let fx = OG_VIEW ? OG_VIEW.fx : toX(me.x); // a preview frame holds its own spot
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
   if (inRoom) {
-    const aim = roomWorld(room.aim);
+    const aim = roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim); // up and about: it follows me
     fx = aim.x;
     fz = aim.z;
   } else if (me.s !== -1) {
@@ -1893,6 +1926,15 @@ function updateCamera(dt) {
       py = 0.9 + Math.sin(cam.pitch) * d;
       pz = cam.fz + cy * cp * d;
     }
+  }
+  if (inRoom) {
+    // never through the room's walls or ceiling
+    const local = room.group.worldToLocal(roomCamAt.set(px, py, pz));
+    local.x = clamp(local.x, -ROOM.W / 2 + 0.15, ROOM.W / 2 - 0.15);
+    local.z = clamp(local.z, -ROOM.D + 0.15, ROOM.FRONT - 0.12);
+    local.y = Math.min(local.y, ROOM.H - 0.2);
+    room.group.localToWorld(local);
+    ({ x: px, y: py, z: pz } = local);
   }
   camera.position.set(px, py, pz);
   if (roomShake > 0) {
@@ -2081,7 +2123,9 @@ function syncRoom(t, dt) {
   const washing = performance.now() < roomWashUntil;
   const spot = washing ? 'wash' : roomStanding ? 'stand' : 'seat';
   const g = roomPerson.group;
+  document.body.classList.toggle('seated', spot !== 'stand'); // the stick shows while you can walk about
   if (spot !== roomSpot) {
+    const from = roomSpot;
     roomSpot = spot;
     if (spot === 'seat') {
       room.seat.add(g);
@@ -2089,12 +2133,21 @@ function syncRoom(t, dt) {
       g.rotation.y = 0;
       setPantsDown(roomPerson, true);
     } else {
-      // up off the toilet, shorts on: standing beside it, or over at the sink
+      // up off the toilet, shorts on: standing in front of it (and walking about from there), or over at the basin
       room.group.add(g);
-      g.position.copy(spot === 'wash' ? room.washSpot : room.standSpot);
-      g.rotation.y = spot === 'wash' ? Math.PI / 2 : 0;
       setPantsDown(roomPerson, false);
+      if (spot === 'wash') {
+        g.position.copy(room.washSpot);
+        g.rotation.y = Math.PI / 2;
+      } else {
+        const at = from === 'wash' ? room.washSpot : room.standSpot;
+        Object.assign(roomWalk, { x: at.x, z: at.z, turn: from === 'wash' ? Math.PI / 2 : 0, walking: false });
+      }
     }
+  }
+  if (spot === 'stand') {
+    g.position.set(roomWalk.x, 0, roomWalk.z);
+    g.rotation.y = roomWalk.turn;
   }
   if (u) {
     syncTower(roomPerson, meId, u.pl, dt);
@@ -2102,7 +2155,7 @@ function syncRoom(t, dt) {
     syncUnder(roomPerson, meId, Boolean(u.un) && spot === 'seat', false);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
-    else if (spot === 'stand') pose(roomPerson, { mode: 'stand', t: t / 1000, seed: me.s });
+    else if (spot === 'stand') pose(roomPerson, { mode: roomWalk.walking ? 'walk' : 'stand', phase: roomWalk.phase, t: t / 1000, seed: me.s, upright: true });
     else {
       pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
       g.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
@@ -2826,6 +2879,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastFrame) / 1000);
   lastFrame = t;
   if (me.ready && me.s === -1) moveMe(dt);
+  else if (inRoom && roomStanding && performance.now() >= roomWashUntil) moveInRoom(dt);
   syncRoom(t, dt);
   updatePlaceName();
   placeWalkers(dt, t);
@@ -3821,14 +3875,15 @@ window.addEventListener('keydown', (e) => {
   }
   if (MOVE_KEYS.includes(e.code)) {
     e.preventDefault();
-    if (me.s !== -1) return; // in a stall the arrows do nothing; only Esc (or the button) gets you out
+    if (me.s !== -1 && !(inRoom && roomStanding)) return; // in a stall the arrows do nothing (up and about in your own room, they walk)
     keys.add(e.code);
   } else if (e.code === 'Space') {
     e.preventDefault();
     spaceHeld = true;
     if (me.s !== -1 || me.q) {
       if (inRoom && roomStanding) {
-        if (!e.repeat) roomStanding = false; // Space sits you back down
+        if (MOVE_KEYS.some((k) => keys.has(k))) return; // walking about the room: Space runs
+        if (!e.repeat) roomStanding = false; // otherwise it sits you back down
         return;
       }
       if (!e.repeat) setHold(true);

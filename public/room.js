@@ -1,12 +1,12 @@
 // The private toilet room behind a door of the private restroom (개인 화장실). There is only one: whoever goes in
-// sees their own room, and nobody else's. It follows the blockout in tools/blender/concept_stall.py
-// (Blender x, y, z become x, z-up, -y here), in bathhouse materials: hinoki slats under lime plaster, an oak floor, a window with the sky,
-// the toilet against the back wall, a side table with a magazine, a sink with a mirror, a chest with a diffuser,
-// a framed picture and a pendant lamp. The room is closed all round so the camera sits inside it.
+// sees their own room, and nobody else's. A roomy, hotel-like bathroom you can get up and walk about in:
+// warm stone tiles, walnut panelling under dark plaster, a cove of soft light round the ceiling and a skylight in it,
+// the toilet in a lit niche on the back wall, a long floating vanity with two basins under a glowing round mirror,
+// a big window with a bench of folded towels below it. The room is closed all round so the camera sits inside it.
 import * as THREE from '/vendor/three.module.js';
 
-export const ROOM = { W: 2.3, D: 2.6, FRONT: 1.6, H: 2.6 }; // width, depth to the back wall, room in front of the origin, height
-const TOILET = { x: -0.35, z: -2.15 };
+export const ROOM = { W: 4.0, D: 3.6, FRONT: 1.7, H: 3.0 }; // width, depth to the back wall, room in front of the origin, height
+const TOILET = { x: -0.7, z: -3.15 };
 
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas');
@@ -50,6 +50,32 @@ function floorTex(repeatX, repeatY) {
       g.fillRect(x, 0, 2, 640);
       const joint = (b % 2 ? 160 : 480) + Math.round(rand() * 40); // where one board ends and the next begins
       g.fillRect(x, joint, 64, 2);
+    }
+  }, [repeatX, repeatY]);
+}
+
+// the floor: big warm stone tiles, 60 cm, with soft veins and fine joints; the canvas holds 2 × 2 tiles
+function stoneTileTex(repeatX, repeatY) {
+  return canvasTex(512, 512, (g) => {
+    const rand = seeded(41);
+    for (let ty = 0; ty < 2; ty++) {
+      for (let tx = 0; tx < 2; tx++) {
+        const tone = 0.95 + rand() * 0.06;
+        g.fillStyle = `rgb(${Math.round(214 * tone)}, ${Math.round(203 * tone)}, ${Math.round(188 * tone)})`;
+        g.fillRect(tx * 256, ty * 256, 256, 256);
+        for (let k = 0; k < 5; k++) { // the veins
+          g.strokeStyle = `rgba(150, 135, 118, ${0.12 + rand() * 0.15})`;
+          g.lineWidth = 0.6 + rand() * 1.4;
+          g.beginPath();
+          const y0 = ty * 256 + rand() * 256;
+          g.moveTo(tx * 256, y0);
+          g.bezierCurveTo(tx * 256 + 80, y0 + (rand() - 0.5) * 120, tx * 256 + 170, y0 + (rand() - 0.5) * 120, tx * 256 + 256, y0 + (rand() - 0.5) * 80);
+          g.stroke();
+        }
+        g.fillStyle = 'rgba(120, 105, 90, 0.5)'; // the joints
+        g.fillRect(tx * 256, ty * 256, 256, 2);
+        g.fillRect(tx * 256, ty * 256, 2, 256);
+      }
     }
   }, [repeatX, repeatY]);
 }
@@ -166,6 +192,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   const group = new THREE.Group();
   group.visible = false;
   const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
+  const phong = (color, extra = {}) => new THREE.MeshPhongMaterial({ color, ...extra });
   const add = (geo, material, x, y, z, { cast = true, receive = true, parent = group } = {}) => {
     const m = new THREE.Mesh(geo, material);
     m.position.set(x, y, z);
@@ -177,143 +204,164 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   const box = (w, h, d, material, x, y, z, opts) => add(new THREE.BoxGeometry(w, h, d), material, x, y, z, opts);
   const cyl = (r1, r2, h, material, x, y, z, segs = 24, opts) => add(new THREE.CylinderGeometry(r1, r2, h, segs), material, x, y, z, opts);
   const ball = (r, material, x, y, z, opts) => add(new THREE.SphereGeometry(r, 16, 12), material, x, y, z, opts);
+  const glow = (color) => new THREE.MeshBasicMaterial({ color }); // lit from within: light strips, the mirror's ring
+  const blockers = []; // furniture you walk round: [x0, x1, z0, z1]
+  const block = (x, z, w, d) => blockers.push([x - w / 2, x + w / 2, z - d / 2, z + d / 2]);
 
   // ---------- floor, walls, ceiling: a closed box, so the camera is always inside ----------
   const depth = D + FRONT;
   const midZ = (FRONT - D) / 2;
-  const floor = add(new THREE.PlaneGeometry(W, depth), lambert('#ffffff', { map: floorTex(W / 0.48, depth / 1.2) }), 0, 0, midZ, { cast: false });
+  const floor = add(new THREE.PlaneGeometry(W, depth), lambert('#ffffff', { map: stoneTileTex(W / 1.2, depth / 1.2) }), 0, 0, midZ, { cast: false });
   floor.rotation.x = -Math.PI / 2;
-  // each wall: hinoki slats up to a rail at 1.05 m, lime plaster above
-  const PANEL = 1.05;
+  // each wall: walnut panelling up to a brass-capped rail at 1.15 m, dark warm plaster above
+  const PANEL = 1.15;
   const wall = (w, rotY, x, z) => {
-    const upper = add(new THREE.PlaneGeometry(w, H - PANEL), lambert('#5a4f45', { map: plasterTex(w / 1.2, (H - PANEL) / 1.2) }), x, PANEL + (H - PANEL) / 2, z, { cast: false }); // a deep, dark wall colour
+    const upper = add(new THREE.PlaneGeometry(w, H - PANEL), lambert('#4a4038', { map: plasterTex(w / 1.2, (H - PANEL) / 1.2) }), x, PANEL + (H - PANEL) / 2, z, { cast: false });
     upper.rotation.y = rotY;
-    const lower = add(new THREE.PlaneGeometry(w, PANEL), lambert('#ffffff', { map: slatTex(w / 0.6) }), x, PANEL / 2, z, { cast: false });
+    const lower = add(new THREE.PlaneGeometry(w, PANEL), lambert('#8a6446', { map: slatTex(w / 0.6) }), x, PANEL / 2, z, { cast: false });
     lower.rotation.y = rotY;
-    return upper;
   };
   wall(W, 0, 0, -D);                       // back
   wall(depth, Math.PI / 2, -W / 2, midZ);  // left
   wall(depth, -Math.PI / 2, W / 2, midZ);  // right
   wall(W, Math.PI, 0, FRONT);              // front, behind the camera
-  // the ceiling, with a skylight cut in it over the middle of the room: look up, and there's the sky
-  const SKY = { hw: 0.7, hd: 0.7, z: -0.45, well: 0.32 }; // half width, half depth, centre (the middle of the room), shaft depth
-  const ceilingMat = lambert('#ffffff', { map: ceilingTex(W / 0.8, depth / 0.8) });
+  const brass = phong('#c9a15a', { shininess: 90, specular: '#fff1c8' });
+  for (const x of [-W / 2 + 0.015, W / 2 - 0.015]) box(0.03, 0.035, depth, brass, x, PANEL, midZ, { cast: false });
+  for (const z of [-D + 0.015, FRONT - 0.015]) box(W, 0.035, 0.03, brass, 0, PANEL, z, { cast: false });
+  for (const x of [-W / 2 + 0.02, W / 2 - 0.02]) box(0.04, 0.08, depth, lambert('#3a2c22'), x, 0.04, midZ, { cast: false }); // skirting
+  for (const z of [-D + 0.02, FRONT - 0.02]) box(W, 0.08, 0.04, lambert('#3a2c22'), 0, 0.04, z, { cast: false });
+
+  // the ceiling: dark wooden battens, a cove of warm light all round its edge, and a skylight over the middle
+  const SKY = { hw: 0.85, hd: 0.85, z: -1.2, well: 0.35 };
+  const ceilingMat = lambert('#8a7258', { map: ceilingTex(W / 0.8, depth / 0.8) });
   const ceilingPart = (x0, x1, z0, z1) => {
     const part = add(new THREE.PlaneGeometry(x1 - x0, z1 - z0), ceilingMat, (x0 + x1) / 2, H, (z0 + z1) / 2, { cast: false });
     part.rotation.x = Math.PI / 2;
   };
-  ceilingPart(-W / 2, W / 2, -D, SKY.z - SKY.hd); // behind the skylight
-  ceilingPart(-W / 2, W / 2, SKY.z + SKY.hd, FRONT); // in front of it
-  ceilingPart(-W / 2, -SKY.hw, SKY.z - SKY.hd, SKY.z + SKY.hd); // either side
+  ceilingPart(-W / 2, W / 2, -D, SKY.z - SKY.hd);
+  ceilingPart(-W / 2, W / 2, SKY.z + SKY.hd, FRONT);
+  ceilingPart(-W / 2, -SKY.hw, SKY.z - SKY.hd, SKY.z + SKY.hd);
   ceilingPart(SKY.hw, W / 2, SKY.z - SKY.hd, SKY.z + SKY.hd);
-  // the shaft up through the roof: pale plaster sides, a wooden frame, and clear glass at the top
-  const shaft = lambert('#efe6d6', { side: THREE.DoubleSide });
-  const wellY = H + SKY.well / 2;
+  const shaft = lambert('#d9cdb9', { side: THREE.DoubleSide });
   for (const [w, rotY, x, z] of [[SKY.hw * 2, 0, 0, SKY.z - SKY.hd], [SKY.hw * 2, Math.PI, 0, SKY.z + SKY.hd], [SKY.hd * 2, Math.PI / 2, -SKY.hw, SKY.z], [SKY.hd * 2, -Math.PI / 2, SKY.hw, SKY.z]]) {
-    const side = add(new THREE.PlaneGeometry(w, SKY.well), shaft, x, wellY, z, { cast: false });
+    const side = add(new THREE.PlaneGeometry(w, SKY.well), shaft, x, H + SKY.well / 2, z, { cast: false });
     side.rotation.y = rotY;
   }
-  const oak = lambert('#7a5a3c');
-  for (const z of [SKY.z - SKY.hd, SKY.z + SKY.hd]) box(SKY.hw * 2 + 0.1, 0.05, 0.05, oak, 0, H - 0.02, z, { cast: false });
-  for (const x of [-SKY.hw, SKY.hw]) box(0.05, 0.05, SKY.hd * 2 + 0.1, oak, x, H - 0.02, SKY.z, { cast: false });
-  const pane = add(new THREE.PlaneGeometry(SKY.hw * 2, SKY.hd * 2), new THREE.MeshBasicMaterial({ color: '#dff0fa', transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }), 0, H + SKY.well, SKY.z, { cast: false, receive: false });
+  const oak = lambert('#5e4532');
+  for (const z of [SKY.z - SKY.hd, SKY.z + SKY.hd]) box(SKY.hw * 2 + 0.1, 0.06, 0.06, oak, 0, H - 0.03, z, { cast: false });
+  for (const x of [-SKY.hw, SKY.hw]) box(0.06, 0.06, SKY.hd * 2 + 0.1, oak, x, H - 0.03, SKY.z, { cast: false });
+  const pane = add(new THREE.PlaneGeometry(SKY.hw * 2, SKY.hd * 2), new THREE.MeshBasicMaterial({ color: '#dff0fa', transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }), 0, H + SKY.well, SKY.z, { cast: false, receive: false });
   pane.rotation.x = Math.PI / 2;
-  box(SKY.hw * 2 + 0.04, 0.03, 0.03, oak, 0, H + SKY.well, SKY.z, { cast: false }); // a glazing bar across the middle
-  // a dark wooden rail along the top of the slats
-  const trim = lambert('#7a5a3c');
-  for (const x of [-W / 2 + 0.02, W / 2 - 0.02]) box(0.04, 0.05, depth, trim, x, PANEL, midZ, { cast: false });
-  box(W, 0.05, 0.04, trim, 0, PANEL, -D + 0.02, { cast: false });
+  box(SKY.hw * 2 + 0.04, 0.03, 0.03, oak, 0, H + SKY.well, SKY.z, { cast: false });
+  const cove = glow('#ffd79a');
+  for (const x of [-W / 2 + 0.04, W / 2 - 0.04]) box(0.02, 0.02, depth - 0.1, cove, x, H - 0.12, midZ, { cast: false, receive: false });
+  for (const z of [-D + 0.04, FRONT - 0.04]) box(W - 0.1, 0.02, 0.02, cove, 0, H - 0.12, z, { cast: false, receive: false });
+  for (const x of [-W / 2 + 0.06, W / 2 - 0.06]) box(0.06, 0.03, depth, lambert('#3a2c22'), x, H - 0.1, midZ, { cast: false }); // the ledge hiding it
+  for (const z of [-D + 0.06, FRONT - 0.06]) box(W, 0.03, 0.06, lambert('#3a2c22'), 0, H - 0.1, z, { cast: false });
 
-  // ---------- the window on the left wall, with the sky behind it ----------
-  const cream = lambert('#fbf6ea');
-  const windowMat = new THREE.MeshBasicMaterial({ color: '#bfe0f7', map: windowTex() });
-  const glass = add(new THREE.PlaneGeometry(0.9, 0.75), windowMat, -W / 2 + 0.01, 1.6, -1.0, { cast: false, receive: false });
-  glass.rotation.y = Math.PI / 2;
-  box(0.05, 0.05, 0.96, cream, -W / 2 + 0.03, 1.6, -1.0);   // cross bar
-  box(0.05, 0.05, 1.0, cream, -W / 2 + 0.03, 1.98, -1.0);   // top
-  box(0.1, 0.05, 1.04, cream, -W / 2 + 0.05, 1.22, -1.0);   // sill
-  for (const z of [-0.53, -1.47]) box(0.05, 0.8, 0.05, cream, -W / 2 + 0.03, 1.6, z);
-
-  // ---------- the toilet against the back wall ----------
-  const porcelain = new THREE.MeshPhongMaterial({ color: '#fbfaf6', shininess: 60 });
+  // ---------- the toilet in a niche on the back wall, a lit shelf above it ----------
+  const porcelain = phong('#fbfaf6', { shininess: 80 });
   const tx = TOILET.x;
-  box(0.44, 0.42, 0.2, porcelain, tx, 0.62, TOILET.z - 0.2);
-  cyl(0.2, 0.16, 0.4, porcelain, tx, 0.2, TOILET.z + 0.08);
-  cyl(0.23, 0.23, 0.05, porcelain, tx, 0.42, TOILET.z + 0.12);
-  cyl(0.02, 0.02, 0.06, lambert('#c9c4bb'), tx + 0.16, 0.86, TOILET.z - 0.2);
-  // a paper roll on the wall beside it
-  const roll = cyl(0.06, 0.06, 0.11, lambert('#ffffff'), -W / 2 + 0.1, 0.72, TOILET.z + 0.3, 20);
+  const tz = TOILET.z;
+  box(1.1, 2.2, 0.02, lambert('#6e5a48', { map: plasterTex(1, 2) }), tx, 1.1, -D + 0.01, { cast: false }); // the niche's back, a shade lighter
+  box(1.1, 0.04, 0.2, lambert('#3a2c22'), tx, 1.45, -D + 0.1); // a shelf
+  box(1.06, 0.015, 0.015, glow('#ffd79a'), tx, 1.43, -D + 0.19, { cast: false, receive: false }); // lit from under its lip
+  box(0.5, 0.36, 0.18, porcelain, tx, 0.66, tz - 0.2); // a slim cistern
+  cyl(0.2, 0.17, 0.38, porcelain, tx, 0.19, tz + 0.08);
+  cyl(0.23, 0.23, 0.05, porcelain, tx, 0.42, tz + 0.12);
+  box(0.1, 0.02, 0.05, brass, tx, 0.85, tz - 0.2); // a brass flush plate
+  for (const k of [0, 1]) box(0.09, 0.12, 0.09, phong(k ? '#e8e1d4' : '#3a3633', { shininess: 40 }), tx - 0.25 + k * 0.5, 1.53, -D + 0.1); // two jars on the shelf
+  box(0.5, 0.64, 0.03, lambert('#1f1b19'), tx, 2.05, -D + 0.03); // a framed print over it
+  box(0.42, 0.56, 0.01, lambert('#ffffff', { map: pictureTex() }), tx, 2.05, -D + 0.05, { cast: false });
+  // a brass paper holder, and a little side table with a magazine
+  const roll = cyl(0.06, 0.06, 0.11, lambert('#ffffff'), tx - 0.5, 0.72, tz + 0.15, 20);
   roll.rotation.z = Math.PI / 2;
-  box(0.04, 0.03, 0.03, lambert('#c9c4bb'), -W / 2 + 0.03, 0.8, TOILET.z + 0.3);
-
-  // ---------- the side table: a magazine to read, a spare roll and a plunger ----------
-  const walnut = lambert('#3f3833');
-  box(0.42, 0.6, 0.38, walnut, tx + 0.62, 0.3, TOILET.z - 0.05);
-  const mag = box(0.3, 0.012, 0.22, lambert('#ffffff', { map: magazineTex() }), tx + 0.56, 0.607, TOILET.z - 0.1);
-  mag.rotation.y = -0.2;
-  box(0.18, 0.02, 0.02, lambert('#cfc6ba'), tx + 0.62, 0.42, TOILET.z + 0.15);
-  const spare = cyl(0.06, 0.06, 0.12, lambert('#ffffff'), tx + 0.62, 0.14, TOILET.z + 0.1, 20);
-  spare.rotation.x = Math.PI / 2;
-  cyl(0.09, 0.06, 0.06, lambert('#2e2a28'), tx + 0.98, 0.03, TOILET.z + 0.05);
-  cyl(0.012, 0.012, 0.55, lambert('#f2efe8'), tx + 0.98, 0.32, TOILET.z + 0.05, 8);
-
-  // ---------- the sink on a stand, towels, a mirror ----------
-  const steel = lambert('#8a6a4a'); // a wooden washstand
-  const sx = 0.85;
-  const sz = -1.25;
-  box(0.04, 0.8, 0.42, steel, sx + 0.18, 0.4, sz);
-  box(0.04, 0.8, 0.42, steel, sx - 0.2, 0.4, sz);
-  box(0.42, 0.04, 0.46, lambert('#a4825e'), sx - 0.02, 0.79, sz);
-  box(0.38, 0.03, 0.4, steel, sx - 0.02, 0.35, sz);
-  box(0.3, 0.1, 0.3, lambert('#ece6da'), sx - 0.02, 0.42, sz); // folded linen towels
-  cyl(0.17, 0.12, 0.14, porcelain, sx - 0.02, 0.88, sz);
-  const tap = cyl(0.015, 0.015, 0.22, lambert('#e9e6df'), W / 2 - 0.12, 1.02, sz, 10);
-  tap.rotation.z = Math.PI / 2;
-  box(0.03, 0.62, 0.5, lambert('#5a4330'), W / 2 - 0.02, 1.55, sz); // a dark wooden mirror frame
-  box(0.01, 0.54, 0.42, new THREE.MeshPhongMaterial({ color: '#dfeef0', shininess: 120 }), W / 2 - 0.04, 1.55, sz, { cast: false });
-
-  // ---------- a chest of drawers with a diffuser ----------
-  box(0.3, 0.9, 0.55, walnut, W / 2 - 0.17, 0.45, -0.55);
-  for (const y of [0.25, 0.55]) box(0.02, 0.02, 0.18, lambert('#cfc6ba'), W / 2 - 0.33, y, -0.55);
-  cyl(0.06, 0.06, 0.16, lambert('#b98f63', { transparent: true, opacity: 0.9 }), W / 2 - 0.17, 0.98, -0.55);
-  const stickMat = lambert('#d4a96b');
-  for (let k = 0; k < 4; k++) {
-    const a = k * 0.4 - 0.6;
-    const stick = cyl(0.006, 0.006, 0.3, stickMat, W / 2 - 0.17 + Math.sin(a) * 0.04, 1.16, -0.55, 6, { cast: false });
-    stick.rotation.set(0.15 * (k - 1.5), 0, -a * 0.3);
+  box(0.16, 0.02, 0.02, brass, tx - 0.5, 0.79, tz + 0.15);
+  const walnut = lambert('#4a382c');
+  cyl(0.2, 0.2, 0.03, walnut, tx + 0.65, 0.55, tz + 0.1);
+  cyl(0.025, 0.025, 0.52, brass, tx + 0.65, 0.27, tz + 0.1, 10);
+  cyl(0.14, 0.16, 0.02, brass, tx + 0.65, 0.01, tz + 0.1);
+  const mag = box(0.28, 0.012, 0.2, lambert('#ffffff', { map: magazineTex() }), tx + 0.65, 0.572, tz + 0.1);
+  mag.rotation.y = -0.3;
+  // a 쾌변 footstool: walnut, U-shaped round the toilet's foot, to put your feet up on
+  const stool = lambert('#5a4130');
+  box(0.6, 0.035, 0.12, stool, tx, 0.2, tz + 0.46); // the front bar
+  for (const sx of [-1, 1]) {
+    box(0.13, 0.035, 0.32, stool, tx + sx * 0.235, 0.2, tz + 0.3); // the arms either side
+    for (const sz of [0.18, 0.46]) box(0.05, 0.18, 0.05, stool, tx + sx * 0.25, 0.09, tz + sz); // legs
   }
+  block(tx, tz + 0.05, 0.65, 1.0);
+  block(tx + 0.65, tz + 0.1, 0.45, 0.45);
 
-  // ---------- a framed picture, the pendant lamp ----------
-  box(0.5, 0.62, 0.03, lambert('#2e2a28'), 0.35, 1.7, -D + 0.02);
-  box(0.42, 0.54, 0.01, lambert('#ffffff', { map: pictureTex() }), 0.35, 1.7, -D + 0.04, { cast: false });
-  // (the lamp hangs at the back, over the toilet, out of the skylight's way)
-  cyl(0.006, 0.006, 0.2, lambert('#2e2a28'), 0.2, 2.5, -1.95, 6, { cast: false });
-  cyl(0.04, 0.22, 0.16, new THREE.MeshLambertMaterial({ color: '#2e2a28', side: THREE.DoubleSide }), 0.2, 2.32, -1.95, 24, { cast: false });
-  ball(0.07, new THREE.MeshBasicMaterial({ color: '#fff3d6' }), 0.2, 2.22, -1.95, { cast: false, receive: false });
-  const lamp = new THREE.PointLight('#ffcf98', 4, 7, 1.4); // a low, warm light
-  lamp.position.set(0.2, 2.1, -1.95);
+  // ---------- the vanity along the right wall: floating walnut, a stone top, two basins, a glowing round mirror ----------
+  const vz = -1.1; // its middle
+  const vx = W / 2 - 0.3;
+  box(0.55, 0.42, 1.7, walnut, vx, 0.6, vz);
+  for (const z of [vz - 0.43, vz + 0.43]) box(0.02, 0.02, 0.5, brass, vx - 0.28, 0.62, z); // drawer pulls
+  box(0.58, 0.05, 1.76, phong('#ece6dc', { shininess: 70 }), vx, 0.835, vz);
+  const basins = [vz - 0.42, vz + 0.42];
+  for (const z of basins) {
+    cyl(0.17, 0.13, 0.13, porcelain, vx + 0.02, 0.92, z, 28);
+    const spout = cyl(0.012, 0.012, 0.16, brass, W / 2 - 0.06, 1.08, z, 10);
+    spout.rotation.z = Math.PI / 2;
+    cyl(0.02, 0.02, 0.2, brass, W / 2 - 0.05, 0.98, z, 10);
+  }
+  // the round mirror, with a warm ring of light behind it
+  const ring = add(new THREE.TorusGeometry(0.42, 0.025, 10, 48), glow('#ffd79a'), W / 2 - 0.03, 1.72, vz, { cast: false, receive: false });
+  ring.rotation.y = Math.PI / 2;
+  const mirror = add(new THREE.CircleGeometry(0.42, 48), phong('#cfe0e6', { shininess: 150, specular: '#ffffff', emissive: '#28343a' }), W / 2 - 0.035, 1.72, vz, { cast: false });
+  mirror.rotation.y = -Math.PI / 2;
+  const mirrorLight = new THREE.PointLight('#ffd9a8', 1.2, 3, 1.6);
+  mirrorLight.position.set(W / 2 - 0.4, 1.7, vz);
+  group.add(mirrorLight);
+  // a brass towel rail beside it, with a towel
+  for (const y of [0.9, 1.1, 1.3]) {
+    const bar = cyl(0.012, 0.012, 0.55, brass, W / 2 - 0.08, y, vz + 1.25, 10);
+    bar.rotation.x = Math.PI / 2;
+  }
+  box(0.04, 0.5, 0.42, lambert('#e9e2d4'), W / 2 - 0.09, 1.02, vz + 1.25);
+  block(vx, vz, 0.6, 1.8);
+
+  // ---------- a big window on the left wall, a bench of folded towels below it ----------
+  const cream = lambert('#2e2620'); // dark window frame
+  const windowMat = new THREE.MeshBasicMaterial({ color: '#bfe0f7', map: windowTex() });
+  const wz = -1.0;
+  const glass = add(new THREE.PlaneGeometry(1.5, 1.2), windowMat, -W / 2 + 0.01, 1.85, wz, { cast: false, receive: false });
+  glass.rotation.y = Math.PI / 2;
+  box(0.05, 0.05, 1.56, cream, -W / 2 + 0.03, 1.85, wz);
+  box(0.05, 0.06, 1.6, cream, -W / 2 + 0.03, 2.47, wz);
+  box(0.14, 0.05, 1.64, lambert('#3a2c22'), -W / 2 + 0.07, 1.23, wz);
+  for (const z of [wz - 0.77, wz, wz + 0.77]) box(0.05, 1.24, 0.05, cream, -W / 2 + 0.03, 1.85, z);
+  box(0.45, 0.06, 1.4, walnut, -W / 2 + 0.25, 0.45, wz); // the bench
+  for (const z of [wz - 0.6, wz + 0.6]) box(0.4, 0.42, 0.06, walnut, -W / 2 + 0.25, 0.21, z);
+  for (const [z, c] of [[wz - 0.3, '#ece6da'], [wz + 0.05, '#d9cbb8'], [wz + 0.35, '#ece6da']]) box(0.32, 0.12, 0.26, lambert(c), -W / 2 + 0.25, 0.54, z);
+  block(-W / 2 + 0.25, wz, 0.5, 1.45);
+
+  // ---------- light: soft and low, a warm point in the middle and a little fill from behind the camera ----------
+  const lamp = new THREE.PointLight('#ffcf98', 3.2, 9, 1.4);
+  lamp.position.set(0, H - 0.5, -1.6);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.bias = -0.004;
   group.add(lamp);
-  const fill = new THREE.PointLight('#ffe6c8', 0.9, 6, 1.2); // soft light from behind the camera, so faces aren't lost in the dark
-  fill.position.set(0, 1.9, 1.0);
+  const fill = new THREE.PointLight('#ffe6c8', 0.9, 7, 1.2);
+  fill.position.set(0, 2.0, FRONT - 0.4);
   group.add(fill);
 
   // where the sitter's hips go (facing out of the room, toward the camera)
   const seat = new THREE.Group();
-  seat.position.set(tx, SEAT_TOP - HIP_Y, TOILET.z + 0.3);
+  seat.position.set(tx, SEAT_TOP - HIP_Y, tz + 0.3);
   group.add(seat);
 
   return {
-    group, seat, windowMat,
-    aim: new THREE.Vector3(-0.1, 0, -1.9),             // what the camera looks at (local)
-    bowl: new THREE.Vector3(tx, 0.6, TOILET.z + 0.1),   // where a poop leaves from (local)
-    head: new THREE.Vector3(tx, 1.5, TOILET.z + 0.3),   // over the sitter's head (local)
-    knock: new THREE.Vector3(0.45, 1.55, -1.1),        // where a knock on the door shows (local)
-    washSpot: new THREE.Vector3(sx - 0.48, 0, sz),     // where you stand to wash, facing the sink (local)
-    standSpot: new THREE.Vector3(tx + 0.5, 0, TOILET.z + 0.85), // standing up, beside the toilet (local)
-    tap: new THREE.Vector3(sx - 0.02, 1.0, sz),         // the water falls from here into the basin (local)
+    group, seat, windowMat, blockers,
+    bounds: { x0: -W / 2 + 0.3, x1: W / 2 - 0.3, z0: -D + 0.3, z1: FRONT - 0.35 }, // where you can walk
+    aim: new THREE.Vector3(-0.2, 0, -2.4),              // what the camera looks at, sitting down (local)
+    bowl: new THREE.Vector3(tx, 0.6, tz + 0.1),         // where a poop leaves from (local)
+    head: new THREE.Vector3(tx, 1.5, tz + 0.3),         // over the sitter's head (local)
+    knock: new THREE.Vector3(0.6, 1.6, -1.6),           // where a knock on the door shows (local)
+    washSpot: new THREE.Vector3(vx - 0.62, 0, basins[0]), // where you stand to wash, facing the basin (local)
+    standSpot: new THREE.Vector3(tx + 0.4, 0, tz + 1.0), // getting up, just in front of the toilet (local)
+    tap: new THREE.Vector3(W / 2 - 0.14, 1.06, basins[0]), // the water falls from here into the basin (local)
   };
 }

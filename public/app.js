@@ -190,6 +190,9 @@ const ICONS = {
   drink: icon(['..xx..', '..xx..', '.YYYY.', 'YWWWWY', 'YWWWWY', 'YYYYYY', 'YYYYYY', '.yyyy.']),
   kick: icon(['...FF....', '...FF....', '...FF....', '..DDD....', '.DDDDDDD.', 'DDDDDDDDD', 'ddddddddd']),
   lie: icon(['.........', '.FF......', 'FffAAAAA.', 'FffAAAAAA', '.FF......']),
+  read: icon(['WWWW.WWWW', 'WggW.WggW', 'WWWW.WWWW', 'WggW.WggW', 'WWWWDWWWW', '....D....']),
+  dance: icon(['..b....', '..bb...', '..b.b..', '..b....', 'bbb....', 'bbb....']),
+  lamp: icon(['.kkkkk.', 'kkkkkkk', '...D...', '...D...', '...D...', '.DDDDD.']),
   lunch: icon(['DDDDDDDDD', 'DWWWWkxAD', 'DWWWWkkAD', 'DWWWWxkAD', 'DDDDDDDDD']),
   // the push button: an empty (pale) poop that fills up with the real one
   poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
@@ -242,7 +245,44 @@ let roomPersonFor = '';
 let roomShake = 0;
 let roomWashUntil = 0; // washing at the room's sink until then
 let roomStanding = false; // up off the toilet, standing in the room
-let roomOnStool = false; // sitting on the stool in the corner, resting
+let roomSeat = -1; // sitting on one of the room's seats (the stool, the sofa), resting; -1 when not
+let roomLastSeat = 0; // the last one, to get up beside it
+let readUntil = 0; // reading the magazine until then
+let danceUntil = 0; // dancing until then
+const reading = () => performance.now() < readUntil;
+const dancing = () => performance.now() < danceUntil;
+// 오늘의 한 줄: what the magazine says today
+const LINES = [
+  '급할수록 천천히, 힘줄수록 숨 쉬기.',
+  '오늘 하루도 무사히 내보내는 중입니다.',
+  '변기 위의 5분은 누구에게도 방해받지 않는 시간.',
+  '물은 하루 여덟 잔, 고민은 하루 한 번만.',
+  '나오지 않는 날도 있다. 그런 날은 바나나우유.',
+  '좋은 생각은 대개 변기 위에서 떠오른다.',
+  '쾌변은 기다림의 기술입니다.',
+  '오늘의 운세: 뒤가 시원한 하루.',
+  '인생은 들어가는 것보다 나오는 게 중요하다.',
+  '휴지는 넉넉히, 마음도 넉넉히.',
+  '신호가 오면 미루지 말 것. 사랑도, 똥도.',
+  '다리 저리기 전에 일어나기.',
+];
+function readMagazine() {
+  if (reading()) {
+    readUntil = 0;
+    return;
+  }
+  readUntil = performance.now() + 10000;
+  $('#readCard p').textContent = LINES[Math.floor(Math.random() * LINES.length)];
+}
+function dance() {
+  danceUntil = dancing() ? 0 : performance.now() + 9000;
+}
+const MOODS = [['warm', '은은한 조명'], ['dim', '어두운 조명'], ['party', '파티 조명']];
+function nextMood() {
+  const k = (MOODS.findIndex(([m]) => m === room.mood.name) + 1) % MOODS.length;
+  room.mood.set(MOODS[k][0]);
+  toast(MOODS[k][1]);
+}
 let roomSpot = ''; // where I am in the room: 'seat', 'stand' or 'wash'
 let snapCam = false; // jump the camera instead of flying it (going into or out of the room)
 
@@ -1653,13 +1693,30 @@ function readMoveInput() {
     vx = Math.cos(cam.yaw) * ix - Math.sin(cam.yaw) * iz;
     vy = -Math.sin(cam.yaw) * ix - Math.cos(cam.yaw) * iz;
   }
-  return { vx, vy, held: Boolean(ix || iz), joyRun };
+  return { vx, vy, ix, iz, held: Boolean(ix || iz), joyRun };
 }
 
 // walking about my own private room (only I see it, so it stays on this page): round the furniture, inside the walls
 const roomWalk = { x: 0, z: 0, turn: 0, walking: false, phase: 0 };
 let leavingRoom = false; // walked out through the door, waiting for the server to say so
-const nearStool = () => inRoom && roomStanding && !roomOnStool && Math.hypot(roomWalk.x - room.stool.x, roomWalk.z - room.stool.z) < 0.95;
+// the seat (stool or sofa) I'm standing by, or -1
+const nearSeat = () => (inRoom && roomStanding && roomSeat < 0 ? room.seats.findIndex((st) => Math.hypot(roomWalk.x - st.at.x, roomWalk.z - st.at.z) < st.near) : -1);
+let partyLit = false;
+// holding the magazine open in both hands, looking down into it
+function readFor(p, on) {
+  if (!p.magazine) {
+    if (!on) return;
+    p.magazine = room.magazine();
+    p.magazine.position.set(0, HIP_Y + 0.36, 0.26);
+    p.magazine.rotation.x = -0.95; // tipped up toward the face
+    p.group.add(p.magazine);
+  }
+  p.magazine.visible = on;
+  if (!on) return;
+  p.parts.arm_L?.rotation.set(-1.15, 0, -0.32);
+  p.parts.arm_R?.rotation.set(-1.15, 0, 0.32);
+  p.parts.head?.rotation.set(0.35, 0, 0);
+}
 
 function moveInRoom(dt) {
   const { vx, vy, joyRun } = readMoveInput();
@@ -1694,7 +1751,13 @@ function moveInRoom(dt) {
 
 function moveMe(dt) {
   if (me.rolling) return;
-  let { vx, vy, held, joyRun } = readMoveInput();
+  let { vx, vy, ix, iz, held, joyRun } = readMoveInput();
+  if (me.ly && !target) {
+    // lying in the grass: the arrows (or the stick) look round the sky instead of getting you up
+    skyLook.yaw -= ix * dt * 1.3;
+    skyLook.pitch = clamp(skyLook.pitch + iz * dt * 0.9, -0.7, 0.55);
+    return;
+  }
   // arrows + Space, or a double-tapped destination
   const running = !me.pd && (held ? spaceHeld || joyRun : Boolean(target?.run));
   me.running = running;
@@ -1751,6 +1814,7 @@ function sendMove(force) {
 
 // starts low and far back, looking in through the entrance at the whole plaza
 let skyView = 0; // 0 the usual view, 1 lying in the grass looking up
+const skyLook = { yaw: 0, pitch: 0 }; // looking round the sky from where you lie
 const roomCamAt = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 const skyAt = new THREE.Vector3();
@@ -1886,7 +1950,13 @@ function clearDist(fx, fz, yaw, pitch, dist) {
 function updateCamera(dt) {
   if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
-  if (inRoom && roomStanding && !roomOnStool) {
+  if (inRoom && roomSeat >= 0) {
+    // resting on the stool or the sofa: the camera comes round in front of it
+    if (performance.now() - manualCamAt > 2500) {
+      const want = room.seats[roomSeat].turn;
+      cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
+    }
+  } else if (inRoom && roomStanding && roomSeat < 0) {
     // walking about the room: the camera keeps to the middle of the room and looks out at me, so by a wall
     // (or at the door) you see the wall, not the top of your head. Turning it by hand pauses this for a moment.
     const dx = -roomWalk.x;
@@ -1912,7 +1982,8 @@ function updateCamera(dt) {
   let fx = OG_VIEW ? OG_VIEW.fx : toX(me.x); // a preview frame holds its own spot
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
   if (inRoom) {
-    const aim = roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim); // up and about: it follows me
+    const seat = room.seats[roomSeat];
+    const aim = seat ? roomWorld(new THREE.Vector3(seat.at.x, 0, seat.at.z)) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x, 0, roomWalk.z)) : roomWorld(room.aim); // resting, walking about, or on the toilet
     fx = aim.x;
     fz = aim.z;
   } else if (me.s !== -1) {
@@ -1975,7 +2046,10 @@ function updateCamera(dt) {
     const x = toX(me.x);
     const z = toZ(me.y);
     camera.position.lerp(skyAt.set(x + fx * 0.15, 0.55, z + fz * 0.15), skyView);
-    lookAt.lerp(skyAt.set(x - fx * 5, 7, z - fz * 5), skyView); // up past your head, with the treetops round the edge
+    // up past your head (with the treetops round the edge), turned by the arrows as you look about
+    const heading = Math.atan2(-fx, -fz) + skyLook.yaw;
+    const up = 0.95 + skyLook.pitch;
+    lookAt.lerp(skyAt.set(x + Math.sin(heading) * Math.cos(up) * 5, 0.55 + Math.sin(up) * 5, z + Math.cos(heading) * Math.cos(up) * 5), skyView);
   }
   camera.lookAt(lookAt);
   // while typing, the keyboard covers the bottom of the screen: slide the picture up so you
@@ -2119,7 +2193,8 @@ function syncRoom(t, dt) {
     roomFor = want;
     inRoom = want >= 0;
     roomStanding = false; // you come in and sit down
-    roomOnStool = false;
+    roomSeat = -1;
+    readUntil = danceUntil = 0;
     leavingRoom = false;
     roomSpot = '';
     room.group.visible = inRoom;
@@ -2142,7 +2217,7 @@ function syncRoom(t, dt) {
     roomPersonFor = meId;
   }
   const washing = performance.now() < roomWashUntil;
-  const spot = washing ? 'wash' : roomOnStool ? 'stool' : roomStanding ? 'stand' : 'seat';
+  const spot = washing ? 'wash' : roomSeat >= 0 ? 'rest' : roomStanding ? 'stand' : 'seat';
   const g = roomPerson.group;
   document.body.classList.toggle('seated', spot !== 'stand'); // the stick shows while you can walk about
   if (spot !== roomSpot) {
@@ -2160,11 +2235,14 @@ function syncRoom(t, dt) {
       if (spot === 'wash') {
         g.position.copy(room.washSpot);
         g.rotation.y = Math.PI / 2;
-      } else if (spot === 'stool') {
-        g.position.copy(room.stool);
-        g.rotation.y = 0; // facing into the room, toward the camera
-      } else if (from === 'stool') {
-        Object.assign(roomWalk, { x: room.stool.x, z: room.stool.z + 0.55, turn: 0, walking: false }); // up, just in front of it
+      } else if (spot === 'rest') {
+        const seat = room.seats[roomSeat];
+        roomLastSeat = roomSeat;
+        g.position.copy(seat.at);
+        g.rotation.y = seat.turn; // facing into the room
+      } else if (from === 'rest') {
+        const seat = room.seats[roomLastSeat];
+        Object.assign(roomWalk, { x: seat.up.x, z: seat.up.z, turn: seat.turn, walking: false }); // up, just in front of it
       } else {
         const at = from === 'wash' ? room.washSpot : room.standSpot;
         Object.assign(roomWalk, { x: at.x, z: at.z, turn: from === 'wash' ? Math.PI / 2 : 0, walking: false });
@@ -2181,15 +2259,22 @@ function syncRoom(t, dt) {
     syncUnder(roomPerson, meId, Boolean(u.un) && spot === 'seat', false);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
-    else if (spot === 'stool') pose(roomPerson, { mode: 'sit', t: t / 1000, seed: me.s, upright: true });
-    else if (spot === 'stand') pose(roomPerson, { mode: roomWalk.walking ? 'walk' : 'stand', phase: roomWalk.phase, t: t / 1000, seed: me.s, upright: true });
+    else if (spot === 'rest') pose(roomPerson, { mode: 'sit', t: t / 1000, seed: me.s, upright: true });
+    else if (spot === 'stand') pose(roomPerson, { mode: dancing() && !roomWalk.walking ? 'dance' : roomWalk.walking ? 'walk' : 'stand', phase: roomWalk.phase, t: t / 1000, seed: me.s, upright: true });
     else {
       pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
       g.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
     }
     handFor(roomPerson, meId, u, !washing);
     lunchFor(roomPerson, meId, t / 1000, spot === 'seat');
+    readFor(roomPerson, (spot === 'seat' || spot === 'rest') && reading());
   }
+  if (spot === 'stand' || spot === 'wash') readUntil = 0; // the magazine stays by the seat
+  if (spot !== 'stand') danceUntil = 0;
+  $('#readCard').hidden = !reading();
+  room.mood.tick(t / 1000, dancing());
+  if (!dancing() && room.mood.name !== 'party' && partyLit) room.mood.set(room.mood.name); // the party's over: back to how it was
+  partyLit = dancing() || room.mood.name === 'party';
 }
 
 let hoverStall = -1;
@@ -2906,7 +2991,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastFrame) / 1000);
   lastFrame = t;
   if (me.ready && me.s === -1) moveMe(dt);
-  else if (inRoom && roomStanding && !roomOnStool && performance.now() >= roomWashUntil) moveInRoom(dt);
+  else if (inRoom && roomStanding && roomSeat < 0 && performance.now() >= roomWashUntil) moveInRoom(dt);
   syncRoom(t, dt);
   updatePlaceName();
   placeWalkers(dt, t);
@@ -2937,11 +3022,11 @@ function renderActions() {
   const near = out && nearestEmptyStall(me.x, me.y) >= 0;
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
-  const mode = inStall ? (inRoom && roomOnStool ? 'resting' : inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.ly ? 'lying' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
+  const mode = inStall ? (inRoom && roomSeat >= 0 ? 'resting' : inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.ly ? 'lying' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}${nearStool() ? 'stool' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}seat${nearSeat()}${reading() ? 'read' : ''}${dancing() ? 'dance' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -2967,17 +3052,21 @@ function renderActions() {
   }
   // the bottom bar: the one main thing to do here (Space), and only what belongs to this place
   if (mode === 'inside') {
-    if (inRoom) bar.append(withKey(miniBtn('jump', '일어나기', () => { setHold(false); roomStanding = true; }), 'F'));
+    if (inRoom) bar.append(withKey(miniBtn('jump', '일어나기', () => { setHold(false); roomStanding = true; }), 'F'), miniBtn('read', reading() ? '그만 읽기' : '잡지 읽기', readMagazine));
     bar.append(withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   } else if (mode === 'squatting') {
     bar.append(withKey(miniBtn('jump', '일어나기', () => send({ t: 'squat', on: false })), 'F'));
   } else if (mode === 'standing') {
     // up and about in my own room: sit on the stool when you're by it, or back on the toilet whenever
-    if (nearStool()) bar.append(mainBtn('bench', '스툴에 앉기', () => { roomOnStool = true; }));
-    bar.append(withKey(nearStool() ? miniBtn('bench', '변기에 앉기', () => { roomStanding = false; }) : mainBtn('bench', '변기에 앉기', () => { roomStanding = false; }), 'F'), withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+    const by = nearSeat();
+    if (by >= 0) bar.append(mainBtn('bench', room.seats[by].label, () => { roomSeat = by; danceUntil = 0; }));
+    const toilet = () => { roomStanding = false; danceUntil = 0; };
+    bar.append(withKey(by >= 0 ? miniBtn('bench', '변기에 앉기', toilet) : mainBtn('bench', '변기에 앉기', toilet), 'F'));
+    bar.append(miniBtn('dance', dancing() ? '그만 추기' : '춤추기', dance), miniBtn('lamp', '조명 바꾸기', nextMood));
+    bar.append(withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   } else if (mode === 'resting') {
     // sitting on the stool, just resting
-    bar.append(withKey(mainBtn('jump', '일어나기', () => { roomOnStool = false; roomStanding = true; }), 'F'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+    bar.append(withKey(mainBtn('jump', '일어나기', () => { roomSeat = -1; roomStanding = true; }), 'F'), miniBtn('read', reading() ? '그만 읽기' : '잡지 읽기', readMagazine), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -3058,6 +3147,7 @@ function labelKeys(bar) {
 // 눕기: on your back right here, and the view goes up to the sky
 function lieDown() {
   target = null;
+  skyLook.yaw = skyLook.pitch = 0;
   sendMove(true);
   send({ t: 'lie', on: true });
 }
@@ -3962,7 +4052,7 @@ const TRACKS = { waltz: startWaltz, hiphop: startHiphop, forest: startForest };
 let track = { name: '', stop: null };
 function wantedTrack() {
   if (soundMode !== 'all' || !soundStarted) return ''; // the place sounds come with 배경음악도; 효과음만 keeps them off
-  if (inRoom) return 'waltz';
+  if (inRoom) return dancing() ? 'hiphop' : 'waltz'; // dancing in the room puts the beat on
   if ((me.s !== -1 && LAYOUT[me.s]?.type === 'public') || (GROUNDS && placeAt(me.x, me.y) === '공중화장실')) return 'hiphop';
   if (inBushHere()) return 'forest';
   return ''; // out on the grounds it's quiet
@@ -4100,8 +4190,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (MOVE_KEYS.includes(e.code)) {
     e.preventDefault();
-    // sitting, lying or squatting: the down arrow gets you up (on the toilet in your room, the stool, a mat, the grass)
-    if ((e.code === 'ArrowDown' || e.code === 'KeyS') && ((inRoom && !roomStanding) || roomOnStool || me.b || me.ly || me.q)) {
+    // sitting or squatting: the down arrow gets you up (on the toilet in your room, the stool or sofa, a mat, the grass)
+    if ((e.code === 'ArrowDown' || e.code === 'KeyS') && ((inRoom && !roomStanding) || roomSeat >= 0 || me.b || me.q)) {
       const up = [...document.querySelectorAll('#actions button')].find((b) => b.textContent.startsWith('일어나기'));
       if (up && !e.repeat) up.click();
       return;
@@ -4112,7 +4202,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     spaceHeld = true;
     if (me.s !== -1 || me.q) {
-      if (inRoom && (roomStanding || roomOnStool)) {
+      if (inRoom && (roomStanding || roomSeat >= 0)) {
         if (MOVE_KEYS.some((k) => keys.has(k))) return; // walking about the room: Space runs
         if (!e.repeat) $('#actions button.main')?.click(); // otherwise the main button: sit down, or get up
         return;

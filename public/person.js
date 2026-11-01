@@ -461,6 +461,18 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
     P.leg_L.rotation.set(0, 0, 0.12);
     P.leg_R.rotation.set(0, 0, -0.12);
     P.head.rotation.y = Math.sin(t * 0.4 + seed) * 0.15;
+  } else if (mode === 'dance') {
+    // dancing in your own room: bouncing on the beat, hips swaying, one arm up then the other
+    const b = t * 7.5;
+    const s = Math.sin(b);
+    P.hips.position.y += Math.abs(Math.sin(b)) * 0.05;
+    P.torso.rotation.z = Math.sin(b / 2) * 0.15;
+    P.torso.rotation.y = Math.sin(b / 2) * 0.3;
+    P.arm_L.rotation.z = 0.4 + Math.max(0, s) * 2.2;
+    P.arm_R.rotation.z = -0.4 - Math.max(0, -s) * 2.2;
+    P.leg_L.rotation.x = -Math.max(0, s) * 0.45;
+    P.leg_R.rotation.x = -Math.max(0, -s) * 0.45;
+    P.head.rotation.z = s * 0.12;
   } else if (mode === 'boat') {
     // 보트 자세: sitting on the bottom, leaning back, legs and arms up in a V, wobbling a little
     const w = Math.sin(t * 3) * 0.05;

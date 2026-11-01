@@ -301,7 +301,8 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     cyl(0.02, 0.02, 0.2, brass, W / 2 - 0.05, 0.98, z, 10);
   }
   // the round mirror, with a warm ring of light behind it
-  const ring = add(new THREE.TorusGeometry(0.42, 0.025, 10, 48), glow('#ffd79a'), W / 2 - 0.03, 1.72, vz, { cast: false, receive: false });
+  const ringMat = glow('#ffd79a');
+  const ring = add(new THREE.TorusGeometry(0.42, 0.025, 10, 48), ringMat, W / 2 - 0.03, 1.72, vz, { cast: false, receive: false });
   ring.rotation.y = Math.PI / 2;
   const mirror = add(new THREE.CircleGeometry(0.42, 48), phong('#cfe0e6', { shininess: 150, specular: '#ffffff', emissive: '#28343a' }), W / 2 - 0.035, 1.72, vz, { cast: false });
   mirror.rotation.y = -Math.PI / 2;
@@ -355,6 +356,30 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   }
   block(stoolAt.x, stoolAt.z, 0.5, 0.5);
 
+  // ---------- a hotel loveseat along the right wall by the front, cushions and all, and a brass floor lamp ----------
+  const sofaAt = { x: W / 2 - 0.42, z: 1.0 };
+  const fabric = lambert('#c9b9a2'); // oatmeal bouclé
+  box(0.75, 0.12, 1.3, walnut, sofaAt.x, 0.08, sofaAt.z); // the walnut base
+  box(0.62, 0.17, 1.12, fabric, sofaAt.x - 0.05, 0.31, sofaAt.z); // the seat cushion
+  box(0.18, 0.46, 1.12, fabric, W / 2 - 0.12, 0.6, sofaAt.z); // the back
+  for (const s of [-1, 1]) box(0.75, 0.46, 0.11, fabric, sofaAt.x, 0.37, sofaAt.z + s * 0.6); // the arms
+  for (const [dz, c, tilt] of [[-0.33, '#8a5a3c', 0.25], [0.33, '#3d4a5c', -0.2]]) {
+    const pillow = box(0.12, 0.32, 0.32, lambert(c), W / 2 - 0.27, 0.56, sofaAt.z + dz);
+    pillow.rotation.set(tilt, 0, 0.18);
+  }
+  block(sofaAt.x, sofaAt.z, 0.8, 1.35);
+  // the floor lamp in the back right corner, behind the stool: a brass stem, a linen drum shade glowing warm
+  const flX = W / 2 - 0.35;
+  const flZ = -D + 0.35;
+  cyl(0.16, 0.18, 0.03, brass, flX, 0.015, flZ, 24);
+  cyl(0.012, 0.012, 1.45, brass, flX, 0.74, flZ, 8);
+  const shadeMat = new THREE.MeshLambertMaterial({ color: '#f1e6d2', emissive: '#ffbf75', emissiveIntensity: 0.6, side: THREE.DoubleSide });
+  cyl(0.2, 0.24, 0.3, shadeMat, flX, 1.52, flZ, 32, { cast: false });
+  const floorLight = new THREE.PointLight('#ffcf98', 0.9, 4, 1.6);
+  floorLight.position.set(flX, 1.45, flZ);
+  group.add(floorLight);
+  block(flX, flZ, 0.35, 0.35);
+
   // ---------- light: soft and low, a warm point in the middle and a little fill from behind the camera ----------
   const lamp = new THREE.PointLight('#ffcf98', 3.2, 9, 1.4);
   lamp.position.set(0, H - 0.5, -1.6);
@@ -366,6 +391,39 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   fill.position.set(0, 2.0, FRONT - 0.4);
   group.add(fill);
 
+  // the lighting moods: warm (as it is), dim (low and cosy), party (the colours go round); dancing brings the party
+  const lights = [[lamp, 3.2], [fill, 0.9], [mirrorLight, 1.2], [floorLight, 0.9]];
+  const warm = new THREE.Color('#ffcf98');
+  const coveWarm = new THREE.Color('#ffd79a');
+  const hue = new THREE.Color();
+  let moodNow = 'warm';
+  const mood = {
+    get name() {
+      return moodNow;
+    },
+    set(name) {
+      moodNow = name;
+      const dim = name === 'dim' ? 0.35 : 1;
+      for (const [l, base] of lights) {
+        l.intensity = base * dim;
+        l.color.copy(warm);
+      }
+      cove.color.copy(coveWarm).multiplyScalar(name === 'dim' ? 0.45 : 1);
+      ringMat.color.copy(cove.color);
+      shadeMat.emissiveIntensity = name === 'dim' ? 0.35 : 0.6;
+    },
+    // every frame: in party mode the colours go round, the light pulsing a little to the beat
+    tick(t, party) {
+      if (!party && moodNow !== 'party') return;
+      hue.setHSL((t * 0.12) % 1, 0.85, 0.6);
+      cove.color.copy(hue);
+      ringMat.color.setHSL((t * 0.12 + 0.5) % 1, 0.85, 0.6);
+      lamp.color.copy(hue);
+      lamp.intensity = 2.4 + Math.abs(Math.sin(t * 7.5)) * 1.2;
+      mirrorLight.color.setHSL((t * 0.12 + 0.33) % 1, 0.8, 0.6);
+    },
+  };
+
   // where the sitter's hips go (facing out of the room, toward the camera)
   const seat = new THREE.Group();
   seat.position.set(tx, SEAT_TOP - HIP_Y, tz + 0.3);
@@ -373,7 +431,12 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
 
   return {
     group, seat, windowMat, blockers,
-    stool: new THREE.Vector3(stoolAt.x, seatTop - HIP_Y, stoolAt.z), // where the hips go, sitting on the stool (local)
+    // places to sit and rest: where the hips go, which way you face, where you get up to, and how near counts as by it
+    seats: [
+      { label: '스툴에 앉기', at: new THREE.Vector3(stoolAt.x, seatTop - HIP_Y, stoolAt.z), turn: 0, up: { x: stoolAt.x, z: stoolAt.z + 0.55 }, near: 0.95 },
+      { label: '소파에 앉기', at: new THREE.Vector3(W / 2 - 0.55, 0.45 - HIP_Y, sofaAt.z), turn: -Math.PI / 2, up: { x: W / 2 - 1.15, z: sofaAt.z }, near: 1.25 },
+    ],
+    mood, magazine: () => new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.008, 0.21), new THREE.MeshLambertMaterial({ map: magazineTex() })),
     door: { x: -W / 2, z: doorZ, half: 0.42 }, // walk into it and you're out (local)
     bounds: { x0: -W / 2 + 0.3, x1: W / 2 - 0.3, z0: -D + 0.3, z1: FRONT - 0.35 }, // where you can walk
     aim: new THREE.Vector3(-0.2, 0, -2.4),              // what the camera looks at, sitting down (local)

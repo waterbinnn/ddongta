@@ -280,6 +280,27 @@ body:not(.wish-near) .chat { display: none; }
   z-index: 20;
 }
 .rail:empty { display: none; }
+
+/* the magazine page: a small cream card near the top, in a plain serif */
+.read-card {
+  position: fixed;
+  left: 50%;
+  top: calc(96px + var(--top-edge, 0px));
+  transform: translateX(-50%);
+  z-index: 18;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px 18px 16px;
+  border-radius: 6px;
+  background: #fbf6ea;
+  color: #3d2c1e;
+  box-shadow: 0 6px 24px rgba(40, 25, 10, 0.25);
+  text-align: center;
+  pointer-events: none;
+  font-family: "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;
+}
+.read-card[hidden] { display: none; }
+.read-card .kicker { font-size: 11px; letter-spacing: 0.12em; color: #a07a4a; margin-bottom: 8px; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
+.read-card p { margin: 0; font-size: 16px; line-height: 1.55; }
 .rail .act { height: 38px; }
 /* stuck with 변비 and a drink in hand: the drink is the way out */
 .rail .act.urge { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; animation: urge 1.2s ease-in-out infinite; }

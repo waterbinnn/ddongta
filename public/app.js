@@ -1660,7 +1660,11 @@ function goSitOnBench(k) {
 // washing up from the toilet: the private room has its own sink; from a public stall you go out to the sinks
 function washFromStall() {
   if (inRoom) {
+    // over to the basin, and you stay standing there afterwards (not back onto the toilet)
     setHold(false);
+    roomStanding = true;
+    roomSeat = -1;
+    roomWashUntil = performance.now() + 2200; // (straight to the basin, without a moment standing by the toilet first)
     send({ t: 'wash' });
     return;
   }

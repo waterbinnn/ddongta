@@ -121,7 +121,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   const wood = lambert('#f4e4cc', { map: teakTex(1, 1) }); // light honey teak, for the frames, battens and furniture
   const teak = lambert('#ffffff', { map: teakTex(1, 1) });
   const brass = phong('#c9a15a', { shininess: 90, specular: '#fff1c8' });
-  const greenMarble = (rx, ry) => phong('#ffffff', { map: greenMarbleTex(rx, ry), shininess: 70, specular: '#ffffff' });
+  const greenMarble = (rx, ry) => phong('#ffffff', { map: greenMarbleTex(rx, ry), shininess: 40, specular: '#3a3a36' }) // a soft sheen, not a glare;
   const stoneBowl = phong('#d9d2c4', { shininess: 30 }); // pale honed stone basins
   const linen = lambert('#f6f2ea');
 
@@ -180,7 +180,8 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   for (const x of [vx - 0.45, vx + 0.45]) box(0.24, 0.02, 0.02, brass, x, VTOP - 0.15, vz + 0.24); // pulls
   const basins = [vx - 0.45, vx + 0.45];
   const basinTop = VTOP + 0.16;
-  const ringMat = glow('#ffd79a'); // the sconces' glow
+  const SCONCE = '#d9b47e'; // the sconces' glow: soft, not glaring
+  const ringMat = glow(SCONCE);
   for (const x of basins) {
     cyl(0.2, 0.15, 0.13, stoneBowl, x, VTOP + 0.105, vz + 0.04, 28); // the bowl
     add(new THREE.CircleGeometry(0.17, 24).rotateX(-Math.PI / 2), phong('#b9b2a4'), x, basinTop + 0.001, vz + 0.04, { cast: false });
@@ -193,8 +194,8 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     box(0.05, 0.05, 0.05, brass, x, 1.35, -D + 0.04);
     cyl(0.04, 0.04, 0.14, ringMat, x, 1.35, -D + 0.1, 16, { cast: false });
   }
-  const mirrorLight = new THREE.PointLight('#ffd9a8', 1.1, 3, 1.6);
-  mirrorLight.position.set(vx, 1.4, -D + 0.6);
+  const mirrorLight = new THREE.PointLight('#ffd9a8', 0.4, 2.6, 1.6); // a gentle light over the basins
+  mirrorLight.position.set(vx, 1.5, -D + 1.0);
   group.add(mirrorLight);
   block(vx, vz, 1.95, 0.55);
 
@@ -468,8 +469,8 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   group.add(gardenSun, gardenSun.target);
 
   // ---------- light: bright and warm; daylight through the glass; a fill from behind the camera ----------
-  const lamp = new THREE.PointLight('#ffe9cc', 4.2, 11, 1.3);
-  lamp.position.set(0.2, H - 0.5, -1.6);
+  const lamp = new THREE.PointLight('#ffe9cc', 2.4, 11, 1.3); // (gentler now the room is open to the sky)
+  lamp.position.set(0.4, H - 0.6, -1.0); // over the middle of the room, well off the walls
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.bias = -0.004;
@@ -482,7 +483,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   group.add(daylight);
 
   // the lighting moods: warm (as it is), dim (low and cosy), party (the colours go round); dancing brings the party
-  const lights = [[lamp, 4.2], [fill, 1.5], [mirrorLight, 1.1], [floorLight, 1.1], [daylight, 1.6]];
+  const lights = [[lamp, 2.4], [fill, 1.5], [mirrorLight, 0.4], [floorLight, 1.1], [daylight, 1.6]];
   const warm = new THREE.Color('#ffe9cc');
   const coveWarm = new THREE.Color('#fff1d6');
   const hue = new THREE.Color();
@@ -499,7 +500,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
         l.color.copy(warm);
       }
       cove.color.copy(coveWarm).multiplyScalar(name === 'dim' ? 0.45 : 1);
-      ringMat.color.set('#ffd79a').multiplyScalar(name === 'dim' ? 0.6 : 1);
+      ringMat.color.set(SCONCE).multiplyScalar(name === 'dim' ? 0.6 : 1);
     },
     // every frame: in party mode the colours go round, the light pulsing a little to the beat
     tick(t, party) {

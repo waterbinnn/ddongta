@@ -309,13 +309,6 @@ const grassCanvas = canvas(16, 16, (g) => {
     g.fillRect(x + 1, y + 1, 1, 1);
   }
 });
-const pavementCanvas = canvas(16, 16, (g) => {
-  g.fillStyle = '#ece5d6';
-  g.fillRect(0, 0, 16, 16);
-  g.fillStyle = '#d8cfbd';
-  g.fillRect(0, 15, 16, 1);
-  g.fillRect(15, 0, 1, 16);
-});
 
 const mirrorCanvas = canvas(12, 16, (g) => {
   g.fillStyle = '#8a7a62';
@@ -417,7 +410,7 @@ function buildRoom() {
   lamps.clear();
   const { ground } = buildGrounds({
     L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, pixelTex, M, wishHits, vendingMachine, planter,
-    tex: { grass: grassCanvas, pavement: pavementCanvas, floor: floorCanvas, tile: TILE, brick: brickCanvas },
+    tex: { grass: grassCanvas, floor: floorCanvas, tile: TILE, brick: brickCanvas },
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
   floorMesh = ground;
@@ -979,25 +972,27 @@ function makePrivateDoor(i) {
   const g = new THREE.Group();
   g.position.set(toX(L.cx), 0, toZ(L.cy));
   const doorCanvas = canvas(48, 112, (c) => {
-    c.fillStyle = '#5a3b2a';
+    c.fillStyle = '#d8b88f'; // light natural oak, like a sauna or a temple's wooden door
     c.fillRect(0, 0, 48, 112);
-    c.fillStyle = '#6b4632'; // two raised panels
+    c.fillStyle = '#e4c8a2'; // two raised panels
     c.fillRect(6, 8, 36, 44);
     c.fillRect(6, 60, 36, 44);
-    c.fillStyle = '#d9b26a'; // the brass number plate
+    c.fillStyle = '#cfae84'; // the grain
+    for (let y = 12; y < 104; y += 9) c.fillRect(9, y, 30, 1);
+    c.fillStyle = '#7a5a3c'; // a dark wooden number plate
     c.fillRect(14, 18, 20, 16);
-    c.fillStyle = '#5a3b2a';
+    c.fillStyle = '#f3e3c6';
     c.font = 'bold 14px -apple-system, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillText(String(L.no), 24, 27);
-    c.fillStyle = '#d9b26a'; // handle
+    c.fillStyle = '#7a5a3c'; // handle
     c.fillRect(38, 56, 4, 10);
   });
   const doorTex = new THREE.CanvasTexture(doorCanvas);
   doorTex.colorSpace = THREE.SRGBColorSpace;
   const face = new THREE.MeshLambertMaterial({ map: doorTex });
-  const edge = mat('#4a3022');
+  const edge = mat('#b8956c');
   const doorway = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 2.1), privateGlow); // the warm room behind the door
   doorway.position.set(0.55, 1.05, 0.004);
   const hinge = new THREE.Group();
@@ -1396,7 +1391,7 @@ function nearSink() {
 }
 
 function nearBench() {
-  return benchSpots.findIndex((b) => Math.hypot(me.x - b.x, me.y - b.y) < 110);
+  return benchSpots.findIndex((b) => Math.hypot(me.x - b.x, me.y - b.y) < 150); // within a step or two of a table
 }
 
 // the closest seat on that bench nobody is sitting on yet
@@ -1540,7 +1535,8 @@ if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG
 const DIST_MIN = 3.5;
 const ROOM_DIST = [2.4, 3.3]; // how near and far the camera can be inside the private room
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
-const DIST_MAX = 40;
+const DIST_MAX = 12; // zooming out stops before the place shrinks to a toy
+const BENCH_DIST = 2.6; // sitting at a terrace table: close, as if across the table from you
 
 // pooping, washing or sitting turns the camera around to face me, and puts it back afterwards
 let focusKey = '';
@@ -1576,7 +1572,8 @@ function focusCamera() {
     pitch = 0.75;
   } else if (me.b) {
     key = 'bench';
-    yaw = benchFacing(me.x, me.y) + Math.PI; // from behind the table, looking at me sitting at it
+    yaw = benchFacing(me.x, me.y) + 0.35; // close, from across the table (a little aside of the parasol pole), looking at me
+    pitch = 0.22;
   }
   if (key === focusKey) return;
   if (!focusKey && key) camBefore = { yaw: cam.tYaw, pitch: cam.tPitch, dist: cam.tDist };
@@ -1587,7 +1584,7 @@ function focusCamera() {
     cam.tLook = 0;
     // far enough back that about four stalls fit across the screen, so the neighbours show on a phone too
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    cam.tDist = key === 'room' ? ROOM_DIST[1] : clamp(Math.max(6.5, 4.4 / (2 * halfW)), DIST_MIN, 16);
+    cam.tDist = key === 'room' ? ROOM_DIST[1] : key === 'bench' ? BENCH_DIST : clamp(Math.max(6.5, 4.4 / (2 * halfW)), DIST_MIN, 16);
   } else if (camBefore) {
     cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;
@@ -1687,7 +1684,7 @@ function updateCamera(dt) {
   const sy = Math.sin(cam.yaw);
   const cy = Math.cos(cam.yaw);
   cam.pitch = lerp(cam.pitch, Math.min(0.95, cam.tPitch), k);
-  cam.dist = lerp(cam.dist, Math.max(DIST_MIN, cam.tDist), k);
+  cam.dist = lerp(cam.dist, Math.max(focusKey === 'bench' ? BENCH_DIST : DIST_MIN, cam.tDist), k);
   cam.look = lerp(cam.look, cam.tLook, k);
   const cp = Math.cos(cam.pitch);
   let px = cam.fx + sy * cp * cam.dist;
@@ -1809,6 +1806,10 @@ function placeWalkers(dt, t) {
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
     syncTower(p, id, u.pl, dt);
+    const under = squatting && Boolean(u.un);
+    if (e.under && !under && !u.un && p.under) leaveBehind(p, id); // got up: it stays on the ground
+    e.under = under;
+    syncUnder(p, id, under, true);
     setFace(p, face);
     setPantsDown(p, pantsDown || squatting);
     p.group.rotation.y = e.turn;
@@ -1878,6 +1879,7 @@ function syncRoom(t, dt) {
   }
   if (u) {
     syncTower(roomPerson, meId, u.pl, dt);
+    syncUnder(roomPerson, meId, Boolean(u.un) && !washing, false);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
     else {
@@ -1935,6 +1937,7 @@ function animateStalls(dt, t) {
       const face = exprOf(u, i);
       if (s.person) {
         syncTower(s.person, occId, u.pl, dt);
+        syncUnder(s.person, occId, Boolean(u.un), false);
         setFace(s.person, face);
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
@@ -1955,7 +1958,8 @@ const notes = [];
 
 function onPoop(m) {
   happyUntil.set(m.id, Date.now() + 1600);
-  if (m.gold) {
+  if (m.gold && m.under) underGold.add(m.id);
+  else if (m.gold) {
     if (!poopGolds.has(m.id)) poopGolds.set(m.id, new Set());
     poopGolds.get(m.id).add(m.pile - 1);
   }
@@ -1984,6 +1988,35 @@ function onPoop(m) {
 // ---------- poop towers: every poop you do stacks on your head, until you give them to the beanstalk ----------
 
 const poopGolds = new Map(); // person id -> which places in their tower are golden
+const underGold = new Set(); // people whose poop under them is a golden one
+
+// the first poop each time you sit or squat stays under you: in the bowl, or on the ground
+function syncUnder(p, id, show, squat) {
+  if (!p.under || p.underGold !== underGold.has(id)) {
+    if (p.under) p.group.remove(p.under);
+    p.underGold = underGold.has(id);
+    p.under = pixelSprite(p.underGold ? PROPS.goldPoop : PROPS.poop, 0.022);
+    p.group.add(p.under);
+  }
+  p.under.visible = show;
+  if (squat) p.under.position.set(0, 0.005, -0.07); // on the ground just behind the heels
+  else p.under.position.set(0, HIP_Y - 0.03, 0.09); // in the bowl, peeking out between the knees
+  if (!show && !squat) underGold.delete(id);
+}
+
+// left behind in the bushes when you get up: the grass takes it back after a while
+const leftovers = [];
+const LEFTOVER_S = 45;
+function leaveBehind(p, id) {
+  const at = p.under.getWorldPosition(new THREE.Vector3());
+  const s = pixelSprite(underGold.has(id) ? PROPS.goldPoop : PROPS.poop, 0.022);
+  s.position.set(at.x, 0.005, at.z);
+  s.material.transparent = true;
+  fxRoot.add(s);
+  leftovers.push({ s, age: 0 });
+  if (leftovers.length > 40) fxRoot.remove(leftovers.shift().s);
+  underGold.delete(id);
+}
 const TOWER_STEP = 0.17;
 const towerHeight = (count) => Math.min(count || 0, TOWER_MAX) * TOWER_STEP;
 function syncTower(p, id, count, dt) {
@@ -2275,6 +2308,15 @@ function showTapMark(x, z) {
 }
 
 function updateEffects(dt) {
+  for (let k = leftovers.length - 1; k >= 0; k--) {
+    const l = leftovers[k];
+    l.age += dt;
+    l.s.material.opacity = Math.min(1, (LEFTOVER_S - l.age) / 3);
+    if (l.age >= LEFTOVER_S) {
+      fxRoot.remove(l.s);
+      leftovers.splice(k, 1);
+    }
+  }
   for (let k = flights.length - 1; k >= 0; k--) {
     const f = flights[k];
     f.t = Math.min(1, f.t + dt / f.dur);
@@ -2647,7 +2689,7 @@ function placeAt(x, y) {
   if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
   if (near(L.pond, L.pond.r + 160)) return '연못';
   if (near(L.bush, L.bush.r)) return '풀숲';
-  if (near(L.gate, 420)) return '정문';
+  if (near(L.gate, 420)) return '똥타'; // coming in: the name of the place itself
   if (Math.abs(Math.hypot(x - L.center, y - L.center) - L.pathR) < L.pathW / 2 + 40) return '산책로';
   return '';
 }

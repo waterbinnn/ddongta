@@ -131,15 +131,7 @@ export function buildGrounds(kit) {
   const ring = mesh(new THREE.RingGeometry(PR - PW / 2, PR + PW / 2, 160), dirt, { receive: true });
   ring.rotation.x = -Math.PI / 2;
   add(ring, C, 0.006, C);
-  const paving = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1) });
-  paving.map.repeat.set(L.plazaR * U * 2.2, L.plazaR * U * 2.2);
-  const PZ = L.plazaR * U;
-  disc(PZ, paving, C, C, 0.012);
-  for (const r of [PZ - 0.8, PZ * 0.6]) {
-    const line = mesh(new THREE.RingGeometry(r - 0.04, r + 0.04, 96), new THREE.MeshLambertMaterial({ color: '#d6c7a2' }));
-    line.rotation.x = -Math.PI / 2;
-    add(line, C, 0.014, C);
-  }
+  const PZ = L.plazaR * U; // the plaza is grass round the beanstalk; the trails start at its edge
   const ex = P(L.exercise);
   const bushIn = (L.center - L.bush.x - L.bush.r) * U; // how far west the bushes start
   strip(C - 0.75, C + PZ - 0.2, C + 0.75, C + PR - PW / 2, dirt);              // south, to the gate
@@ -152,18 +144,8 @@ export function buildGrounds(kit) {
     const r = p === L.terrace ? L.terraceR * U : L.pond.r * U + 0.4;
     lane(C + Math.sin(a) * (PZ - 0.2), C + Math.cos(a) * (PZ - 0.2), tx - Math.sin(a) * (r - 0.2), tz - Math.cos(a) * (r - 0.2), 1.4, dirt);
   }
-  // a paved forecourt in front of both restrooms, joining the plaza
-  const court = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1) });
-  court.map.repeat.set(22, 4);
-  strip(L.private.x0 * U - 0.6, L.private.y1 * U, L.public.x1 * U + 0.6, C - PZ + 0.3, court, 0.011);
 
-  // ---------- the café terrace: its own paved circle, tables, a coffee cart, a vending machine ----------
-  {
-    const [tx, tz] = P(L.terrace);
-    const deck = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1), color: '#fff3e2' });
-    deck.map.repeat.set(L.terraceR * U * 2.2, L.terraceR * U * 2.2);
-    disc(L.terraceR * U, deck, tx, tz, 0.012);
-  }
+  // ---------- the café terrace, on the grass: tables, a coffee cart, a vending machine ----------
   const white = mat('#fffaf0');
   const metal = mat('#3b3a36');
   const shades = ['#9fd8c7', '#ffc2a8', '#ffe28a'];
@@ -356,17 +338,6 @@ export function buildGrounds(kit) {
       blades.setMatrixAt(k, new THREE.Matrix4().makeTranslation(bx + Math.cos(a) * d, 0.25, bz + Math.sin(a) * d));
     }
     root.add(blades);
-  }
-
-  // ---------- the gate ----------
-  {
-    const [x, z] = P(L.gate);
-    const wood = mat('#8a5a34');
-    for (const sx of [-1.2, 1.2]) add(mesh(new THREE.CylinderGeometry(0.16, 0.19, 3.8, 10), wood, { cast: true }), x + sx, 1.9, z);
-    block(3.3, 0.36, 0.34, wood, x, 3.8, z);
-    block(2.6, 0.18, 0.24, wood, x, 3.25, z);
-    sign('똥타', x, 3.8, z - 0.18, Math.PI, [1.4, 0.36], { bg: '#ffe28a', ink: '#5b3a0c', font: 80 });
-    sign('똥타', x, 3.8, z + 0.18, 0, [1.4, 0.36], { bg: '#ffe28a', ink: '#5b3a0c', font: 80 });
   }
 
   // ---------- lamps along the path, trees round the outside ----------

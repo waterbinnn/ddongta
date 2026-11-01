@@ -145,6 +145,7 @@ function sit(room, user, i) {
   user.stall = i;
   user.bench = false;
   user.squat = false;
+  user.under = false; // a fresh seat: the first poop will stay under you
   user.ex = '';
   user.holding = false;
   room.meta[i].hp = DOOR_HP;
@@ -160,6 +161,7 @@ function leaveStall(room, user) {
   user.y = LAYOUT[i].y;
   user.stall = -1;
   user.holding = false;
+  user.under = false;
   room.dirty = true;
   return i;
 }
@@ -170,6 +172,7 @@ function breakDoor(room, i, breaker) {
   room.stalls[i] = null;
   victim.stall = -1;
   victim.holding = false;
+  victim.under = false;
   victim.progress = 0;
   // tumble out of the door
   const L = LAYOUT[i];
@@ -207,7 +210,7 @@ function snapshot(room) {
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
       r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
-      q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile,
+      q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile, un: u.under ? 1 : 0,
     })),
   });
 }
@@ -250,8 +253,12 @@ setInterval(() => {
         u.count++;
         countPoop();
         const gold = Math.random() < GOLD_CHANCE;
-        u.pile++; // it goes on top of your head, and stays there until you give it to the beanstalk
-        broadcast(room, { t: 'poop', id: u.id, n: u.count, pile: u.pile, ...(u.stall !== -1 ? { stall: u.stall } : { bush: 1 }), ...(gold && { gold: 1 }) });
+        // the first one each time you sit down stays under you (in the bowl, or on the ground in the bushes);
+        // every one after that goes on top of your head, and stays there until you give it to the beanstalk
+        const under = !u.under;
+        if (under) u.under = true;
+        else u.pile++;
+        broadcast(room, { t: 'poop', id: u.id, n: u.count, pile: u.pile, ...(under && { under: 1 }), ...(u.stall !== -1 ? { stall: u.stall } : { bush: 1 }), ...(gold && { gold: 1 }) });
         u.signal = false; // the signal has been answered
         u.exCount = 0;
         if (gold) wish.gild(); // a golden poop puts a little gold back on the wish page's poop
@@ -348,6 +355,7 @@ wss.on('connection', (ws, req) => {
     lastEx: 0,
     signal: false, // 「신호가 왔다!」 after a few moves, until the next poop
     pile: 0, // the poops stacked on your head
+    under: false, // a poop under you, where you sit or squat
   };
   room.users.add(user);
   room.dirty = true;
@@ -383,6 +391,7 @@ wss.on('connection', (ws, req) => {
       if (user.squat) {
         user.squat = false; // and up out of a squat
         user.holding = false;
+        user.under = false;
       }
       room.dirty = true;
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
@@ -439,6 +448,7 @@ wss.on('connection', (ws, req) => {
       // only in the bushes; there's no squatting on the plaza
       user.squat = Boolean(m.on) && inBush(user);
       if (!user.squat) user.holding = false;
+      user.under = false; // squatting down (or getting up) starts afresh
       user.bench = false;
       user.ex = '';
       room.dirty = true;

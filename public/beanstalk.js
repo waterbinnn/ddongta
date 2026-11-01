@@ -4,7 +4,7 @@ import * as THREE from '/vendor/three.module.js';
 
 const CM_PER_POOP = 5;
 const DRAW_MAX = 300; // past this many metres it's lost in the sky anyway
-export const beanHeight = (total) => 2.5 + (total * CM_PER_POOP) / 100; // planted at 2.5 m, so it stands out in the plaza
+export const beanHeight = (total) => 0.15 + (total * CM_PER_POOP) / 100; // it starts as a little sprout
 export const heightText = (m) => (m < 1 ? `${Math.round(m * 100)}cm` : m < 100 ? `${m.toFixed(1)}m` : `${Math.round(m)}m`);
 
 export function makeBeanstalk(x, z) {
@@ -27,13 +27,20 @@ export function makeBeanstalk(x, z) {
   let shown = 0;
   let target = beanHeight(0);
 
-  // two strands winding round each other, broad leaves all the way up, a curl at the very top
+  // two strands winding round each other, broad leaves all the way up, a curl at the very top.
+  // While it's small it's a sprout: thin, barely winding, two round seed leaves on top.
+  let grown = 1; // 0 a sprout, 1 a proper stalk
   const strandAt = (y, phase) => {
     const a = y * 1.4 + phase;
-    const r = 0.1 + 0.04 * Math.sin(y * 0.6);
+    const r = (0.1 + 0.04 * Math.sin(y * 0.6)) * grown;
     return new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
   };
+  let seedLeaves = [];
   function build(h) {
+    grown = Math.min(1, h / 1.5);
+    mound.scale.set(0.35 + 0.65 * grown, 0.28 * (0.35 + 0.65 * grown), 0.35 + 0.65 * grown);
+    for (const l of seedLeaves) group.remove(l);
+    seedLeaves = [];
     for (const s of strands) {
       group.remove(s);
       s.geometry.dispose();
@@ -51,7 +58,8 @@ export function makeBeanstalk(x, z) {
     strands = [0, Math.PI].map((phase, k) => {
       const pts = [];
       for (let i = 0; i <= n; i++) pts.push(strandAt((draw * i) / n, phase));
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, k ? 0.05 : 0.065, 7), stalkMat);
+      const thick = (k ? 0.05 : 0.065) * (0.3 + 0.7 * grown);
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, thick, 7), stalkMat);
       tube.castShadow = true;
       group.add(tube);
       return tube;
@@ -70,10 +78,24 @@ export function makeBeanstalk(x, z) {
     }
     leaves.castShadow = true;
     group.add(leaves);
-    curl = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.025, 6, 16, Math.PI * 1.5), stalkMat);
-    curl.position.copy(strandAt(draw, 0)).add(new THREE.Vector3(0, 0.1, 0));
+    curl = new THREE.Mesh(new THREE.TorusGeometry(0.12 * grown + 0.02, 0.025 * (0.4 + 0.6 * grown), 6, 16, Math.PI * 1.5), stalkMat);
+    curl.position.copy(strandAt(draw, 0)).add(new THREE.Vector3(0, 0.1 * grown, 0));
     curl.rotation.y = draw;
+    curl.visible = grown > 0.3;
     group.add(curl);
+    // the sprout's two round seed leaves, opening out at the tip (they fall away as it grows up)
+    if (grown < 0.6) {
+      const tip = strandAt(draw, 0);
+      for (const side of [-1, 1]) {
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        leaf.position.copy(tip);
+        leaf.rotation.set(0, side > 0 ? 0 : Math.PI, 0.35);
+        leaf.scale.set(0.08, 0.02, 0.06);
+        leaf.castShadow = true;
+        group.add(leaf);
+        seedLeaves.push(leaf);
+      }
+    }
   }
 
   return {

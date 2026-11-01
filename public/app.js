@@ -20,9 +20,12 @@ console.log(
      (_________________)
 %c
   다들 쾌변하는 삶 사세요 💩
+%c
+  made by https://github.com/waterbinnn
 `,
   'color:#8a5228;font-family:monospace;font-size:13px;line-height:1.15',
   'color:#5e3517;font-size:15px;font-weight:700',
+  'color:#9a7d58;font-size:12px',
 );
 
 // ---------- world constants (keep in sync with server.js) ----------

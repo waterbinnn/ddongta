@@ -41,7 +41,7 @@ function signTexture(text, { bg = '#fffaf0', ink = '#4a3520', w = 512, h = 128, 
 }
 
 export function buildGrounds(kit) {
-  const { L, root, lamps, lampLights, glows, mesh, mat, tex, vendingMachine, planter, M, wishHits, lampColor, lampPower } = kit;
+  const { L, root, lamps, lampLights, glows, mesh, mat, tex, vendingMachine, M, wishHits, lampColor, lampPower } = kit;
   glows.length = 0; // things that change from day to night: (dark) => void, dark 0 by day and 1 at night
   const C = L.center * U; // the plaza's middle, in metres (x and z)
   const P = (p) => [p.x * U, p.y * U]; // a layout point to world x, z
@@ -253,7 +253,6 @@ export function buildGrounds(kit) {
     const mirror = new THREE.Mesh(new THREE.PlaneGeometry(cd - 0.1, 0.8), new THREE.MeshPhongMaterial({ color: '#d9ecf2', emissive: '#3d5560', shininess: 140 }));
     mirror.rotation.y = -Math.PI / 2;
     add(mirror, x1 - 0.12, 1.55, cz);
-    planter(x0 + 0.8, z1 - 0.6, 1.1, 3, 'snake');
   }
 
   // ---------- the private restroom: a closed, warmer brick cottage; each door opens into a room of its own ----------
@@ -275,8 +274,6 @@ export function buildGrounds(kit) {
     roof.scale.set(1, 1, 0.7);
     add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
     block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1); // a wooden fascia over the doors
-    planter(x0 - 0.5, z1 + 0.5, 1.1, 5);
-    planter(x1 + 0.5, z1 + 0.5, 1.1, 6);
   }
 
   // ---------- the 쾌변 exercise ground: a wide open lawn in a clearing, mats in rows, walk in from any side ----------
@@ -443,7 +440,8 @@ export function buildGrounds(kit) {
       const x = C + Math.cos(a) * d;
       const z = C + Math.sin(a) * d;
       const cm = { x: x / U, y: z / U };
-      const clear = L.obstacles.every((o) => cm.x < o.x0 - 80 || cm.x > o.x1 + 80 || cm.y < o.y0 - 80 || cm.y > o.y1 + 80);
+      // clear of everything in the way, and of the two restroom buildings (their tiled floors too)
+      const clear = [...L.obstacles, L.public, L.private].every((o) => cm.x < o.x0 - 80 || cm.x > o.x1 + 80 || cm.y < o.y0 - 80 || cm.y > o.y1 + 80);
       const offLawn = Math.hypot(cm.x - L.exercise.x, cm.y - L.exercise.y) > L.exercise.r + 60;
       if (clear && offLawn) rocks.push([x, z, k]);
     }

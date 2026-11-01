@@ -441,7 +441,7 @@ function buildRoom() {
   vendings.length = 0;
   lamps.clear();
   const { ground } = buildGrounds({
-    L: GROUNDS, root: worldRoot, lamps, lampLights, glows, mesh, mat, M, wishHits, vendingMachine, planter, goldEnv,
+    L: GROUNDS, root: worldRoot, lamps, lampLights, glows, mesh, mat, M, wishHits, vendingMachine, goldEnv,
     tex: { grass: grassCanvas },
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
@@ -1041,51 +1041,6 @@ function vendingMachine(x, z, rotY, color) {
 
 // chunky low-poly leaves for the trees outside
 const LEAF_MATS = ['#5fae57', '#4b9446', '#7cc26a'].map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
-// a potted plant in a rounded, glossy cream pot: a tall snake plant, or a soft round bush
-const POT_SHAPE = [[0, 0], [0.2, 0], [0.27, 0.06], [0.3, 0.2], [0.29, 0.36], [0.26, 0.44], [0.27, 0.46], [0.23, 0.46]].map(([r, y]) => new THREE.Vector2(r, y));
-const POT_GEO = new THREE.LatheGeometry(POT_SHAPE, 24);
-const POT_MAT = new THREE.MeshPhongMaterial({ color: '#f6f1e4', shininess: 70, specular: '#ffffff', side: THREE.DoubleSide });
-const SOIL_MAT = new THREE.MeshLambertMaterial({ color: '#6b4a32' });
-const SNAKE_MATS = ['#3f8f4e', '#4fa35a', '#367f45'].map((c) => new THREE.MeshLambertMaterial({ color: c }));
-const BUSH_MATS = ['#6cbf5f', '#5aae52', '#7fcd6c'].map((c) => new THREE.MeshLambertMaterial({ color: c }));
-function planter(x, z, size, seed, kind = 'bush') {
-  const g = new THREE.Group();
-  const pot = mesh(POT_GEO, POT_MAT, { cast: true, receive: true });
-  const soil = mesh(new THREE.CircleGeometry(0.24, 20), SOIL_MAT);
-  soil.rotation.x = -Math.PI / 2;
-  soil.position.y = 0.43;
-  g.add(pot, soil);
-  const rnd = (k) => {
-    const v = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453;
-    return v - Math.floor(v);
-  };
-  if (kind === 'snake') {
-    // upright blades, flat and pointed, leaning a little outward
-    for (let k = 0; k < 7; k++) {
-      const h = 0.75 + rnd(k) * 0.55;
-      const blade = mesh(new THREE.ConeGeometry(0.075, h, 4), SNAKE_MATS[k % 3], { cast: true });
-      blade.scale.z = 0.3;
-      const a = (k / 7) * Math.PI * 2 + rnd(k + 5);
-      const d = k === 0 ? 0 : 0.1 + rnd(k + 9) * 0.06;
-      blade.position.set(Math.sin(a) * d, 0.43 + h / 2, Math.cos(a) * d);
-      blade.rotation.set(Math.cos(a) * 0.12, a, -Math.sin(a) * 0.12);
-      g.add(blade);
-    }
-  } else {
-    // a few soft spheres, one big on top, smaller ones around it
-    for (let k = 0; k < 5; k++) {
-      const r = k === 0 ? 0.3 : 0.18 + rnd(k) * 0.06;
-      const ball = mesh(new THREE.SphereGeometry(r, 16, 12), BUSH_MATS[k % 3], { cast: true });
-      const a = (k / 4) * Math.PI * 2 + rnd(k + 3);
-      const d = k === 0 ? 0 : 0.2;
-      ball.position.set(Math.sin(a) * d, k === 0 ? 0.78 : 0.56 + rnd(k + 7) * 0.08, Math.cos(a) * d);
-      g.add(ball);
-    }
-  }
-  g.position.set(x, 0, z);
-  g.scale.setScalar(size);
-  worldRoot.add(g);
-}
 
 // ---------- time of day ----------
 // The sky and the light follow the visitor's clock: blue sky by day, a pink-orange sunset,
@@ -2583,9 +2538,27 @@ function sparkle(at) {
 
 // a golden poop drifts across the top of the screen whenever anyone makes one
 let goldSrc = '';
+// a big three-tier swirl, so it reads as a poop going by and not as a UFO
+const GOLD_FLYER = sprite(
+  [
+    '.......pp.......',
+    '......pppP......',
+    '.....phppP......',
+    '....pppppPP.....',
+    '.....PPPPP......',
+    '...phhpppppP....',
+    '..pppppppppPP...',
+    '...PPPPPPPPP....',
+    '.phhppppppppPP..',
+    'pppppppppppppPP.',
+    'ppppppppppppppPP',
+    '.PPPPPPPPPPPPPP.',
+  ],
+  { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' },
+);
 function floatGold() {
   if (document.hidden || document.querySelectorAll('.gold-float').length > 8) return;
-  goldSrc ||= PROPS.goldPoop.toDataURL();
+  goldSrc ||= GOLD_FLYER.toDataURL();
   const el = document.createElement('img');
   el.className = 'gold-float';
   el.src = goldSrc;

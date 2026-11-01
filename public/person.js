@@ -252,10 +252,17 @@ function crownY(p) {
   h.updateWorldMatrix(true, false);
   return h.localToWorld(crownV.set(0, h.geometry.boundingBox.max.y, 0)).y;
 }
+// how far the very top of the character (the hair, ears or horns, not just the head's own shape) stands above the
+// crown of the head, so a name tag can sit just clear of it
+const topBox = new THREE.Box3();
 function withCrown(p) {
   if (!p.parts.head) return p;
   p.group.updateMatrixWorld(true);
-  p.above = Math.max(0, p.height - crownY(p));
+  topBox.setFromObject(p.group);
+  p.above = Math.max(0, Math.max(p.height, topBox.max.y) - crownY(p));
+  // and about how round the head is (with its hair), for where its outline tops out seen from an angle
+  topBox.setFromObject(p.parts.head);
+  p.headR = (topBox.max.y - topBox.min.y) / 2;
   return p;
 }
 export const crownOf = (p) => (p.parts.head ? crownY(p) : p.group.position.y + p.height);

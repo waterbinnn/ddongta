@@ -3005,6 +3005,12 @@ function placeNameTags() {
       continue;
     }
     tagAt.copy(h);
+    if (seat === -1 && e.p.headR) {
+      // seen from above, the head's outline tops out at its far edge, higher on screen than the top of the head; so
+      // go to the middle of the head and out by its radius along the screen's up, and the tag clears it at any zoom
+      tagAt.y -= e.p.headR;
+      tagAt.addScaledVector(camUp.set(0, 1, 0).applyQuaternion(camera.quaternion), e.p.headR);
+    }
     const p = toScreen(tagAt);
     e.tag.hidden = !p.on;
     // 12 pixels over the top of the head, however far the camera is zoomed

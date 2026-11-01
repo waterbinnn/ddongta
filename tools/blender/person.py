@@ -10,8 +10,8 @@ Colours are not set here: the page paints each part by name (skin, hair, shirt, 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
   hips (shorts) > torso (tee) > head (skin) > hair, ear_L / ear_R
                               > arm_L / arm_R (sleeves) > hand_L / hand_R
-                > leg_L / leg_R (bare legs) > short_L / short_R (shorts legs), shoe_L / shoe_R,
-                                             cuff_L / cuff_R (shorts round the ankles, hidden by default)
+                > short_L / short_R (the legs of the shorts, fixed to the hips)
+                > leg_L / leg_R (bare legs) > shoe_L / shoe_R, cuff_L / cuff_R (shorts round the ankles, hidden by default)
 """
 import math
 import os
@@ -122,7 +122,7 @@ def bean_bm(center, radii, flare=0.12):
 
 # ---------- body ----------
 # the seat of the shorts: as wide and deep as the two legs of the shorts together, so nothing sticks out
-hips = new_object('hips', squircle_bm(HIP_Z + 0.075, HIP_Z - 0.005, (0, 0), 0.13, 0.068, n=3.2), Vector((0, 0, HIP_Z)))
+hips = new_object('hips', squircle_bm(HIP_Z + 0.075, HIP_Z - 0.005, (0, 0), 0.122, 0.06, n=3.2), Vector((0, 0, HIP_Z)))
 # an A-line tee: narrow at the round shoulders, flaring a little to a hem that hangs over the top of the shorts
 tee = squircle_bm(NECK_Z - 0.01, HIP_Z + 0.035, (0, 0), 0.098, 0.084, n=3.0, rx_bottom=0.136, ry_bottom=0.106)
 made = bmesh.ops.create_uvsphere(tee, u_segments=24, v_segments=12, radius=1.0)
@@ -147,8 +147,9 @@ for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they fac
     hip = Vector((side * LEG_X, 0, HIP_Z))
     leg = new_object(f'leg_{tag}', capsule_bm(hip + Vector((0, 0, -0.01)), hip + Vector((0, 0, -0.15)), 0.042, 0.04), hip, hips)   # thin bare legs
     # a short leg of the shorts round each thigh, so it reads as shorts, not a skirt
-    # each leg of the shorts: flat-sided, so the two meet in a plain line down the middle; flat hems above the knee
-    new_object(f'short_{tag}', squircle_bm(hip.z + 0.02, hip.z - 0.06, (side * 0.066, 0), 0.064, 0.066), hip, leg)
+    # each leg of the shorts: flat-sided, so the two meet in a plain line down the middle; flat hems above the knee.
+    # They hang from the hips, not the legs: the shorts stay put and the thin legs swing inside them.
+    new_object(f'short_{tag}', squircle_bm(hip.z + 0.02, hip.z - 0.06, (side * 0.062, 0), 0.064, 0.066), hip, hips)
     ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.17)), (0.058, 0.08, 0.04), leg)   # chunky little shoes
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.072, radius2=0.066, depth=0.05)

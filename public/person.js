@@ -227,8 +227,8 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
   const breathe = Math.sin(t * 1.9 + seed) * 0.015;
   if (mode === 'walk') {
     const s = Math.sin(phase);
-    P.leg_L.rotation.x = s * 0.6;
-    P.leg_R.rotation.x = -s * 0.6;
+    P.leg_L.rotation.x = s * 0.45; // small steps, so the legs stay inside the shorts
+    P.leg_R.rotation.x = -s * 0.45;
     P.arm_L.rotation.x = -s * 0.55;
     P.arm_R.rotation.x = s * 0.55;
     P.arm_L.rotation.z = 0.12;

@@ -4626,6 +4626,12 @@ canvasEl.addEventListener('pointermove', (e) => {
         p.axis = ax > ay * 1.5 ? 'x' : ay > ax * 1.5 ? 'y' : 'xy';
       }
       manualCamAt = performance.now();
+      if (me.ly && me.s === -1 && !inRoom) {
+        // lying in the grass looking up: dragging looks round the sky, as the arrow keys do
+        if (p.axis !== 'y') skyLook.yaw -= dx * 0.0045;
+        if (p.axis !== 'x') skyLook.pitch = clamp(skyLook.pitch - dy * 0.003, -0.7, 0.55);
+        return;
+      }
       if (p.axis !== 'y') cam.tYaw = clamp(cam.tYaw - dx * 0.0045, -YAW_MAX, YAW_MAX);
       if (p.axis !== 'x') {
         // one vertical axis: dragging up lowers the camera to its lowest angle, and past that it looks up at the sky

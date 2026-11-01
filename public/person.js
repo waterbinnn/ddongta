@@ -238,9 +238,9 @@ export function makeAnimal(kind) {
   return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size, quad: fourLegs(parts) };
 }
 
-// On all fours: the body tips forward at the waist and the arms become front legs. They're short for that, so
-// they stretch to reach the ground (the paw keeps its shape and just moves down).
-const PITCH = 1.4;
+// On all fours: the body tips forward at the waist and the arms (made like the hind legs) become front legs. They
+// stretch a little if they need to, to reach the ground (the foot keeps its shape and just moves down).
+const PITCH = 1.65; // a touch past level, so the shoulders come down to the height of the hips
 function fourLegs(P) {
   for (const n of ['arm_L', 'hand_L']) P[n].geometry.computeBoundingBox();
   const armReach = -P.arm_L.geometry.boundingBox.min.y; // shoulder to the end of the arm

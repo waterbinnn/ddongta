@@ -269,18 +269,17 @@ class Body:
     def limbs(self, hand_mat=None, foot_mat=None):
         s = self.s
         sx, sz = s['shoulder']
-        ar, fr = s['arm_r'], s['paw_r']
+        lr = s['leg_r']
+        fx, fy, fz = s['foot_r']
+        fwd = s.get('foot_fwd', 0.02)
         for side, tag in ((1, 'L'), (-1, 'R')):
-            # a short stubby foreleg in one smooth piece (no elbow seam, which read as a T-shirt sleeve), a round paw on the end
+            # the front legs are the hind legs again: the same thickness, length and foot, so on all fours the animal
+            # stands on four matching legs (standing up, they hang at its sides)
             sh = Vector((side * sx, 0, sz))
-            wrist = sh + Vector((side * 0.035, 0, -0.1))
-            arm = new_object(f'arm_{tag}', capsule_bm(sh, wrist, ar, ar * 0.92), sh, self.torso, self.fur)
-            paw = ellipsoid_bm(wrist + Vector((side * 0.004, -0.004, -0.012)), (fr, fr * 0.95, fr * 1.02), 16, 12)
-            new_object(f'hand_{tag}', paw, sh, arm, hand_mat or self.fur)
+            arm = new_object(f'arm_{tag}', capsule_bm(sh + Vector((0, 0, -0.005)), sh + Vector((0, 0, -0.15)), lr, lr * 0.92), sh, self.torso, self.fur)
+            new_object(f'hand_{tag}', ellipsoid_bm(sh + Vector((0, -fwd, -HIP_Z + fz)), (fx, fy, fz), 20, 12), sh, arm, foot_mat or hand_mat or self.fur)
             hip = Vector((side * s['leg_x'], 0, HIP_Z))
-            lr = s['leg_r']
             leg = new_object(f'leg_{tag}', capsule_bm(hip + Vector((0, 0, -0.005)), hip + Vector((0, 0, -0.15)), lr, lr * 0.92), hip, self.hips, self.fur)
-            fx, fy, fz = s['foot_r']
             new_object(f'foot_{tag}', ellipsoid_bm(hip + Vector((0, -s.get('foot_fwd', 0.02), -HIP_Z + fz)), (fx, fy, fz), 20, 12), hip, leg, foot_mat or self.fur)
 
     def belly(self, material, cx=0.085, cz=0.33, hz=0.12, depth=0.0):

@@ -286,7 +286,7 @@ function snapshot(room) {
     users: [...room.users, ...room.npcs].map((u) => ({
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
-      r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0, ly: u.lie ? 1 : 0,
+      r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0, ly: u.lie ? 1 : 0, rd: u.read && u.stall !== -1 ? 1 : 0,
       q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile, un: u.under ? 1 : 0,
       pk: u.pocket, cn: u.stuck ? 1 : 0, k: u.kind, ...(u.npc && { npc: 1 }),
     })),
@@ -489,6 +489,7 @@ wss.on('connection', (ws, req) => {
       }
       room.dirty = true;
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
+      user.read = false; // (a fresh stall, the book still shut)
       if (!validStall || room.stalls[i] || !nearStall(i)) return;
       sit(room, user, i);
       const where = LAYOUT[i].type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i].no}번 칸`;
@@ -543,6 +544,10 @@ wss.on('connection', (ws, req) => {
         room.dirty = true;
         broadcast(room, { t: 'pick', id: user.id, pile: user.pile, drop: best.i, ...(best.g && { gold: 1 }) });
       }
+    } else if (m.t === 'read' && user.stall !== -1) {
+      // a book open on the lap in the public restroom, for all to see (in a premium room nobody sees it anyway)
+      user.read = Boolean(m.on);
+      room.dirty = true;
     } else if (m.t === 'lunch' && user.stall !== -1) {
       // a lunchbox opened on the lap, in the stall
       const now = Date.now();

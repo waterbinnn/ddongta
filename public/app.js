@@ -276,6 +276,7 @@ const dancing = () => performance.now() < danceUntil;
 function toggleBook() {
   bookOpen = !bookOpen;
   if (bookOpen) setHold(false);
+  if (!inRoom) send({ t: 'read', on: bookOpen }); // in the public restroom, others see you reading
 }
 // up off the toilet, the stool or the sofa (there's no button for it: tap anywhere, or press the down arrow)
 function standUpInRoom() {
@@ -1750,19 +1751,26 @@ const nearSeat = () => (inRoom && roomStanding && roomSeat < 0 ? room.seats.find
 const nearBasin = () => inRoom && roomStanding && roomSeat < 0 && Math.hypot(roomWalk.x - room.washSpot.x, roomWalk.z - room.washSpot.z) < 0.85;
 let partyLit = false;
 // holding the book open in both hands, looking down into it
-function readFor(p, on) {
+// (high: held up in front of the face, as over a public stall's half door, so it shows from outside)
+function readFor(p, on, high = false) {
   if (!p.book) {
     if (!on) return;
     p.book = room.book();
-    p.book.position.set(0, HIP_Y + 0.2, 0.34); // held low and out in front, below the chin
-    p.book.rotation.x = -0.55; // tipped up toward the eyes
     p.group.add(p.book);
   }
   p.book.visible = on;
   if (!on) return;
-  p.parts.arm_L?.rotation.set(-0.95, 0, -0.3);
-  p.parts.arm_R?.rotation.set(-0.95, 0, 0.3);
-  p.parts.head?.rotation.set(0.3, 0, 0);
+  if (high) {
+    p.book.position.set(0, HIP_Y + 0.4, 0.46); // held up in front of the chin, clear of the big head
+    p.book.rotation.x = -1.05; // tipped up, its cover to the world
+  } else {
+    p.book.position.set(0, HIP_Y + 0.2, 0.34); // held low and out in front, below the chin
+    p.book.rotation.x = -0.55; // tipped up toward the eyes
+  }
+  const arm = high ? -1.5 : -0.95;
+  p.parts.arm_L?.rotation.set(arm, 0, -0.3);
+  p.parts.arm_R?.rotation.set(arm, 0, 0.3);
+  p.parts.head?.rotation.set(high ? 0.12 : 0.3, 0, 0);
 }
 
 function moveInRoom(dt) {
@@ -2451,6 +2459,7 @@ function animateStalls(dt, t) {
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
         handFor(s.person, occId, u, true);
         lunchFor(s.person, occId, t / 1000, true);
+        readFor(s.person, occId === meId ? bookOpen : Boolean(u.rd), true); // a book held up over the door (mine shows at once)
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
       }
     }
@@ -2670,10 +2679,20 @@ const beanAt = new THREE.Vector3();
 // the place labels (콩나무, 황금똥) show only once you've walked up close
 const LABEL_NEAR = 520;
 const walkedUpTo = (p) => me.s === -1 && Math.hypot(me.x - p.x, me.y - p.y) <= LABEL_NEAR;
+// a place's guide label shows as you walk up to it, then goes after 3 seconds there (and comes back the next time)
+const nearSince = {};
+function freshlyNear(key, p) {
+  if (!walkedUpTo(p)) {
+    nearSince[key] = 0;
+    return false;
+  }
+  nearSince[key] ||= performance.now();
+  return performance.now() - nearSince[key] < 3000;
+}
 
 function placeBeanLabel() {
   const el = $('#beanLabel');
-  if (!bean || inRoom || OG || !walkedUpTo(GROUNDS.bean)) {
+  if (!bean || inRoom || OG || !freshlyNear('bean', GROUNDS.bean)) {
     el.hidden = true;
     return;
   }
@@ -3002,7 +3021,7 @@ const wishAt = new THREE.Vector3();
 function placeWishLink() {
   const link = $('#wishLink');
   const emblem = wishHits[0];
-  if (!emblem || inRoom || !walkedUpTo(GROUNDS.wish)) {
+  if (!emblem || inRoom || !freshlyNear('wish', GROUNDS.wish)) {
     link.hidden = true;
     return;
   }
@@ -3152,6 +3171,7 @@ function renderActions() {
   const near = out && nearestEmptyStall(me.x, me.y) >= 0;
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
+  if (me.s === -1 && bookOpen) bookOpen = false; // out of the stall, the book goes away
   const mode = inStall ? (inRoom && roomSeat >= 0 ? 'resting' : inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.ly ? 'lying' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
@@ -3182,8 +3202,7 @@ function renderActions() {
   }
   // the bottom bar: the one main thing to do here (Space), and only what belongs to this place
   if (mode === 'inside') {
-    // in my own room everything is on the side rail; in a public stall, washing and going out are here
-    if (!inRoom) bar.append(miniBtn('wash', '손 씻기', washFromStall), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+    // on the toilet (a public stall or my room) everything else is on the side rail: just the push button here
   } else if (mode === 'squatting') {
     bar.append(miniBtn('jump', '일어나기', () => send({ t: 'squat', on: false })));
   } else if (mode === 'standing') {
@@ -3242,6 +3261,8 @@ function renderActions() {
   const pickHere = ((mode === 'inside' || mode === 'squatting') && me.un) || (canMove && mode !== 'rolling' && nearDropHere());
   if (pickHere) rail.append(miniBtn('poop', '줍기', () => send({ t: 'pick' })));
   if (mode === 'inside') rail.append(miniBtn('lunch', '도시락 먹기', () => send({ t: 'lunch' })));
+  // in a public stall: read, wash, and (after the bell) go, all on the side as in the room
+  if (mode === 'inside' && !inRoom) rail.append(miniBtn('read', bookOpen ? '책 덮기' : '책 읽기', toggleBook), miniBtn('wash', '손 씻기', washFromStall));
   // out walking about (the exercise lawn too): sit or lie down right where you are
   // out walking about (the exercise lawn too): sit or lie down right where you are. Round buttons in the bottom right
   // corner, across from the stick, always out (never folded away)
@@ -3272,7 +3293,7 @@ function renderActions() {
     if (!nearBasin()) rail.append(miniBtn('wash', '손 씻기', washFromStall));
   }
   if (mode === 'inside' || mode === 'standing' || mode === 'resting') rail.append(miniBtn('bird', '에티켓벨', ringBell));
-  if (inRoom) rail.append(withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+  if (inRoom || mode === 'inside') rail.append(withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   // (phones) the fold-away button shows only when there are small buttons to fold away
   const fold = $('#railToggle');
   fold.hidden = !rail.querySelector('.act.mini:not(.pose)');

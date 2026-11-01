@@ -1865,6 +1865,9 @@ const BENCH_DIST = 2.6; // sitting at a terrace table: close, as if across the t
 // pooping, washing or sitting turns the camera around to face me, and puts it back afterwards
 let focusKey = '';
 let camBefore = null;
+let roomCamMode = ''; // which of the room's views the camera last took (walking, toilet, washing, a seat)
+// walking about the room, the camera stands up high on the door's side (behind you as you come in) looking in
+const ROOM_STAND_YAW = () => Math.atan2(room.entry.x, room.entry.z - (ROOM.FRONT - ROOM.D) / 2);
 let washFocusUntil = 0;
 function focusCamera() {
   const mx = toX(me.x);
@@ -1875,7 +1878,7 @@ function focusCamera() {
   if (inRoom) {
     key = 'room';
     pitch = 0.65; // coming in: from up high (the room is open to the sky) behind me, so you see the whole of it
-    yaw = Math.atan2(room.entry.x, room.entry.z - (ROOM.FRONT - ROOM.D) / 2);
+    yaw = ROOM_STAND_YAW();
   } else if (me.s !== -1 && LAYOUT[me.s]) {
     key = `stall${me.s}`;
     yaw = LAYOUT[me.s].rot; // straight in front of the door
@@ -1903,6 +1906,7 @@ function focusCamera() {
   }
   if (key === focusKey) return;
   if (!focusKey && key) camBefore = { yaw: cam.tYaw, pitch: cam.tPitch, dist: cam.tDist };
+  const was = focusKey;
   focusKey = key;
   if (key) {
     cam.tYaw = yaw + Math.PI * 2 * Math.round((cam.tYaw - yaw) / (Math.PI * 2)); // the short way round
@@ -1912,7 +1916,9 @@ function focusCamera() {
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
     cam.tDist = key === 'room' ? ROOM_VIEW : key === 'bench' ? BENCH_DIST : clamp(Math.max(6.5, 4.4 / (2 * halfW)), DIST_MIN, 16);
   } else if (camBefore) {
-    cam.tYaw = camBefore.yaw;
+    // back as it was; but after washing, or coming out of a stall or the room, stay facing this way: swinging back
+    // round to where you looked before (perhaps somewhere else entirely, since 똥 누러 가기 warps you) is dizzying
+    if (was !== 'wash' && was !== 'room' && !was.startsWith('stall')) cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;
     cam.tDist = camBefore.dist;
     camBefore = null;
@@ -1991,15 +1997,8 @@ function updateCamera(dt) {
       cam.tDist = Math.hypot(h, c.y - 0.9);
       cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
     }
-  } else if (inRoom && roomStanding && roomSeat < 0) {
-    // walking about the room: the camera stands behind me, up high, looking past me into the room, so the whole
-    // room is the backdrop with me in front of it. Turning it by hand pauses this for a moment.
-    const dx = roomWalk.x;
-    const dz = roomWalk.z - (ROOM.FRONT - ROOM.D) / 2;
-    if (Math.hypot(dx, dz) > 0.7 && performance.now() - manualCamAt > 2500) {
-      const want = Math.atan2(dx, dz);
-      cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
-    }
+  } else if (inRoom && (roomStanding || roomCamMode === 'wash')) {
+    // walking about or washing: the camera holds still where its view was set (below), free to turn by hand
   } else if (me.s !== -1 && LAYOUT[me.s]) {
     // in a stall the camera only swings around the front, never behind it; in the private room it stays between the walls
     const off = cam.tYaw - LAYOUT[me.s].rot;
@@ -2008,6 +2007,18 @@ function updateCamera(dt) {
     cam.tYaw -= rel - clamp(rel, -swing, swing);
   }
   if (inRoom) {
+    // a fixed view for each thing you do in the room, set once as you start doing it (never chasing you about):
+    // walking about, the whole room from up high by the door; on the toilet, from the room, in front of it; washing,
+    // the basin from a little to the side; resting, out of the window past you (above)
+    const mode = performance.now() < roomWashUntil ? 'wash' : roomSeat >= 0 ? `seat${roomSeat}` : roomStanding ? 'stand' : 'toilet';
+    if (mode !== roomCamMode) {
+      roomCamMode = mode;
+      const turnTo = (y) => y + Math.PI * 2 * Math.round((cam.tYaw - y) / (Math.PI * 2)); // the short way round
+      if (mode === 'stand') Object.assign(cam, { tYaw: turnTo(ROOM_STAND_YAW()), tPitch: 0.65, tDist: ROOM_VIEW, tLook: 0 });
+      else if (mode === 'toilet') Object.assign(cam, { tYaw: turnTo(0), tPitch: 0.42, tDist: 4.6, tLook: 0 });
+      else if (mode === 'wash') Object.assign(cam, { tYaw: turnTo(0.45), tPitch: 0.5, tDist: 3.6, tLook: 0 });
+      manualCamAt = 0;
+    }
     cam.tPitch = clamp(cam.tPitch, 0.1, 1.0);
     cam.tDist = clamp(cam.tDist, ROOM_DIST[0], ROOM_DIST[1]);
     // dragging up raises your eyes, as outside: up to the skylight and the sky through it
@@ -2018,9 +2029,12 @@ function updateCamera(dt) {
   let fz = OG_VIEW ? OG_VIEW.fz : toZ(me.y);
   if (inRoom) {
     const seat = room.seats[roomSeat];
-    // resting, the camera looks past you out of the window; walking about, halfway between you and the room's middle;
-    // on the toilet, at it
-    const aim = seat ? roomWorld(seat.view.aim) : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x * 0.5, 0, (roomWalk.z + (ROOM.FRONT - ROOM.D) / 2) * 0.5)) : roomWorld(room.aim);
+    // resting, the camera looks past you out of the window; washing, at the basin; walking about, halfway between you
+    // and the room's middle; on the toilet, at it
+    const aim = seat ? roomWorld(seat.view.aim)
+      : roomCamMode === 'wash' ? roomWorld(room.washSpot)
+      : roomStanding ? roomWorld(new THREE.Vector3(roomWalk.x * 0.5, 0, (roomWalk.z + (ROOM.FRONT - ROOM.D) / 2) * 0.5))
+      : roomWorld(room.aim);
     fx = aim.x;
     fz = aim.z;
   } else if (me.s !== -1) {
@@ -2277,6 +2291,7 @@ function syncRoom(t, dt) {
     danceUntil = 0;
     leavingRoom = false;
     roomSpot = '';
+    roomCamMode = '';
     room.group.visible = inRoom;
     worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
     for (const o of outdoorLights()) o.visible = !inRoom;

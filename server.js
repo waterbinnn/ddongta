@@ -271,7 +271,7 @@ function snapshot(room) {
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
       r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
       q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile, un: u.under ? 1 : 0,
-      pk: u.pocket, cn: u.stuck ? 1 : 0,
+      pk: u.pocket, cn: u.stuck ? 1 : 0, k: u.kind,
     })),
   });
 }
@@ -370,6 +370,10 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 2048 });
 let nextId = 1;
 
+// who you come as, picked at random each time: a person three times in ten, otherwise one of the six animals
+const ANIMALS = ['elephant', 'dog', 'cat', 'rabbit', 'giraffe', 'wombat'];
+const pickKind = (asked) => (asked === 'person' || ANIMALS.includes(asked) ? asked : Math.random() < 0.3 ? 'person' : pick(ANIMALS)); // ?as= is for trying one out
+
 wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://localhost').searchParams;
   const wanted = rooms.find((r) => r.id === q.get('room')) || rooms[0];
@@ -386,6 +390,7 @@ wss.on('connection', (ws, req) => {
     id: nextId++,
     name: isValidName(q.get('name')) ? q.get('name') : freshName(room),
     color: pick(COLORS),
+    kind: pickKind(q.get('as')),
     ws,
     x: GROUNDS.spawn.x + (Math.random() - 0.5) * 240, // just inside the gate
     y: GROUNDS.spawn.y - Math.random() * 100,
@@ -454,6 +459,8 @@ wss.on('connection', (ws, req) => {
       room.dirty = true;
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
       if (!validStall || room.stalls[i] || !nearStall(i)) return;
+      // the restrooms are for people; animals go in the bushes
+      if (user.kind !== 'person') return send(ws, { t: 'toast', text: '여기는 사람 화장실이에요. 풀숲으로 가 보세요', direct: 1 });
       sit(room, user, i);
       const where = LAYOUT[i].type === 'private' ? `개인 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i].no}번 칸`;
       broadcast(room, { t: 'toast', text: `${user.name}님이 ${where}에 들어갔어요` });

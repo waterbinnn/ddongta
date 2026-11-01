@@ -1,5 +1,6 @@
-// 3D people: one chibi character from Blender (public/models/person.glb, made by tools/blender/person.py).
-// Everyone who comes as a person looks the same apart from hair colour; they are posed in code
+// 3D characters: one chibi person from Blender (public/models/person.glb, made by tools/blender/person.py) and six
+// animals (public/models/animal-<kind>.glb, tools/blender/animals.py) built on the same joints, so the same poses fit
+// them all. Everyone who comes as a person looks the same apart from hair colour; they are posed in code
 // (legs and arms swing on their joints) and the face is a drawn decal that changes with the mood.
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
@@ -8,21 +9,24 @@ import { clone as cloneRigged } from '/vendor/jsm/utils/SkeletonUtils.js';
 export const HIP_Y = 0.21; // hip joints above the feet (matches the Blender script)
 export const HEIGHT = 1.04;
 
-let template = null;
-export const peopleReady = new Promise((resolve) => {
-  new GLTFLoader().load(
-    '/models/person.glb',
-    (gltf) => {
-      template = gltf.scene;
-      resolve();
-    },
-    undefined,
-    (err) => {
-      console.warn('could not load the person model', err);
-      resolve();
-    },
-  );
-});
+export const ANIMALS = ['elephant', 'dog', 'cat', 'rabbit', 'giraffe', 'wombat'];
+const templates = {};
+const loadModel = (kind, url) =>
+  new Promise((resolve) => {
+    new GLTFLoader().load(
+      url,
+      (gltf) => {
+        templates[kind] = gltf.scene;
+        resolve();
+      },
+      undefined,
+      (err) => {
+        console.warn(`could not load the ${kind} model`, err);
+        resolve();
+      },
+    );
+  });
+export const peopleReady = Promise.all([loadModel('person', '/models/person.glb'), ...ANIMALS.map((k) => loadModel(k, `/models/animal-${k}.glb`))]);
 
 // the one look: warm peach skin, soft brown hair, a butter-yellow tee, sky-blue shorts, white sneakers
 export const LOOK = { skin: '#ffd8bf', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffc9d6' }; // pale pink briefs, so they show against the skin
@@ -145,10 +149,10 @@ const faceTex = (expr) => {
   return faces.get(expr);
 };
 
-// the face sits on a slice of sphere just over the front of the head
-let faceGeo = null;
+// the face sits on a slice of sphere just over the front of the head (one per kind of head: they share geometry)
+const faceGeos = new WeakMap();
 function faceGeometry(head) {
-  if (faceGeo) return faceGeo;
+  if (faceGeos.has(head.geometry)) return faceGeos.get(head.geometry);
   head.geometry.computeBoundingBox();
   const box = head.geometry.boundingBox;
   const size = box.getSize(new THREE.Vector3());
@@ -156,14 +160,17 @@ function faceGeometry(head) {
   const g = new THREE.SphereGeometry(r * 1.015, 32, 20, Math.PI / 2 - 0.95, 1.9, Math.PI / 2 - 0.62, 1.5);
   g.scale(size.x / size.z, size.y / size.z, 1);
   g.translate(...box.getCenter(new THREE.Vector3()).toArray());
-  faceGeo = g;
+  faceGeos.set(head.geometry, g);
   return g;
 }
 
 // ---------- one person ----------
 
+// a person, or one of the animals
+export const makeCharacter = (kind, hair) => (ANIMALS.includes(kind) && templates[kind] ? makeAnimal(kind) : makePerson(hair));
+
 export function makePerson(hair = LOOK.hair) {
-  const root = template ? cloneRigged(template) : new THREE.Group(); // keeps the shorts bound to their own bones
+  const root = templates.person ? cloneRigged(templates.person) : new THREE.Group(); // keeps the shorts bound to their own bones
   const parts = {};
   root.traverse((o) => {
     if (o.name) parts[o.name] = o;
@@ -201,7 +208,34 @@ export function makePerson(hair = LOOK.hair) {
     const world = b.getWorldQuaternion(new THREE.Quaternion());
     bones[n] = { bone: b, local: b.quaternion.clone(), world, worldInv: world.clone().invert() };
   }
-  return { group, spin, root, parts, face, rest, bones, expr: 'idle', down: false };
+  return { group, spin, root, parts, face, rest, bones, expr: 'idle', down: false, skin: LOOK.skin, height: HEIGHT, size: 1 };
+}
+
+// an animal: the same joints as a person, in fur. Its colours come with the model (by part), drawn in the same
+// soft cartoon shading; the small ones are made smaller at the hips in the model, which is moved up to the whole
+// animal here so the poses (which move the hips about) shrink with it.
+export function makeAnimal(kind) {
+  const root = templates[kind].clone(true);
+  const parts = {};
+  root.traverse((o) => {
+    if (o.name) parts[o.name] = o;
+    if (o.isMesh) o.material = matOf(`#${o.material.color.getHexString()}`);
+  });
+  const size = parts.hips.scale.x;
+  parts.hips.scale.setScalar(1);
+  parts.hips.position.y = HIP_Y;
+  root.scale.setScalar(size);
+  const face = new THREE.Mesh(faceGeometry(parts.head), new THREE.MeshBasicMaterial({ map: faceTex('idle'), transparent: true, depthWrite: false }));
+  parts.head.add(face);
+  const group = new THREE.Group();
+  const spin = new THREE.Group();
+  spin.add(root);
+  group.add(spin);
+  const rest = {};
+  for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R']) rest[n] = parts[n].position.clone();
+  root.updateMatrixWorld(true);
+  const height = new THREE.Box3().setFromObject(root).max.y; // the top of the head, or of the ears
+  return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size };
 }
 
 export function disposePerson(p) {
@@ -220,7 +254,7 @@ export function setFlush(p, red = 0, yellow = 0) {
     p.flushMat = p.parts.head.material.clone();
     for (const n of ['head', 'ear_L', 'ear_R']) if (p.parts[n]) p.parts[n].material = p.flushMat;
   }
-  p.flushMat.color.set(LOOK.skin).lerp(RED, red * 0.65).lerp(YELLOW, yellow * 0.75);
+  p.flushMat.color.set(p.skin).lerp(RED, red * 0.65).lerp(YELLOW, yellow * 0.75);
 }
 
 export function setFace(p, expr) {
@@ -266,6 +300,8 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
   p.spin.position.set(0, 0, 0);
   p.spin.rotation.set(0, 0, 0);
   p.root.position.set(0, 0, 0);
+  // a tail wagging gently, faster on the move
+  if (P.tail) P.tail.rotation.set(0, Math.sin(t * (mode === 'walk' ? 9 : 3) + seed) * 0.35, 0);
 
   const breathe = Math.sin(t * 1.9 + seed) * 0.015;
   if (mode === 'walk') {

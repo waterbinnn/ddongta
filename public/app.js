@@ -1,6 +1,6 @@
 // 똥타 — a roomy three.js restroom rendered at low resolution, with hand-drawn pixel sprites standing in it.
 import * as THREE from '/vendor/three.module.js';
-import { peopleReady, makePerson, hairFor, disposePerson, setFace, setFlush, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
+import { peopleReady, makePerson, makeCharacter, hairFor, disposePerson, setFace, setFlush, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
 import { RoomEnvironment } from '/vendor/jsm/environments/RoomEnvironment.js';
 import { buildPrivateRoom } from './room.js';
@@ -1319,7 +1319,7 @@ function syncStalls() {
 // ---------- characters ----------
 
 function makeWalker(u) {
-  const p = makePerson(hairFor(u.id));
+  const p = makeCharacter(u.k, hairFor(u.id)); // a person or an animal, as the server picked
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
@@ -1367,7 +1367,8 @@ const serverDown = (on) => {
   $('#down').hidden = !on;
 };
 function connect() {
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  const as = new URLSearchParams(location.search).get('as'); // ?as=giraffe tries out one character
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${as ? `?as=${encodeURIComponent(as)}` : ''}`);
   ws.onmessage = (e) => handle(JSON.parse(e.data));
   clearTimeout(downTimer);
   downTimer = setTimeout(() => serverDown(true), retries ? 3000 : 8000); // the first visit may be waking the server
@@ -1510,6 +1511,7 @@ function applyState(st) {
       me.pl = u.pl || 0;
       me.cn = Boolean(u.cn);
       me.pk = u.pk || [];
+      me.k = u.k;
       if (u.r) {
         me.x = u.x;
         me.y = u.y;
@@ -1530,7 +1532,8 @@ function applyState(st) {
 
 // ---------- movement ----------
 
-const freeFor = (i) => !stalls[i];
+const isAnimal = () => Boolean(me.k) && me.k !== 'person'; // animals go in the bushes, not the restrooms
+const freeFor = (i) => !stalls[i] && !isAnimal();
 
 function nearestStall(x, y, ok, range = ENTER_RANGE) {
   let best = -1;
@@ -2046,7 +2049,7 @@ function placeWalkers(dt, t) {
       pose(p, { mode: 'sit', t: sec, seed: id });
       handFor(p, id, u, false); // at the table the drink stands in front of you, as a cup
       p.group.position.set(X, BENCH_TOP - HIP_Y + lift, Z);
-      overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, HEIGHT + 0.2 + bob + towerHeight(u.pl));
+      overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, p.height + 0.2 + bob + towerHeight(u.pl));
       continue;
     }
     if (e.kickT > 0) {
@@ -2062,7 +2065,7 @@ function placeWalkers(dt, t) {
     handFor(p, id, u, true);
     if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
-    overHead(e.marker, X, lift, Z, HEIGHT + 0.22 + bob + towerHeight(u.pl));
+    overHead(e.marker, X, lift, Z, p.height + 0.22 + bob + towerHeight(u.pl));
   }
 }
 
@@ -2262,7 +2265,7 @@ const DRAW_MOST = 600; // past this many on one person, the extra ones are count
 const RING = 8; // poops round the body in each row
 const ROWS = [0.92, 0.76, 0.6, 0.44, 0.28, 0.12]; // heights of the rows, from the shoulders to the ankles
 // where the k-th poop sits: on top of the head first, then rows of them all round the body, layer on layer
-function poopSpot(k, out) {
+function poopSpot(k, out, height = HEIGHT) {
   if (k < HEAD_STACK) return out.set((((k * 7) % 3) - 1) * 0.012, k * TOWER_STEP, 0);
   const j = k - HEAD_STACK;
   const perLayer = RING * ROWS.length;
@@ -2271,7 +2274,7 @@ function poopSpot(k, out) {
   const col = j % RING;
   const a = (col / RING) * Math.PI * 2 + row * 0.39 + layer * 0.21;
   const r = 0.27 + layer * 0.07;
-  return out.set(Math.sin(a) * r, ROWS[row] * HEIGHT - 0.03, Math.cos(a) * r);
+  return out.set(Math.sin(a) * r, ROWS[row] * height - 0.03, Math.cos(a) * r);
 }
 function syncTower(p, id, count, dt) {
   if (!p.tower) {
@@ -2282,6 +2285,7 @@ function syncTower(p, id, count, dt) {
     if (head) {
       head.geometry.computeBoundingBox();
       p.tower.position.y = head.geometry.boundingBox.max.y + 0.01; // sits on the crown of the head
+      p.tower.scale.setScalar(1 / p.size); // the same poops on a small animal's head as on anyone's
       head.add(p.tower);
     } else {
       p.tower.position.y = HEIGHT;
@@ -2298,7 +2302,7 @@ function syncTower(p, id, count, dt) {
     while (group.children.length < n) {
       const k = offset + group.children.length;
       const s = pixelSprite(golds?.has(k) ? PROPS.goldPoop : PROPS.poop, POOP_PX);
-      s.userData.to = poopSpot(k, new THREE.Vector3());
+      s.userData.to = poopSpot(k, new THREE.Vector3(), p.height);
       s.position.copy(s.userData.to).add(new THREE.Vector3(0, 0.6, 0)); // drops in from above
       group.add(s);
     }
@@ -2685,7 +2689,7 @@ function headOf(id) {
   const tower = towerHeight(e.data.pl);
   if (id === meId && inRoom) return roomWorld(room.head).add(new THREE.Vector3(0, tower, 0));
   if (seat !== -1) return stallWorld(seat, STALL_M / 2, 1.55 + tower, SEAT_Z);
-  return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, HEIGHT + 0.15 + tower); // screen-up, like the markers
+  return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, e.p.height + 0.15 + tower); // screen-up, like the markers
 }
 
 // a crisp label pinned under the golden poop statue (text drawn in 3D would blur)
@@ -2933,7 +2937,7 @@ function sitHere() {
 
 // 똥 누러 가기: off to the nearest free stall, or to the bushes when every stall is taken
 function goPoop() {
-  const i = closestAnywhere(freeFor);
+  const i = isAnimal() ? -1 : closestAnywhere(freeFor);
   if (i >= 0) {
     walkToStall(i);
     return;
@@ -2942,7 +2946,7 @@ function goPoop() {
   target = settleLocal({ x: b.x, y: b.y });
   pendingEnter = -1;
   showTapMark(toX(target.x), toZ(target.y));
-  toast('칸이 다 찼어요. 가까운 풀숲으로 가요');
+  toast(isAnimal() ? '가까운 풀숲으로 가요' : '칸이 다 찼어요. 가까운 풀숲으로 가요');
 }
 
 // ---------- the vending machines, the drink in your hand, and 변비 ----------

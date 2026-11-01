@@ -67,6 +67,7 @@ const users = new Map();
 const me = { x: 100, y: 300, s: -1, p: 0, ready: false, rolling: false, pd: false, q: 0, b: false };
 let pendingBench = false;
 let pendingWash = false;
+let washAfterExit = false; // left a public stall to go and wash
 let spaceHeld = false; // arrows + Space = run
 const keys = new Set();
 let target = null;
@@ -219,6 +220,7 @@ let roomFor = -1;
 let roomPerson = null;
 let roomPersonFor = '';
 let roomShake = 0;
+let roomWashUntil = 0; // washing at the room's sink until then
 let snapCam = false; // jump the camera instead of flying it (going into or out of the room)
 
 let W = 1;
@@ -1288,6 +1290,8 @@ function applyState(st) {
         target = null;
         e.rx = u.x;
         e.ry = u.y;
+        if (washAfterExit && me.s !== -1) setTimeout(washHands); // out of the stall (once me.s is updated below), over to the sinks
+        washAfterExit = false;
       }
       if (me.s === -1 && u.s !== -1) setHold(false);
       me.s = u.s;
@@ -1419,9 +1423,31 @@ function flush() {
   send({ t: 'flush' });
 }
 
+// washing up from the toilet: the private room has its own sink; from a public stall you go out to the sinks
+function washFromStall() {
+  if (inRoom) {
+    setHold(false);
+    send({ t: 'wash' });
+    return;
+  }
+  washAfterExit = true;
+  exitStall();
+}
+
 function exitStall() {
   setHold(false);
   send({ t: 'exit' });
+}
+
+// The public restroom is open only at the front: walking in or out from the side goes round by the opening first
+function waypoint(from, to) {
+  const P = GROUNDS.public;
+  const inside = (p) => p.x > P.x0 && p.x < P.x1 && p.y < P.y1;
+  const byOpening = (p) => p.x > P.x0 + 40 && p.x < P.x1 - 40 && p.y > P.y1;
+  const a = inside(from);
+  const b = inside(to);
+  if (a === b || (!a && byOpening(from)) || (!b && byOpening(to))) return to;
+  return { x: clamp(from.x, P.x0 + 90, P.x1 - 90), y: P.y1 + 60 };
 }
 
 function moveMe(dt) {
@@ -1456,10 +1482,11 @@ function moveMe(dt) {
     pendingBench = false;
     pendingWash = false;
   } else if (target) {
-    const dx = target.x - me.x;
-    const dy = target.y - me.y;
+    const goal = waypoint(me, target);
+    const dx = goal.x - me.x;
+    const dy = goal.y - me.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < 2) {
+    if (dist < 2 && goal === target) {
       target = null;
       if (pendingEnter >= 0) tryEnter(pendingEnter);
       pendingEnter = -1;
@@ -1540,8 +1567,11 @@ function focusCamera() {
     // from the side, so you see the hands under the tap; pick whichever side is closer to the current view
     const sink = nearestSink(me.x, me.y);
     const toBasin = Math.atan2(toX(sink.lookX) - mx, toZ(sink.lookY) - mz);
+    // the clear side (a wall may close one off), else whichever is closer to the current view
     const side = (y) => Math.abs(Math.atan2(Math.sin(y - cam.tYaw), Math.cos(y - cam.tYaw)));
-    yaw = side(toBasin + Math.PI / 2) < side(toBasin - Math.PI / 2) ? toBasin + Math.PI / 2 : toBasin - Math.PI / 2;
+    const sides = [toBasin + Math.PI / 2, toBasin - Math.PI / 2];
+    const space = sides.map((y) => clearDist(mx, mz, y, 0.4, 8));
+    yaw = space[0] !== space[1] ? (space[0] > space[1] ? sides[0] : sides[1]) : side(sides[0]) < side(sides[1]) ? sides[0] : sides[1];
     pitch = 0.4;
   } else if (me.b) {
     key = 'bench';
@@ -1597,6 +1627,26 @@ function followWalk(dt) {
   cam.tYaw = lerpAngle(cam.tYaw, behind, 1 - Math.exp(-dt * 2.2));
 }
 
+// how far the camera can sit from (fx, fz) along this yaw and pitch before a restroom wall gets in the way
+function clearDist(fx, fz, yaw, pitch, dist) {
+  const P = GROUNDS.public;
+  const walls = [
+    GROUNDS.private,
+    { x0: P.x0, x1: P.x1, y0: P.y0, y1: P.doorLine }, // the stalls and the back wall
+    { x0: P.x0 - 20, x1: P.x0 + 20, y0: P.y0, y1: P.y1 }, // the side walls
+    { x0: P.x1 - 20, x1: P.x1 + 20, y0: P.y0, y1: P.y1 },
+  ];
+  const cp = Math.cos(pitch);
+  for (let k = 0.6; k <= dist; k += 0.15) {
+    const x = (fx + Math.sin(yaw) * cp * k) / U;
+    const z = (fz + Math.cos(yaw) * cp * k) / U;
+    if (0.9 + Math.sin(pitch) * k < 3.4 && walls.some((w) => x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
+      return Math.max(1.8, k - 0.35);
+    }
+  }
+  return dist;
+}
+
 function updateCamera(dt) {
   if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
@@ -1639,9 +1689,18 @@ function updateCamera(dt) {
   cam.dist = lerp(cam.dist, Math.max(DIST_MIN, cam.tDist), k);
   cam.look = lerp(cam.look, cam.tLook, k);
   const cp = Math.cos(cam.pitch);
-  const px = cam.fx + sy * cp * cam.dist;
-  const py = 0.9 + Math.sin(cam.pitch) * cam.dist;
-  const pz = cam.fz + cy * cp * cam.dist;
+  let px = cam.fx + sy * cp * cam.dist;
+  let py = 0.9 + Math.sin(cam.pitch) * cam.dist;
+  let pz = cam.fz + cy * cp * cam.dist;
+  if (!inRoom && GROUNDS && !OG_VIEW) {
+    // a wall between me and the camera: bring the camera in front of the first one along the way
+    const d = clearDist(cam.fx, cam.fz, cam.yaw, cam.pitch, cam.dist);
+    if (d !== cam.dist) {
+      px = cam.fx + sy * cp * d;
+      py = 0.9 + Math.sin(cam.pitch) * d;
+      pz = cam.fz + cy * cp * d;
+    }
+  }
   camera.position.set(px, py, pz);
   if (roomShake > 0) {
     // someone is knocking on my door: the room gives a little jolt
@@ -1806,10 +1865,27 @@ function syncRoom(t) {
     room.seat.add(roomPerson.group);
     roomPersonFor = meId;
   }
+  const washing = performance.now() < roomWashUntil;
+  const g = roomPerson.group;
+  if (washing && g.parent !== room.group) {
+    // up off the toilet, shorts on, over to the sink
+    room.group.add(g);
+    g.position.copy(room.washSpot);
+    g.rotation.y = Math.PI / 2;
+    setPantsDown(roomPerson, false);
+  } else if (!washing && g.parent !== room.seat) {
+    room.seat.add(g);
+    g.position.set(0, 0, 0);
+    g.rotation.y = 0;
+    setPantsDown(roomPerson, true);
+  }
   if (u) {
-    setFace(roomPerson, exprOf(u, me.s));
-    pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
-    roomPerson.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
+    setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
+    if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
+    else {
+      pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
+      g.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
+    }
   }
 }
 
@@ -1995,19 +2071,36 @@ const streamGeo = new THREE.CylinderGeometry(0.03, 0.05, 1, 6);
 function onWash(m) {
   const e = users.get(m.id);
   if (!e) return;
+  const inside = m.id === meId && inRoom;
+  if (!inside && e.data.s !== -1) return; // someone washing in their own private room: nobody else sees it
   e.washUntil = performance.now() + 2200;
   if (m.id === meId) washFocusUntil = performance.now() + 2600;
-  const ux = toX(e.rx);
-  const uz = toZ(e.ry);
-  const sink = nearestSink(e.rx, e.ry);
-  const tapX = toX(sink.x) - sink.side * 0.3; // the tap over that sink
-  const tapZ = toZ(sink.y);
-  const hands = new THREE.Vector3(ux - sink.side * 0.35, 0.95, uz);
-  pop(hands.clone().add(new THREE.Vector3(0, 0.45, 0)), '뽀득뽀득');
+  let tap;
+  let hands;
+  let top;
+  let bottom;
+  if (inside) {
+    // the little sink in my room: step over from the toilet and wash there
+    roomWashUntil = performance.now() + 2200;
+    tap = roomWorld(room.tap);
+    hands = roomWorld(room.washSpot).lerp(tap, 0.5).setY(0.92);
+    top = tap.y;
+    bottom = 0.86;
+  } else {
+    const sink = nearestSink(e.rx, e.ry);
+    tap = new THREE.Vector3(toX(sink.lookX), 1.12, toZ(sink.lookY)); // the tap over that basin
+    const ux = toX(e.rx);
+    const uz = toZ(e.ry);
+    const d = Math.hypot(tap.x - ux, tap.z - uz) || 1;
+    hands = new THREE.Vector3(ux + ((tap.x - ux) / d) * 0.35, 0.95, uz + ((tap.z - uz) / d) * 0.35);
+    top = tap.y;
+    bottom = 0.9;
+  }
+  const tapX = tap.x;
+  const tapZ = tap.z;
+  pop(hands.clone().add(new THREE.Vector3(0, 0.45, 0)), '뽀득뽀득', inside);
   if (!document.hidden) {
     // a stream of water from the tap toward this person's hands
-    const top = 1.68;
-    const bottom = 0.88;
     const stream = new THREE.Mesh(streamGeo, new THREE.MeshBasicMaterial({ color: '#9fe0ff', transparent: true, opacity: 0.8 }));
     stream.position.set(tapX, (top + bottom) / 2, tapZ);
     stream.scale.y = top - bottom;
@@ -2026,7 +2119,7 @@ function onWash(m) {
     for (let k = 0; k < 6; k++) {
       const d = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(PROPS.drop), transparent: true }));
       d.scale.set(0.06, 0.06, 1);
-      d.position.set(tapX, 0.9, tapZ);
+      d.position.set(tapX, bottom + 0.02, tapZ);
       fxRoot.add(d);
       washFx.push({ o: d, t: -k * 0.25, life: 0.6, kind: 'drop', vx: (Math.random() - 0.5) * 0.8, vz: (Math.random() - 0.5) * 0.8, vy: 1 + Math.random() * 0.8 });
     }
@@ -2365,7 +2458,7 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
-    bar.append(miniBtn('flush', '물 내리기', flush), miniBtn('bird', '에티켓벨', ringBell), miniBtn('exit', '나가기', exitStall));
+    bar.append(miniBtn('flush', '물 내리기', flush), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;

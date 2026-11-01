@@ -386,7 +386,8 @@ wss.on('connection', (ws, req) => {
       user.lastJump = now;
       user.bench = false;
       broadcast(room, { t: 'jump', id: user.id });
-    } else if (m.t === 'wash' && user.stall === -1 && !user.roll) {
+    } else if (m.t === 'wash' && !user.roll && (user.stall === -1 || LAYOUT[user.stall].type === 'private')) {
+      // at a sink outside, or at the little sink in your own private room
       const now = Date.now();
       if (now - user.lastWash < 2000) return;
       user.lastWash = now;

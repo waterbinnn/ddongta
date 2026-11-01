@@ -2,7 +2,7 @@
 // sees their own room, and nobody else's. It follows the blockout in tools/blender/concept_stall.py
 // (Blender x, y, z become x, z-up, -y here): cream brick-tile walls, a soft pink floor, a window with the sky,
 // the toilet against the back wall, a side table with a magazine, a sink with a mirror, a chest with a diffuser,
-// a hanging plant, a framed picture and a pendant lamp. The room is closed all round so the camera sits inside it.
+// a framed picture and a pendant lamp. The room is closed all round so the camera sits inside it.
 import * as THREE from '/vendor/three.module.js';
 
 export const ROOM = { W: 2.3, D: 2.6, FRONT: 1.6, H: 2.6 }; // width, depth to the back wall, room in front of the origin, height
@@ -216,17 +216,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     stick.rotation.set(0.15 * (k - 1.5), 0, -a * 0.3);
   }
 
-  // ---------- a hanging plant, a framed picture, the pendant lamp ----------
-  const dark = lambert('#3b3a36');
-  cyl(0.005, 0.005, 0.4, dark, -0.35, 2.4, -1.2, 6, { cast: false });
-  const planter = cyl(0.16, 0.0, 0.3, lambert('#e3d8c8'), -0.35, 2.05, -1.2, 4);
-  planter.rotation.y = 0.4;
-  const leaf = lambert('#6fb36a');
-  for (let k = 0; k < 7; k++) {
-    const a = (k / 7) * Math.PI * 2;
-    const l = ball(0.06, leaf, -0.35 + Math.cos(a) * 0.09, 2.0 - (k % 3) * 0.09, -1.2 - Math.sin(a) * 0.09);
-    l.scale.set(1, 1.6, 1);
-  }
+  // ---------- a framed picture, the pendant lamp ----------
   box(0.5, 0.62, 0.03, lambert('#2e2a28'), 0.35, 1.7, -D + 0.02);
   box(0.42, 0.54, 0.01, lambert('#ffffff', { map: pictureTex() }), 0.35, 1.7, -D + 0.04, { cast: false });
   cyl(0.006, 0.006, 0.2, lambert('#2e2a28'), 0.2, 2.5, -1.4, 6, { cast: false });
@@ -242,10 +232,6 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   fill.position.set(0, 1.9, 1.0);
   group.add(fill);
 
-  // a round rug in front of the toilet
-  const rug = add(new THREE.CircleGeometry(0.5, 32), lambert('#e9c9a6'), tx + 0.1, 0.006, TOILET.z + 0.7, { cast: false });
-  rug.rotation.x = -Math.PI / 2;
-
   // where things go: the sitter's hips (facing out of the room, toward the camera), the poop tower on the side table
   const seat = new THREE.Group();
   seat.position.set(tx, SEAT_TOP - HIP_Y, TOILET.z + 0.3);
@@ -260,5 +246,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     bowl: new THREE.Vector3(tx, 0.6, TOILET.z + 0.1),   // where a poop leaves from (local)
     head: new THREE.Vector3(tx, 1.5, TOILET.z + 0.3),   // over the sitter's head (local)
     knock: new THREE.Vector3(0.45, 1.55, -1.1),        // where a knock on the door shows (local)
+    washSpot: new THREE.Vector3(sx - 0.48, 0, sz),     // where you stand to wash, facing the sink (local)
+    tap: new THREE.Vector3(sx - 0.02, 1.0, sz),         // the water falls from here into the basin (local)
   };
 }

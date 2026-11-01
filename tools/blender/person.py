@@ -8,9 +8,8 @@ its pivot at its joint, so the page can swing legs and arms and turn the head in
 Colours are not set here: the page paints each part by name (skin, hair, shirt, pants, shoes), and draws the face.
 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
-  hips (shorts) > torso (tee) > head (skin) > hair, ear_L / ear_R
+  hips (shorts, one block) > torso (tee) > head (skin) > hair, ear_L / ear_R
                               > arm_L / arm_R (sleeves) > hand_L / hand_R
-                > short_L / short_R (the legs of the shorts, fixed to the hips)
                 > leg_L / leg_R (bare legs) > shoe_L / shoe_R, cuff_L / cuff_R (shorts round the ankles, hidden by default)
 """
 import math
@@ -109,6 +108,23 @@ def squircle_bm(top_z, bottom_z, center_xy, rx, ry, n=4.0, segs=28, rx_bottom=No
     return bm
 
 
+def rounded_box_bm(center, radii, side=3.0, ends=4.0, segs=32, rings=20):
+    """A box with soft, evenly rounded edges all round (a superellipsoid): no flat caps, no sharp rims."""
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=segs, v_segments=rings, radius=1.0)
+    for v in bm.verts:
+        x, y, z = v.co
+        rho = math.hypot(x, y)
+        zz = math.copysign(abs(z) ** (2 / ends), z)
+        ring = rho ** (2 / ends)
+        if rho > 1e-6:
+            c, s = x / rho, y / rho
+            x = math.copysign(abs(c) ** (2 / side), c) * ring
+            y = math.copysign(abs(s) ** (2 / side), s) * ring
+        v.co = Vector((x * radii[0], y * radii[1], zz * radii[2])) + Vector(center)
+    return bm
+
+
 def bean_bm(center, radii, flare=0.12):
     """An ellipsoid a little wider at the bottom, like a bean."""
     bm = ellipsoid_bm((0, 0, 0), radii, 24, 14)
@@ -121,8 +137,8 @@ def bean_bm(center, radii, flare=0.12):
 
 
 # ---------- body ----------
-# the seat of the shorts: as wide and deep as the two legs of the shorts together, so nothing sticks out
-hips = new_object('hips', squircle_bm(HIP_Z + 0.075, HIP_Z - 0.005, (0, 0), 0.122, 0.06, n=3.2), Vector((0, 0, HIP_Z)))
+# the shorts: one soft block fixed to the hips (the thin legs swing inside it); its top hides under the tee
+hips = new_object('hips', rounded_box_bm((0, 0, HIP_Z + 0.01), (0.13, 0.068, 0.07)), Vector((0, 0, HIP_Z)))
 # an A-line tee: narrow at the round shoulders, flaring a little to a hem that hangs over the top of the shorts
 tee = squircle_bm(NECK_Z - 0.01, HIP_Z + 0.035, (0, 0), 0.098, 0.084, n=3.0, rx_bottom=0.136, ry_bottom=0.106)
 made = bmesh.ops.create_uvsphere(tee, u_segments=24, v_segments=12, radius=1.0)
@@ -134,7 +150,6 @@ head = new_object('head', ellipsoid_bm(HEAD_C, (HEAD_R * HEAD_SCALE.x, HEAD_R * 
 for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they face -y
     ellipsoid(f'ear_{tag}', (0, 0, NECK_Z), HEAD_C + Vector((side * 0.3, 0.01, -0.03)), (0.04, 0.034, 0.055), head)
     sh = Vector((side * SHOULDER.x, 0, SHOULDER.z))
-    # a puffy short sleeve, then a bare arm hanging a little away from the body, ending in a round hand
     # a short sleeve flaring a little at the end, a thin arm, and a round ball of a hand
     elbow = sh + Vector((side * 0.03, 0, -0.065))
     wrist = sh + Vector((side * 0.06, 0, -0.175))
@@ -146,10 +161,6 @@ for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they fac
     new_object(f'hand_{tag}', hand, sh, arm)
     hip = Vector((side * LEG_X, 0, HIP_Z))
     leg = new_object(f'leg_{tag}', capsule_bm(hip + Vector((0, 0, -0.01)), hip + Vector((0, 0, -0.15)), 0.042, 0.04), hip, hips)   # thin bare legs
-    # a short leg of the shorts round each thigh, so it reads as shorts, not a skirt
-    # each leg of the shorts: flat-sided, so the two meet in a plain line down the middle; flat hems above the knee.
-    # They hang from the hips, not the legs: the shorts stay put and the thin legs swing inside them.
-    new_object(f'short_{tag}', squircle_bm(hip.z + 0.02, hip.z - 0.06, (side * 0.062, 0), 0.064, 0.066), hip, hips)
     ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.17)), (0.058, 0.08, 0.04), leg)   # chunky little shoes
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.072, radius2=0.066, depth=0.05)
@@ -246,7 +257,7 @@ if PREVIEW:
         return m
 
     skin, hair, shirt, pants, shoe = mat('skin', (1, 0.9, 0.84)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
-    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'short': pants, 'cuff': pants, 'shoe': shoe}
+    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'cuff': pants, 'shoe': shoe}
     for o in scene.objects:
         if o.type == 'MESH':
             o.data.materials.append(next(v for k, v in paint.items() if o.name.startswith(k)))

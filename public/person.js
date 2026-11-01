@@ -172,7 +172,7 @@ export function makePerson(hair = LOOK.hair) {
   paint(['head', 'ear_L', 'ear_R', 'hand_L', 'hand_R', 'leg_L', 'leg_R'], LOOK.skin);
   if (parts.hair) parts.hair.material = matOf(hair, true); // an open shell: its inside can show at the edge
   paint(['torso', 'arm_L', 'arm_R'], LOOK.shirt);
-  paint(['hips', 'short_L', 'short_R', 'cuff_L', 'cuff_R'], LOOK.pants);
+  paint(['hips', 'cuff_L', 'cuff_R'], LOOK.pants);
   paint(['shoe_L', 'shoe_R'], LOOK.shoes);
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = false;
 
@@ -206,8 +206,11 @@ export function setPantsDown(p, down) {
   if (p.down === down) return;
   p.down = down;
   const { parts } = p;
-  if (parts.hips) parts.hips.material = matOf(down ? LOOK.undies : LOOK.pants);
-  for (const n of ['short_L', 'short_R']) if (parts[n]) parts[n].visible = !down;
+  if (parts.hips) {
+    // pulled down, the shorts block shrinks up into a pair of white briefs
+    parts.hips.material = matOf(down ? LOOK.undies : LOOK.pants);
+    parts.hips.scale.y = down ? 0.55 : 1;
+  }
   for (const n of ['cuff_L', 'cuff_R']) if (parts[n]) parts[n].visible = down;
 }
 

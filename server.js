@@ -81,6 +81,7 @@ function cleanChat(text) {
 const kstDate = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 let today = kstDate();
 let flushedToday = 0;
+let beanstalk = 0; // every poop ever given to the beanstalk as fertilizer, in all rooms; it never stops growing
 
 // "today's poops" survives restarts and deploys when a Key Value store is attached (REDIS_URL on Render)
 let kv = null;
@@ -94,9 +95,10 @@ if (process.env.REDIS_URL) {
     console.warn('key value:', err.message);
   });
   kv.connect()
-    .then(() => kv.get(`flushed:${today}`))
-    .then((saved) => {
+    .then(() => Promise.all([kv.get(`flushed:${today}`), kv.get('beanstalk')]))
+    .then(([saved, bean]) => {
       flushedToday = Math.max(flushedToday, Number(saved) || 0);
+      beanstalk = Math.max(beanstalk, Number(bean) || 0);
     })
     .catch((err) => console.warn('key value unavailable:', err.message));
 }
@@ -108,7 +110,7 @@ function countPoop() {
   if (kv?.isReady) kv.multi().incr(`flushed:${today}`).expire(`flushed:${today}`, 3 * 86400).exec().catch(() => {});
 }
 
-const newMeta = () => ({ pile: 0, hp: DOOR_HP, knockedAt: 0 });
+const newMeta = () => ({ hp: DOOR_HP, knockedAt: 0 });
 
 // Restrooms: the first one is always open; when every open one is full another opens (2호점, 3호점 ...)
 // and extra ones close again after standing empty for a while.
@@ -154,7 +156,6 @@ function leaveStall(room, user) {
   const i = user.stall;
   room.stalls[i] = null;
   room.meta[i].hp = DOOR_HP;
-  room.meta[i].pile = 0; // your tower leaves with you
   user.x = LAYOUT[i].x;
   user.y = LAYOUT[i].y;
   user.stall = -1;
@@ -167,7 +168,6 @@ function breakDoor(room, i, breaker) {
   const now = Date.now();
   const victim = room.stalls[i];
   room.stalls[i] = null;
-  room.meta[i].pile = 0;
   victim.stall = -1;
   victim.holding = false;
   victim.progress = 0;
@@ -200,14 +200,14 @@ function snapshot(room) {
   return JSON.stringify({
     t: 'state',
     flushed: flushedToday,
+    bean: beanstalk,
     stalls: room.stalls.map((u) => (u ? u.id : 0)),
-    piles: room.meta.map((m) => m.pile),
     hp: room.meta.map((m) => Math.round(m.hp)),
     users: [...room.users].map((u) => ({
       id: u.id, name: u.name, c: u.color, x: Math.round(u.x), y: Math.round(u.y), d: u.dir,
       s: u.stall, p: u.progress, n: u.count, h: u.holding,
       r: u.roll ? 1 : 0, pd: u.pantsUntil > now ? 1 : 0, b: u.bench ? 1 : 0,
-      q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0,
+      q: u.squat ? 1 : 0, ex: u.ex, sg: u.signal ? 1 : 0, pl: u.pile,
     })),
   });
 }
@@ -250,14 +250,8 @@ setInterval(() => {
         u.count++;
         countPoop();
         const gold = Math.random() < GOLD_CHANCE;
-        if (u.stall !== -1) {
-          const m = room.meta[u.stall];
-          m.pile++; // every stall keeps its own poop tower
-          broadcast(room, { t: 'poop', id: u.id, n: u.count, stall: u.stall, pile: m.pile, ...(gold && { gold: 1 }) });
-        } else {
-          // squatting in the bushes: it lands right there, and the grass takes it back after a while
-          broadcast(room, { t: 'poop', id: u.id, n: u.count, bush: 1, x: Math.round(u.x), y: Math.round(u.y), ...(gold && { gold: 1 }) });
-        }
+        u.pile++; // it goes on top of your head, and stays there until you give it to the beanstalk
+        broadcast(room, { t: 'poop', id: u.id, n: u.count, pile: u.pile, ...(u.stall !== -1 ? { stall: u.stall } : { bush: 1 }), ...(gold && { gold: 1 }) });
         u.signal = false; // the signal has been answered
         u.exCount = 0;
         if (gold) wish.gild(); // a golden poop puts a little gold back on the wish page's poop
@@ -353,6 +347,7 @@ wss.on('connection', (ws, req) => {
     exCount: 0,
     lastEx: 0,
     signal: false, // 「신호가 왔다!」 after a few moves, until the next poop
+    pile: 0, // the poops stacked on your head
   };
   room.users.add(user);
   room.dirty = true;
@@ -429,11 +424,14 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { t: 'bell', stall: user.stall, id: user.id });
     } else if (m.t === 'exit') {
       leaveStall(room, user);
-    } else if (m.t === 'flush' && user.stall !== -1) {
-      // flushing clears your poop tower but keeps your seat
-      room.meta[user.stall].pile = 0;
-      room.dirty = true;
-      broadcast(room, { t: 'flush', id: user.id, stall: user.stall });
+    } else if (m.t === 'fert' && user.pile > 0 && !user.roll) {
+      // the tower on your head goes to the beanstalk as fertilizer
+      const n = user.pile;
+      user.pile = 0;
+      beanstalk += n;
+      if (kv?.isReady) kv.incrBy('beanstalk', n).catch(() => {});
+      for (const r of rooms) r.dirty = true; // every room's beanstalk grows
+      broadcast(room, { t: 'fert', id: user.id, n, total: beanstalk });
     } else if (m.t === 'hold') {
       user.holding = Boolean(m.on) && (user.stall !== -1 || user.squat);
       room.dirty = true;

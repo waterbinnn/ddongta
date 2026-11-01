@@ -130,6 +130,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .toast.out { opacity: 0; }
 .badge[hidden], .toast[hidden] { display: none; }
 
+/* the beanstalk's height, pinned under it */
+.bean-label {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(58, 110, 40, 0.8);
+  color: #f2ffe0;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.bean-label[hidden] { display: none; }
+
 /* the name of the place you just walked into, like a title card */
 .place-name {
   position: fixed;

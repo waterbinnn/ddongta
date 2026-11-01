@@ -3,6 +3,7 @@ import * as THREE from '/vendor/three.module.js';
 import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
 import { buildPrivateRoom } from './room.js';
+import { makeBeanstalk, beanHeight, heightText } from './beanstalk.js';
 
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
@@ -28,7 +29,7 @@ const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at 
 const SEAT_TOP = 0.46; // where the sitter's hips rest: perched on the seat, face clear of the door
 const BENCH_TOP = 0.45; // terrace chairs
 const PX_M = 0.05; // meters per sprite pixel
-const PILE_MAX = 10;
+const TOWER_MAX = 15; // the most poops drawn on one head (the count keeps going)
 
 const INK = '#2a1f2b';
 // a casual fast-food restroom: butter-yellow tile, ketchup-red doors, cream stalls, warm daylight
@@ -61,7 +62,6 @@ function lerpAngle(a, b, k) {
 let ws = null;
 let meId = null;
 let stalls = [];
-let piles = [];
 let hp = [];
 const users = new Map();
 const me = { x: 100, y: 300, s: -1, p: 0, ready: false, rolling: false, pd: false, q: 0, b: false };
@@ -154,7 +154,6 @@ const ICONS = {
   people: icon(['.HHHH.', 'HFFFFH', '.FFFF.', '..FF..', '.AAAA.', 'AAAAAA', 'AAAAAA']),
   chat: icon(['.SSSSSSS.', 'SWWWWWWWS', 'SWSSSSSWS', 'SWWWWWWWS', '.SSSSSSS.', '..SS.....', '..S......']),
   chatOff: icon(['xSSSSSSS.', 'SxWWWWWWS', 'SWxSSSSWS', 'SWWxWWWWS', '.SSSxSSS.', '..SS.x...', '..S...x..']),
-  flush: icon(['...b...', '..bBb..', '.bBBBb.', 'bBBWBBb', 'bBBWBBb', '.bBBBb.', '..bbb..']),
   recenter: icon(['...S...', '.SSSSS.', '.S...S.', 'SS.S.SS', '.S...S.', '.SSSSS.', '...S...']),
   soundOn: icon(['...S.....', '..SS..W..', 'SSSS.W.W.', 'SSSS.W.W.', '..SS..W..', '...S.....']),
   soundOff: icon(['...S.....', '..SS.....', 'SSSS.x.x.', 'SSSS..x..', '..SS.x.x.', '...S.....']),
@@ -162,6 +161,7 @@ const ICONS = {
   wash: icon(['...B...', '..BBB..', '.BBBBB.', '.BBWBB.', '.BBBBB.', '..BBB..']),
   bench: icon(['DDDDDDDDD', 'DdddddddD', 'DDDDDDDDD', '.D.....D.', '.D.....D.']),
   jump: icon(['...A...', '..AAA..', '.AAAAA.', '...A...', '...A...', '...A...']),
+  sprout: icon(['.AA.AA.', 'AAA.AAA', '.AAAAA.', '...A...', '...A...', '.DDDDD.', 'DDDDDDD']),
   pin: icon(['..xxx..', '.xxxxx.', 'xxWWxxx', 'xxWWxxx', '.xxxxx.', '..xxx..', '...x...']),
   poop: asIcon(PROPS.poop),
   // the push button: an empty (pale) poop that fills up with the real one
@@ -421,6 +421,7 @@ function buildRoom() {
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
   floorMesh = ground;
+  placeBeanstalk();
   benchSpots.length = 0;
   benchSeats.length = 0;
   GROUNDS.plaza.tables.forEach((t, k) => {
@@ -1013,18 +1014,16 @@ function makePrivateDoor(i) {
   halo.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.visible = false;
-  const pile = new THREE.Group();
-  pile.visible = false; // the poop tower stays private too
   const hit = new THREE.Mesh(G.hit, M.hit);
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
-  g.add(doorway, hinge, marker, pile, hit);
+  g.add(doorway, hinge, marker, hit);
   stallRoot.add(g);
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet, marker, halo, pile,
-    open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0, private: true,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet, marker, halo,
+    open: 1, shake: 0, gone: 0, regrow: 1, private: true,
   };
 }
 
@@ -1084,15 +1083,13 @@ function makeStall(i) {
   halo.position.set(STALL_M / 2, SEAT_TOP - HIP_Y + HEIGHT + 0.08, SEAT_Z);
   halo.visible = false;
 
-  const pile = new THREE.Group();
-  pile.position.set(0.84, PART_TOP + 0.05, 0.02);
 
   const hit = new THREE.Mesh(G.hit, M.hit);
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
 
 
-  g.add(part, cap, post, hinge, toilet, seatSpot, feet, marker, halo, pile, hit);
+  g.add(part, cap, post, hinge, toilet, seatSpot, feet, marker, halo, hit);
 
   // the last stall in a bank has no neighbour closing its right side, so give it its own wall
   const endX = L.cx + Math.cos(L.rot) * STALL_W;
@@ -1110,8 +1107,8 @@ function makeStall(i) {
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot, person: null, personFor: '', feet, marker, halo, pile,
-    open: 1, shake: 0, gone: 0, regrow: 1, pileShown: -1, pending: 0, squash: 0,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot, person: null, personFor: '', feet, marker, halo,
+    open: 1, shake: 0, gone: 0, regrow: 1,
   };
 }
 
@@ -1135,22 +1132,9 @@ function syncStalls() {
       drawDoorCanvas(s.doorCanvas, LAYOUT[i].no, crack);
       s.doorTex.needsUpdate = true;
     }
-    if (!s.pending && s.pileShown !== piles[i]) setPile(s, piles[i]);
   });
 }
 
-function setPile(s, count) {
-  const want = Math.min(count, PILE_MAX);
-  if (!count) s.golds = new Set(); // a fresh tower forgets its golden ones
-  while (s.pile.children.length > want) s.pile.remove(s.pile.children.at(-1));
-  while (s.pile.children.length < want) {
-    const k = s.pile.children.length;
-    const p = pixelSprite(s.golds?.has(k) ? PROPS.goldPoop : PROPS.poop, 0.035);
-    p.position.set((((s.i * 7 + k * 13) % 3) - 1) * 0.02, k * 0.2, 0);
-    s.pile.add(p);
-  }
-  s.pileShown = count;
-}
 
 // ---------- characters ----------
 
@@ -1254,10 +1238,8 @@ function handle(m) {
     onBreak(m);
   } else if (m.t === 'bell') {
     onBell(m);
-  } else if (m.t === 'flush') {
-    const h = headOf(m.id);
-    if (h) pop(h, '쏴아~');
-    if (m.id === meId) playFlush(); // only your own flush makes a sound
+  } else if (m.t === 'fert') {
+    onFert(m);
   } else if (m.t === 'jump') {
     const e = users.get(m.id);
     if (e) e.jumpT = 0.001;
@@ -1273,6 +1255,10 @@ function applyState(st) {
   // everyone in this restroom, and how many stalls are in use right now
   $('#online').innerHTML = `${roomNo > 1 ? `${roomNo}호<span class="unit">점 ·</span> ` : ''}${st.users.length}<span class="unit">명</span>`; // units hide on phones
   $('#busy').innerHTML = `${st.stalls.filter(Boolean).length}<span class="cap">/${st.stalls.length}</span><span class="unit">칸</span>`;
+  if (st.bean !== undefined && performance.now() > beanHoldUntil && st.bean !== beanTotal) {
+    beanTotal = st.bean;
+    bean?.setTotal(beanTotal);
+  }
   if (st.flushed !== lastFlushed) {
     const el = $('#todayCount');
     el.textContent = st.flushed.toLocaleString('ko-KR');
@@ -1284,7 +1270,6 @@ function applyState(st) {
     lastFlushed = st.flushed;
   }
   stalls = st.stalls;
-  piles = st.piles;
   hp = st.hp;
 
   const seen = new Set();
@@ -1315,6 +1300,7 @@ function applyState(st) {
       me.pd = Boolean(u.pd);
       me.b = Boolean(u.b);
       me.q = Boolean(u.q);
+      me.pl = u.pl || 0;
       if (u.r) {
         me.x = u.x;
         me.y = u.y;
@@ -1432,11 +1418,6 @@ function goSitOnBench(k) {
   pendingBench = true;
 }
 
-// flush: your poop tower is cleared and you stay seated
-function flush() {
-  if (me.s === -1) return;
-  send({ t: 'flush' });
-}
 
 // washing up from the toilet: the private room has its own sink; from a public stall you go out to the sinks
 function washFromStall() {
@@ -1827,6 +1808,7 @@ function placeWalkers(dt, t) {
     else if (!e.walking && e.idle > 1.5 && !u.q) want = cam.yaw;
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
+    syncTower(p, id, u.pl, dt);
     setFace(p, face);
     setPantsDown(p, pantsDown || squatting);
     p.group.rotation.y = e.turn;
@@ -1854,26 +1836,13 @@ function placeWalkers(dt, t) {
 }
 
 // Going into my private room hides the grounds and shows the room; coming out puts everything back.
-// The stall's poop tower moves into the room with me, and I sit in there with my shorts down.
+// I sit in there with my shorts down, my poop tower still on my head.
 const outdoorLights = () => [sun, lamps];
-function syncRoom(t) {
+function syncRoom(t, dt) {
   const want = me.s !== -1 && LAYOUT[me.s]?.type === 'private' && stallObjs[me.s] ? me.s : -1;
   if (want !== roomFor) {
-    const was = roomFor >= 0 ? stallObjs[roomFor] : null;
-    if (was) {
-      was.pile = was.doorPile;
-      setPile(was, 0);
-    }
-    room.pile.clear();
     roomFor = want;
     inRoom = want >= 0;
-    if (inRoom) {
-      const s = stallObjs[want];
-      s.doorPile ??= s.pile;
-      s.pile = room.pile;
-      s.golds = new Set();
-      setPile(s, piles[want] ?? 0);
-    }
     room.group.visible = inRoom;
     worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
     for (const o of outdoorLights()) o.visible = !inRoom;
@@ -1908,6 +1877,7 @@ function syncRoom(t) {
     setPantsDown(roomPerson, true);
   }
   if (u) {
+    syncTower(roomPerson, meId, u.pl, dt);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
     else {
@@ -1964,6 +1934,7 @@ function animateStalls(dt, t) {
       const u = occ.data;
       const face = exprOf(u, i);
       if (s.person) {
+        syncTower(s.person, occId, u.pl, dt);
         setFace(s.person, face);
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
@@ -1972,12 +1943,6 @@ function animateStalls(dt, t) {
       s.marker.position.y = (s.private ? 2.55 : 1.6) + (Math.floor(t / 300) % 2) * 0.04;
     } else {
       s.halo.visible = false;
-    }
-    if (s.squash > 0 && s.pile.children.length) {
-      s.squash -= dt;
-      const top = s.pile.children.at(-1);
-      const q = Math.sin(s.squash * 20) * 0.15 * (s.squash / 0.3);
-      top.scale.set(PROPS.poop.width * 0.035 * (1 + q), PROPS.poop.height * 0.035 * (1 - q), 1);
     }
   });
 }
@@ -1990,36 +1955,137 @@ const notes = [];
 
 function onPoop(m) {
   happyUntil.set(m.id, Date.now() + 1600);
-  const s = m.bush ? null : stallObjs[m.stall];
-  if (m.bush) dropInBush(m);
-  if (s) {
-    s.pending++;
-    const k = Math.min(m.pile, PILE_MAX) - 1;
-    if (m.gold) (s.golds ||= new Set()).add(k);
-    const mine = inRoom && m.stall === me.s;
-    const from = mine ? roomWorld(room.bowl) : stallWorld(m.stall, STALL_M / 2, 0.6, -1.0);
-    const to = mine ? room.pile.localToWorld(new THREE.Vector3(0, k * 0.2, 0)) : stallWorld(m.stall, 0.84, PART_TOP + 0.05 + k * 0.2, 0.02);
-    const p = pixelSprite(m.gold ? PROPS.goldPoop : PROPS.poop, m.gold ? 0.05 : 0.035);
-    p.position.copy(from);
-    fxRoot.add(p);
-    flights.push({ p, from, to, t: 0, s, gold: m.gold, arc: mine ? 0.5 : 1.0 });
-    const byMe = m.id === meId;
-    const text = m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `퐁당! 오늘 ${m.n}번째` : '퐁당';
-    pop(to.clone().add(new THREE.Vector3(0, mine ? 0.3 : 0.45, 0)), text, mine);
-    if (m.gold) sparkle(from);
+  if (m.gold) {
+    if (!poopGolds.has(m.id)) poopGolds.set(m.id, new Set());
+    poopGolds.get(m.id).add(m.pile - 1);
+  }
+  const byMe = m.id === meId;
+  const inside = byMe && inRoom;
+  const h = headOf(m.id);
+  if (h) {
+    const sound = m.bush ? '뿌직' : '퐁당';
+    pop(h.clone(), m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `${sound}! 오늘 ${m.n}번째` : sound, inside);
+    if (m.gold && !inside) sparkle(h);
   }
   if (m.gold) {
     floatGold();
-    if (m.id === meId) {
+    if (byMe) {
       playDing();
       toast('황금똥이 나왔어요! 오늘은 운수 좋은 날');
     }
   }
-  if (m.id === meId) {
+  if (byMe) {
     flashUntil = performance.now() + 1300;
     buzz([30, 40, 90]);
+    plop(1); // only your own poop makes a sound; a room of dozens would be a racket
   }
-  if (m.id === meId) plop(1); // only your own poop makes a sound; a room of dozens would be a racket
+}
+
+// ---------- poop towers: every poop you do stacks on your head, until you give them to the beanstalk ----------
+
+const poopGolds = new Map(); // person id -> which places in their tower are golden
+const TOWER_STEP = 0.17;
+const towerHeight = (count) => Math.min(count || 0, TOWER_MAX) * TOWER_STEP;
+function syncTower(p, id, count, dt) {
+  if (!p.tower) {
+    p.tower = new THREE.Group();
+    const head = p.parts.head;
+    if (head) {
+      head.geometry.computeBoundingBox();
+      p.tower.position.y = head.geometry.boundingBox.max.y + 0.01; // sits on the crown of the head
+      head.add(p.tower);
+    } else {
+      p.tower.position.y = HEIGHT;
+      p.group.add(p.tower);
+    }
+  }
+  const tower = p.tower;
+  const want = Math.min(count || 0, TOWER_MAX);
+  const golds = poopGolds.get(id);
+  while (tower.children.length > want) tower.remove(tower.children.at(-1));
+  while (tower.children.length < want) {
+    const k = tower.children.length;
+    const s = pixelSprite(golds?.has(k) ? PROPS.goldPoop : PROPS.poop, 0.028);
+    s.position.set((((k * 7) % 3) - 1) * 0.015, k * TOWER_STEP + 0.8, 0); // drops in from above
+    tower.add(s);
+  }
+  for (let k = 0; k < tower.children.length; k++) {
+    const s = tower.children[k];
+    s.position.y += (k * TOWER_STEP - s.position.y) * Math.min(1, dt * 10);
+  }
+}
+
+// ---------- the beanstalk: fertilizer from everyone, in every room; it never stops growing ----------
+
+let bean = null;
+let beanHoldUntil = 0; // while my fertilizer is in the air, the stalk waits for it to land
+let beanTotal = 0;
+function placeBeanstalk() {
+  if (bean) worldRoot.remove(bean.group);
+  bean = makeBeanstalk(toX(GROUNDS.garden.x), toZ(GROUNDS.garden.y));
+  bean.setTotal(beanTotal);
+  worldRoot.add(bean.group);
+}
+
+function fertilize() {
+  if (!me.pl) {
+    toast('머리 위에 아직 똥이 없어요');
+    return;
+  }
+  setHold(false);
+  send({ t: 'fert' });
+}
+
+function onFert(m) {
+  poopGolds.delete(m.id);
+  const from = headOf(m.id);
+  const byMe = m.id === meId;
+  const seen = from && bean && !(byMe && inRoom);
+  if (seen) {
+    // the whole tower flies over to the beanstalk, one poop after another
+    beanHoldUntil = performance.now() + 2500;
+    const to = bean.landing();
+    const n = Math.min(m.n, TOWER_MAX);
+    for (let k = 0; k < n; k++) {
+      const p = pixelSprite(PROPS.poop, 0.028);
+      const start = from.clone().add(new THREE.Vector3(0, k * TOWER_STEP - towerHeight(m.n), 0));
+      p.position.copy(start);
+      fxRoot.add(p);
+      flights.push({ p, from: start, to, t: -k * 0.07, dur: 1.2, arc: 2 + start.distanceTo(to) * 0.12, land: k === n - 1 ? () => growBean(m.total, true) : null });
+    }
+  } else {
+    growBean(m.total, false);
+  }
+  if (byMe) {
+    playFlush();
+    toast(`콩나무에 비료를 줬어요 · 이제 ${heightText(beanHeight(m.total))}`);
+  }
+}
+
+function growBean(total, popIt) {
+  beanTotal = Math.max(beanTotal, total);
+  beanHoldUntil = 0;
+  bean?.setTotal(beanTotal);
+  if (popIt && bean) pop(bean.landing().add(new THREE.Vector3(0, 0.6, 0)), '쑥쑥!');
+}
+
+// the height, pinned under the stalk (text drawn in 3D would blur)
+const beanAt = new THREE.Vector3();
+function placeBeanLabel() {
+  const el = $('#beanLabel');
+  if (!bean || inRoom || OG) {
+    el.hidden = true;
+    return;
+  }
+  beanAt.set(toX(GROUNDS.garden.x), 0, toZ(GROUNDS.garden.y));
+  const far = beanAt.distanceTo(camera.position) > 30;
+  beanAt.project(camera);
+  const on = !far && beanAt.z < 1 && Math.abs(beanAt.x) < 0.95 && beanAt.y > -0.7 && beanAt.y < 0.95;
+  el.hidden = !on;
+  if (!on) return;
+  const text = `콩나무 ${heightText(bean.height)}`;
+  if (el.textContent !== text) el.textContent = text;
+  el.style.transform = `translate(${((beanAt.x + 1) / 2) * W}px, ${((1 - beanAt.y) / 2) * H + 8}px) translate(-50%, 0)`;
 }
 
 const lastKnockPop = new Map();
@@ -2200,16 +2266,14 @@ function showTapMark(x, z) {
 function updateEffects(dt) {
   for (let k = flights.length - 1; k >= 0; k--) {
     const f = flights[k];
-    f.t = Math.min(1, f.t + dt / 0.7);
-    f.p.position.lerpVectors(f.from, f.to, f.t);
-    f.p.position.y += Math.sin(f.t * Math.PI) * (f.arc ?? 1.0);
-    f.p.material.rotation = f.t * Math.PI * 4;
+    f.t = Math.min(1, f.t + dt / f.dur);
+    const t = Math.max(0, f.t); // waiting its turn until t reaches 0
+    f.p.position.lerpVectors(f.from, f.to, t);
+    f.p.position.y += Math.sin(t * Math.PI) * f.arc;
+    f.p.material.rotation = t * Math.PI * 4;
     if (f.t >= 1) {
       fxRoot.remove(f.p);
-      f.s.pending--;
-      setPile(f.s, piles[f.s.i] ?? 0); // trust the latest count, the stall may have been reset meanwhile
-      f.s.squash = 0.3;
-      if (f.gold) sparkle(f.to);
+      f.land?.();
       flights.splice(k, 1);
     }
   }
@@ -2301,9 +2365,10 @@ function headOf(id) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
-  if (id === meId && inRoom) return roomWorld(room.head);
-  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 1.55, SEAT_Z);
-  return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, HEIGHT + 0.15); // screen-up, like the markers
+  const tower = towerHeight(e.data.pl);
+  if (id === meId && inRoom) return roomWorld(room.head).add(new THREE.Vector3(0, tower, 0));
+  if (seat !== -1) return stallWorld(seat, STALL_M / 2, 1.55 + tower, SEAT_Z);
+  return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, HEIGHT + 0.15 + tower); // screen-up, like the markers
 }
 
 // a crisp link pinned under the golden poop on the back wall (text drawn in the 3D room would blur)
@@ -2441,16 +2506,17 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastFrame) / 1000);
   lastFrame = t;
   if (me.ready && me.s === -1) moveMe(dt);
-  syncRoom(t);
+  syncRoom(t, dt);
   updatePlaceName();
   placeWalkers(dt, t);
   animateStalls(dt, t);
   updateEffects(dt);
-  updateBushPoops(dt);
   updateCamera(dt);
   clouds.rotation.y += dt * 0.004; // clouds drift slowly round
+  bean?.update(dt);
   renderer.render(scene, camera);
   updateLabels(dt);
+  placeBeanLabel();
   renderActions();
   updatePush(t);
   requestAnimationFrame(frame);
@@ -2469,8 +2535,8 @@ function renderActions() {
   const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
-  if (mode === actionMode) return;
-  actionMode = mode;
+  if (`${mode}${me.pl > 0}` === actionMode) return; // a tower on your head adds the fertilizer button
+  actionMode = `${mode}${me.pl > 0}`;
   const bar = $('#actions');
   bar.innerHTML = '';
   const pad = $('#pushPad');
@@ -2490,8 +2556,8 @@ function renderActions() {
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
-    if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
-    else bar.append(miniBtn('flush', '물 내리기', flush), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+    if (mode === 'squatting') bar.append(miniBtn('sprout', '비료로 뿌리기', fertilize), miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
+    else bar.append(miniBtn('sprout', '비료로 뿌리기', fertilize), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -2528,6 +2594,7 @@ function renderActions() {
     }));
   }
   if (mode !== 'inside' && mode !== 'rolling' && mode !== 'squatting') {
+    if (me.pl > 0) bar.append(miniBtn('sprout', '비료로 뿌리기', fertilize)); // out and about with a tower on your head
     const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
     go.dataset.move = '1';
     bar.append(go);
@@ -2546,44 +2613,10 @@ function doExercise(move) {
   send({ t: 'ex', move });
 }
 
-// poops left in the bushes: they sit there a while, then the grass takes them back
-const bushPoops = [];
-const BUSH_POOP_S = 45;
-function dropInBush(m) {
-  const e = users.get(m.id);
-  const turn = e ? e.turn : 0;
-  // just behind where they squat
-  const x = toX(m.x) - Math.sin(turn) * 0.12;
-  const z = toZ(m.y) - Math.cos(turn) * 0.12;
-  const p = pixelSprite(m.gold ? PROPS.goldPoop : PROPS.poop, m.gold ? 0.04 : 0.03);
-  p.position.set(x, 0.01, z);
-  p.material.transparent = true;
-  fxRoot.add(p);
-  bushPoops.push({ p, age: 0 });
-  if (bushPoops.length > 40) fxRoot.remove(bushPoops.shift().p);
-  const byMe = m.id === meId;
-  pop(new THREE.Vector3(x, 0.9, z), m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `뿌직! 오늘 ${m.n}번째` : '뿌직');
-  if (m.gold) sparkle(new THREE.Vector3(x, 0.3, z));
-}
-function updateBushPoops(dt) {
-  for (let k = bushPoops.length - 1; k >= 0; k--) {
-    const b = bushPoops[k];
-    b.age += dt;
-    b.p.material.opacity = Math.min(1, (BUSH_POOP_S - b.age) / 3);
-    if (b.age >= BUSH_POOP_S) {
-      fxRoot.remove(b.p);
-      bushPoops.splice(k, 1);
-    }
-  }
-}
-
 function onSignal(m) {
   const h = headOf(m.id);
   if (h) pop(h.clone(), '신호가 왔다!');
-  if (m.id === meId) {
-    toast('신호가 왔다! 화장실로 가 볼까요?');
-    buzz([40, 60, 40]);
-  }
+  if (m.id === meId) buzz([40, 60, 40]);
 }
 
 // ---------- the name of the place you're in, shown for a moment when you walk into it ----------
@@ -2595,7 +2628,7 @@ function placeAt(x, y) {
   const V = L.private;
   if (x > P.x0 - 40 && x < P.x1 + 40 && y > P.y0 && y < P.y1 + 40) return '공중화장실';
   if (x > V.x0 - 120 && x < V.x1 + 120 && y > V.y1 && y < V.y1 + 280) return '개인 화장실';
-  if (near(L.garden, 260)) return '작은 정원';
+  if (near(L.garden, 260)) return '콩나무 정원';
   if (near({ x: L.center, y: L.center }, L.plazaR + 20)) return '카페 테라스';
   if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
   if (near(L.pond, L.pond.r + 160)) return '연못';
@@ -3231,7 +3264,7 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'KeyJ') {
     jump();
   } else if (e.code === 'KeyF') {
-    flush();
+    fertilize();
   } else if (e.code === 'KeyR') {
     recenterCam();
   } else if (e.code === 'KeyM') {

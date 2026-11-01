@@ -232,16 +232,13 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   fill.position.set(0, 1.9, 1.0);
   group.add(fill);
 
-  // where things go: the sitter's hips (facing out of the room, toward the camera), the poop tower on the side table
+  // where the sitter's hips go (facing out of the room, toward the camera)
   const seat = new THREE.Group();
   seat.position.set(tx, SEAT_TOP - HIP_Y, TOILET.z + 0.3);
-  const pile = new THREE.Group();
-  pile.position.set(tx + 0.76, 0.62, TOILET.z + 0.06); // on the side table, beside the magazine
-  pile.scale.setScalar(0.7);
-  group.add(seat, pile);
+  group.add(seat);
 
   return {
-    group, seat, pile, windowMat,
+    group, seat, windowMat,
     aim: new THREE.Vector3(-0.1, 0, -1.9),             // what the camera looks at (local)
     bowl: new THREE.Vector3(tx, 0.6, TOILET.z + 0.1),   // where a poop leaves from (local)
     head: new THREE.Vector3(tx, 1.5, TOILET.z + 0.3),   // over the sitter's head (local)

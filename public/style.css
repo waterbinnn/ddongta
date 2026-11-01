@@ -693,7 +693,7 @@ body.typing .keys { display: none; }
 }
 
 /* ?og: the link-preview frame */
-.og .top, .og .dock, .og .toast, .og .badge, .og .joy, .og .loading { display: none !important; }
+.og .top, .og .dock, .og .toast, .og .badge, .og .joy, .og .loading, .og .move-wrap, .og .rail, .og .rail-toggle, .og .place-name { display: none !important; }
 
 /* ---------- the server is down ---------- */
 .down {

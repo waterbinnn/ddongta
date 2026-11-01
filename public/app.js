@@ -236,7 +236,7 @@ scene.background = new THREE.Color(PAL.sky);
 scene.fog = new THREE.Fog(PAL.sky, 70, 260);
 const FOV = 50; // a wide lens outdoors, so you see the sky and the space around you, not a tunnel
 const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 600);
-const WALK_VIEW = { pitch: 0.2, dist: 5.8 }; // the usual view: close behind me and low, so the place towers round you
+const WALK_VIEW = { pitch: 0.07, dist: 4.4 }; // the usual view: close and at eye level, looking at you straight on, the place towering round you
 const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
 const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // the sun by day, the moon at night
 sun.castShadow = true;
@@ -1342,29 +1342,8 @@ function syncStalls() {
 
 // ---------- characters ----------
 
-// Behind a tree or a wall, I still show: a soft see-through silhouette of me, drawn only where something stands in
-// front of me. My own body is drawn after the rest of the world and marks the stencil wherever it shows, so the
-// silhouette (drawn where something is nearer than me) fills just the hidden parts, never over my own arms and legs.
-const ghostMat = new THREE.MeshBasicMaterial({
-  color: '#fff3c4', transparent: true, opacity: 0.5, depthWrite: false, depthFunc: THREE.GreaterDepth,
-  stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc,
-});
-function addGhost(p) {
-  const parts = [];
-  p.group.traverse((o) => o.isMesh && !o.isSkinnedMesh && o !== p.face && parts.push(o));
-  for (const m of parts) {
-    m.renderOrder = 5;
-    for (const mm of [m.material].flat()) Object.assign(mm, { stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp });
-    const ghost = new THREE.Mesh(m.geometry, ghostMat);
-    ghost.renderOrder = 20;
-    ghost.frustumCulled = false;
-    m.add(ghost);
-  }
-}
-
 function makeWalker(u) {
   const p = makeCharacter(u.k, hairFor(u.id)); // a person or an animal, as the server picked
-  if (u.id === meId) addGhost(p);
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
@@ -1726,12 +1705,16 @@ function readMoveInput() {
   if (keys.has('ArrowRight') || keys.has('KeyD')) ix += 1;
   if (keys.has('ArrowUp') || keys.has('KeyW')) iz += 1;
   if (keys.has('ArrowDown') || keys.has('KeyS')) iz -= 1;
-  let joyRun = false;
-  if (!ix && !iz && Math.hypot(joy.x, joy.y) > 0.2) {
-    // the on-screen stick: push it, walk; push it all the way, run
+  const joyRun = false; // (the stick never runs: it walks, as fast as it's pushed)
+  let pace = 1; // how fast, 0 to 1: the keys are always full pace; the stick, by how far it's pushed
+  const pushed = Math.hypot(joy.x, joy.y);
+  if (!ix && !iz && pushed > 0.15) {
+    // the on-screen stick: a little push, an amble; all the way out, a walk (an easing curve, so the slow end is
+    // easy to hold)
     ix = joy.x;
     iz = -joy.y;
-    joyRun = Math.hypot(joy.x, joy.y) > 0.85;
+    const f = Math.min(1, (pushed - 0.15) / 0.75);
+    pace = 0.25 + 0.75 * f * f;
   }
   let vx = 0;
   let vy = 0;
@@ -1739,7 +1722,7 @@ function readMoveInput() {
     vx = Math.cos(cam.yaw) * ix - Math.sin(cam.yaw) * iz;
     vy = -Math.sin(cam.yaw) * ix - Math.cos(cam.yaw) * iz;
   }
-  return { vx, vy, ix, iz, held: Boolean(ix || iz), joyRun };
+  return { vx, vy, ix, iz, held: Boolean(ix || iz), joyRun, pace };
 }
 
 // walking about my own private room (only I see it, so it stays on this page): round the furniture, inside the walls
@@ -1774,12 +1757,12 @@ function readFor(p, on, high = false) {
 }
 
 function moveInRoom(dt) {
-  const { vx, vy, joyRun } = readMoveInput();
+  const { vx, vy, joyRun, pace } = readMoveInput();
   roomWalk.walking = Boolean(vx || vy);
   if (!roomWalk.walking) return;
   const len = Math.hypot(vx, vy);
   const running = spaceHeld || joyRun;
-  const step = (running ? 2.6 : 1.4) * dt;
+  const step = (running ? 2.6 : 1.4) * pace * dt;
   let x = roomWalk.x + (vx / len) * step;
   let z = roomWalk.z + (vy / len) * step;
   const b = room.bounds;
@@ -1802,12 +1785,12 @@ function moveInRoom(dt) {
     exitStall();
   }
   roomWalk.turn = lerpAngle(roomWalk.turn, Math.atan2(vx, vy), Math.min(1, dt * 12));
-  roomWalk.phase += dt * (running ? 14 : 9);
+  roomWalk.phase += dt * (running ? 14 : 9) * Math.max(0.4, pace);
 }
 
 function moveMe(dt) {
   if (me.rolling) return;
-  let { vx, vy, ix, iz, held, joyRun } = readMoveInput();
+  let { vx, vy, ix, iz, held, joyRun, pace } = readMoveInput();
   if (me.ly && !target) {
     // lying in the grass: the arrows (or the stick) look round the sky instead of getting you up
     skyLook.yaw -= ix * dt * 1.3;
@@ -1817,7 +1800,7 @@ function moveMe(dt) {
   // arrows + Space, or a double-tapped destination
   const running = !me.pd && (held ? spaceHeld || joyRun : Boolean(target?.run));
   me.running = running;
-  let step = SPEED * (me.pd ? 0.45 : running ? 2 : 1) * dt;
+  let step = SPEED * (me.pd ? 0.45 : running ? 2 : 1) * (held ? pace : 1) * dt;
   if (vx || vy) {
     target = null;
     choosingToilet = false; // walking off: never mind which restroom
@@ -1876,8 +1859,9 @@ const roomCamAt = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 const skyAt = new THREE.Vector3();
 const cam = { yaw: 0, pitch: 0.24, dist: 9, tYaw: 0, tPitch: 0.24, tDist: 9, fx: 20, fz: 48, look: 0, tLook: 0 }; // look: tilting the view up at the sky
-// link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
+// link-preview frames (?og, ?og=hero, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
+  hero: { fx: 19.5, fz: 15.6, yaw: 0.06, pitch: 0.12, dist: 11 }, // the golden poop in the middle, the villa and the public restroom either side
   entrance: { fx: 20, fz: 45, yaw: 0, pitch: 0.28, dist: 11 },
   plaza: { fx: 20, fz: 28, yaw: 0.4, pitch: 0.45, dist: 14 },
   stalls: { fx: 33, fz: 9, yaw: 0, pitch: 0.35, dist: 13 },
@@ -1887,7 +1871,7 @@ const OG_VIEWS = {
   inside: { fx: 20, fz: 44, yaw: Math.PI, pitch: 0.55, dist: 18 }, // from the entrance, looking back out
 };
 const OG_VIEW = OG ? OG_VIEWS[new URLSearchParams(location.search).get('og')] || OG_VIEWS.entrance : null;
-if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist });
+if (OG_VIEW) Object.assign(cam, { fx: OG_VIEW.fx, fz: OG_VIEW.fz, yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG_VIEW.pitch, tPitch: OG_VIEW.pitch, dist: OG_VIEW.dist, tDist: OG_VIEW.dist }); // (there from the first frame)
 const DIST_MIN = 3.5;
 const ROOM_DIST = [2.6, 9.0]; // how near and far the camera can be inside the private room
 const ROOM_VIEW = 6.5; // where it starts; past this the walls stop it, so zooming out further widens the lens instead
@@ -2211,7 +2195,7 @@ function placeWalkers(dt, t) {
     e.walking = Math.hypot(dx, dz) > 0.3;
     if (e.walking) {
       e.idle = 0;
-      e.phase += dt * (Math.hypot(dx, dz) > 6 ? 14 : 8); // legs move faster when running
+      e.phase += dt * clamp((Math.hypot(dx, dz) / Math.max(dt, 0.001) / SPEED) * 8.5, 3, 15); // the legs keep pace with how fast you go
       e.facing = Math.atan2(dx, dz);
     } else {
       e.idle += dt;
@@ -3133,6 +3117,30 @@ function updatePush(t) {
 // ---------- main loop ----------
 
 let lastFrame = performance.now();
+// the link-preview picture (?og=hero) only: a couple of the animals squatting in the grass by the statue, each with
+// its poop under its tail, and a poop or two left about. Nothing here happens in the real place (they poop in the
+// bushes, or outside your stall), it just shows that they do.
+const ogAnimals = [];
+function stageOgScene() {
+  if (ogAnimals.length || OG_VIEW !== OG_VIEWS.hero || !GROUNDS) return;
+  const W0 = GROUNDS.wish;
+  for (const [k, x, y, turn] of [['cat', W0.x - 250, W0.y + 600, 0.5], ['dog', W0.x + 470, W0.y + 560, -0.9], ['wombat', W0.x + 520, W0.y + 150, -1.2]]) {
+    const p = makeCharacter(k);
+    p.group.position.set(toX(x), 0, toZ(y));
+    p.group.rotation.y = turn;
+    charRoot.add(p.group);
+    ogAnimals.push(p);
+    const poop = pixelSprite(artFor(k), 0.022 * sizeFor(k) * 1.3);
+    poop.position.set(toX(x) - Math.sin(turn) * 0.3, 0.005, toZ(y) - Math.cos(turn) * 0.3);
+    fxRoot.add(poop);
+  }
+  for (const [x, y, k] of [[W0.x + 60, W0.y + 760, 'person'], [W0.x - 520, W0.y + 330, 'cat']]) {
+    const poop = pixelSprite(artFor(k), 0.022 * sizeFor(k) * 1.3);
+    poop.position.set(toX(x), 0.005, toZ(y));
+    fxRoot.add(poop);
+  }
+}
+
 function frame(t) {
   const dt = Math.min(0.05, (t - lastFrame) / 1000);
   lastFrame = t;
@@ -3151,8 +3159,10 @@ function frame(t) {
     v.group.rotation.z = v.shake > 0 ? Math.sin(t / 25) * 0.04 * (v.shake / 0.35) : 0;
   }
   if (inRoom) syncGarden(performance.now() / 1000); // the garden outside the window
-  // in the bushes (and at their edge, among the tall grass) you're meant to be hidden: no silhouette there
-  ghostMat.visible = !GROUNDS?.bushes.some((b) => Math.hypot(me.x - b.x, me.y - b.y) <= b.r + 150);
+  if (OG_VIEW) {
+    stageOgScene();
+    ogAnimals.forEach((p, i) => pose(p, { mode: 'squat', t: t / 1000, strain: true, seed: i }));
+  }
   renderer.render(scene, camera);
   updateLabels(dt);
   placeBeanLabel();
@@ -4691,8 +4701,8 @@ canvasEl.addEventListener('pointermove', (e) => {
         // one vertical axis: dragging up lowers the camera to its lowest angle, and past that it looks up at the sky
         // (looking up moves at half speed, so a small drag doesn't throw you into the sky)
         const v = cam.tPitch - cam.tLook * 2 + dy * 0.003;
-        cam.tPitch = clamp(v, 0.2, 0.95);
-        cam.tLook = clamp((0.2 - v) / 2, 0, 1.0);
+        cam.tPitch = clamp(v, WALK_VIEW.pitch, 0.95);
+        cam.tLook = clamp((WALK_VIEW.pitch - v) / 2, 0, 1.0);
       }
     }
   } else if (pointers.size === 2) {

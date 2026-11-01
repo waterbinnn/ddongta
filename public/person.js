@@ -227,27 +227,46 @@ export function makeAnimal(kind) {
   root.scale.setScalar(size);
   const face = new THREE.Mesh(faceGeometry(parts.head), new THREE.MeshBasicMaterial({ map: faceTex('idle'), transparent: true, depthWrite: false }));
   parts.head.add(face);
+  // the torso's own mesh (with its belly, spots...) goes under a joint of its own, so the body can stretch out on
+  // all fours without stretching the front legs and the head fixed to it
+  const body = parts.torso;
+  const torso = new THREE.Group();
+  torso.position.copy(body.position);
+  body.parent.add(torso);
+  body.position.set(0, 0, 0);
+  torso.add(body);
+  for (const n of ['arm_L', 'arm_R', 'head', 'neck']) if (parts[n]?.parent === body) torso.add(parts[n]);
+  parts.torso = torso;
+  parts.body = body;
   const group = new THREE.Group();
   const spin = new THREE.Group();
   spin.add(root);
   group.add(spin);
   const rest = {};
-  for (const n of ['hips', 'torso', 'head', 'arm_L', 'arm_R', 'leg_L', 'leg_R', 'hand_L', 'hand_R']) rest[n] = parts[n].position.clone();
+  for (const n of ['hips', 'torso', 'head', 'neck', 'arm_L', 'arm_R', 'leg_L', 'leg_R', 'hand_L', 'hand_R', 'tail']) if (parts[n]) rest[n] = parts[n].position.clone();
   root.updateMatrixWorld(true);
   const height = new THREE.Box3().setFromObject(root).max.y; // the top of the head, or of the ears
-  return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size, quad: fourLegs(parts) };
+  return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size, quad: fourLegs(parts, BODY[kind] || 1) };
 }
 
-// On all fours: the body tips forward at the waist and the arms (made like the hind legs) become front legs. They
-// stretch a little if they need to, to reach the ground (the foot keeps its shape and just moves down).
-const PITCH = 1.65; // a touch past level, so the shoulders come down to the height of the hips
-function fourLegs(P) {
+// On all fours: the body stretches out long (more for the cat and the rabbit, whose chibi bodies are stubby) and
+// tips forward at the waist, just far enough that the front legs (made like the hind legs) stand on the ground.
+// If they still fall short, they stretch a little (the foot keeps its shape and just moves down).
+const BODY = { cat: 1.7, rabbit: 1.6, dog: 1.4, wombat: 1.25, elephant: 1.15, giraffe: 1.2 };
+function fourLegs(P, long) {
   for (const n of ['arm_L', 'hand_L']) P[n].geometry.computeBoundingBox();
   const armReach = -P.arm_L.geometry.boundingBox.min.y; // shoulder to the end of the arm
   const pawBelow = -P.hand_L.geometry.boundingBox.min.y - armReach; // and how far the paw hangs below that
-  const shoulderY = HIP_Y + P.torso.position.y + P.arm_L.position.y * Math.cos(PITCH); // where the shoulders end up
+  const shoulder = P.arm_L.position.y * long; // how far along the stretched body the shoulders sit
+  const waistY = HIP_Y + P.torso.position.y;
+  const pitch = Math.min(1.9, Math.max(Math.PI / 2, Math.acos(Math.max(-1, Math.min(1, (armReach + pawBelow - waistY) / shoulder)))));
+  const shoulderY = waistY + shoulder * Math.cos(pitch); // where the shoulders end up
   const k = Math.max(1, (shoulderY - pawBelow) / armReach);
-  return { k, handY: (-armReach * (k - 1)) / k };
+  // the round bottom of the body reaches back past the hips once it lies along the ground: the hind legs and the
+  // tail go back to the end of it, so the legs stand at the two ends of the body, not bunched under the front
+  P.body.geometry.computeBoundingBox();
+  const back = -P.body.geometry.boundingBox.min.y * long * Math.sin(pitch) * 0.8;
+  return { long, pitch, k, back, handY: (-armReach * (k - 1)) / k };
 }
 
 export function disposePerson(p) {
@@ -316,6 +335,9 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
       P[n].position.copy(rest[n]);
     }
     P.neck?.rotation.set(0, 0, 0);
+    if (P.neck) P.neck.position.copy(rest.neck);
+    if (P.tail) P.tail.position.copy(rest.tail);
+    P.body.scale.set(1, 1, 1);
   }
   p.spin.position.set(0, 0, 0);
   p.spin.rotation.set(0, 0, 0);
@@ -326,17 +348,22 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
   const breathe = Math.sin(t * 1.9 + seed) * 0.015;
   if (p.quad && !upright && (mode === 'walk' || mode === 'stand')) {
     // an animal standing and walking about on all fours, like a real one (it gets up on two legs for everything else)
-    P.torso.rotation.x = PITCH;
+    const { pitch, long, back } = p.quad;
+    P.torso.rotation.x = pitch;
+    for (const n of ['leg_L', 'leg_R', 'tail']) if (P[n]) P[n].position.z = rest[n].z - back;
+    P.body.scale.y = long; // the body stretched out, the shoulders and the head moved out to its front end
+    (P.neck || P.head).position.y = rest[P.neck ? 'neck' : 'head'].y * long;
     for (const n of ['arm_L', 'arm_R']) {
-      P[n].rotation.x = -PITCH;
+      P[n].position.y = rest[n].y * long;
+      P[n].rotation.x = -pitch;
       P[n].scale.y = p.quad.k;
     }
     for (const n of ['hand_L', 'hand_R']) {
       P[n].scale.y = 1 / p.quad.k;
       P[n].position.y = rest[n].y + p.quad.handY;
     }
-    if (P.neck) P.neck.rotation.x = -PITCH - 0.05; // the giraffe holds its neck up
-    else P.head.rotation.x = -PITCH + 0.05; // looking ahead
+    if (P.neck) P.neck.rotation.x = -pitch - 0.05; // the giraffe holds its neck up
+    else P.head.rotation.x = -pitch + 0.05; // looking ahead
     if (mode === 'walk') {
       // a walking gait: each front leg goes with the hind leg on the other side
       const s = Math.sin(phase);

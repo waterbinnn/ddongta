@@ -404,6 +404,7 @@ wss.on('connection', (ws, req) => {
     lastBell: 0,
     lastJump: 0,
     lastWash: 0,
+    lastLunch: 0,
     bench: false,
     roll: null,
     pantsUntil: 0,
@@ -491,6 +492,12 @@ wss.on('connection', (ws, req) => {
       if (now - user.lastWash < 2000) return;
       user.lastWash = now;
       broadcast(room, { t: 'wash', id: user.id });
+    } else if (m.t === 'lunch' && user.stall !== -1) {
+      // a lunchbox opened on the lap, in the stall
+      const now = Date.now();
+      if (now - user.lastLunch < 3000) return;
+      user.lastLunch = now;
+      broadcast(room, { t: 'lunch', id: user.id });
     } else if (m.t === 'bell' && user.stall !== -1) {
       const now = Date.now();
       if (now - user.lastBell < BELL_GAP_MS) return;

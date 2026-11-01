@@ -1461,6 +1461,8 @@ function handle(m) {
     onKick(m);
   } else if (m.t === 'drink') {
     onDrink(m);
+  } else if (m.t === 'lunch') {
+    onLunch(m);
   } else if (m.t === 'stuck') {
     onStuck(m);
   } else if (m.t === 'knock') {
@@ -2152,6 +2154,7 @@ function syncRoom(t, dt) {
       g.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
     }
     handFor(roomPerson, meId, u, !washing);
+    lunchFor(roomPerson, meId, t / 1000, spot === 'seat');
   }
 }
 
@@ -2208,6 +2211,7 @@ function animateStalls(dt, t) {
         setFace(s.person, face);
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
         handFor(s.person, occId, u, true);
+        lunchFor(s.person, occId, t / 1000, true);
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
       }
       s.marker.position.y = (s.private ? 2.55 : 1.6 + towerHeight(occ.data.pl)) + (Math.floor(t / 300) % 2) * 0.04;
@@ -2892,7 +2896,7 @@ function renderActions() {
     if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
     else {
       if (inRoom) bar.append(miniBtn('bench', '일어나기', () => { setHold(false); roomStanding = true; }));
-      bar.append(miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+      bar.append(miniBtn(null, '도시락 먹기', () => send({ t: 'lunch' })), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
     }
   } else if (mode === 'standing') {
     // standing in my own room: sit back down whenever
@@ -2920,7 +2924,7 @@ function renderActions() {
   } else if (mode === 'bean') {
     bar.append(mainBtn('sprout', `비료로 뿌리기 · ${me.pl}개`, fertilize));
   } else if (mode === 'bush') {
-    bar.append(mainBtn('door', '쪼그려 앉아 누기', () => send({ t: 'squat', on: true })));
+    bar.append(mainBtn('door', '똥 누기', () => send({ t: 'squat', on: true })));
   } else if (mode === 'lawn') {
     // 쾌변 체조: any move, any time; a few of them and the signal comes
     for (const [move, label] of EX_MOVES) bar.append(miniBtn(null, label, () => doExercise(move)));
@@ -3041,6 +3045,74 @@ function drinkPose(p) {
   p.parts.arm_R?.rotation.set(-1.55, 0, -0.55);
   p.parts.head?.rotation.set(-0.3, 0, -0.18); // head tipped back and toward the bottle
 }
+// ---------- 도시락: a lunchbox opened on the lap in the stall, eaten with chopsticks ----------
+
+const LUNCH_MS = 6500;
+const lunching = new Map(); // id -> until when (performance.now())
+function onLunch(m) {
+  lunching.set(m.id, performance.now() + LUNCH_MS);
+  const inside = m.id === meId && inRoom;
+  const say = (text, ms) => setTimeout(() => {
+    const h = headOf(m.id);
+    if (h) pop(h.clone(), text, inside);
+  }, ms);
+  say('도시락 냠냠', 0);
+  say('냠', 2400);
+  say('냠냠…', 4600);
+  if (m.id === meId && soundOn) for (let k = 0; k < 3; k++) tone('triangle', 330, 260, 0.08, 0.2, 1.2 + k * 1.9);
+}
+function lunchbox() {
+  // a black lacquered box: rice, a rolled omelette, a little sausage, greens and a pickled plum
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.BoxGeometry(0.17, 0.045, 0.12), mat('#2b2321'), { cast: true }));
+  const fill = (w, d, color, x, z, h = 0.012) => {
+    const m = mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+    m.position.set(x, 0.022 + h / 2, z);
+    g.add(m);
+  };
+  fill(0.08, 0.1, '#fbf8f0', -0.035, 0); // the rice
+  fill(0.07, 0.045, '#f3cf4a', 0.04, -0.025, 0.02); // 계란말이
+  fill(0.035, 0.03, '#d9534a', 0.03, 0.03, 0.018); // sausage
+  fill(0.03, 0.03, '#5aa34a', 0.06, 0.03, 0.014); // greens
+  const plum = mesh(new THREE.SphereGeometry(0.012, 8, 6), mat('#c7304a'));
+  plum.position.set(-0.035, 0.036, 0);
+  g.add(plum);
+  return g;
+}
+function chopsticks() {
+  const g = new THREE.Group();
+  for (const x of [-0.008, 0.008]) {
+    const c = mesh(new THREE.CylinderGeometry(0.004, 0.006, 0.2, 6), mat('#c79a5b'));
+    c.position.set(x, -0.1, 0);
+    g.add(c);
+  }
+  return g;
+}
+// after the pose for this frame: the box held in the left hand on the lap, the right hand going from box to mouth
+function lunchFor(p, id, t, seated) {
+  const on = seated && (lunching.get(id) || 0) > performance.now();
+  if (!on) {
+    if (p.lunch) p.lunch.box.visible = p.lunch.sticks.visible = false;
+    return;
+  }
+  if (!p.lunch && p.parts.hand_L && p.parts.hand_R) {
+    p.lunch = { box: lunchbox(), sticks: chopsticks() };
+    p.lunch.box.scale.setScalar(1.6);
+    p.lunch.sticks.scale.setScalar(1.6);
+    p.parts.hand_L.add(p.lunch.box);
+    p.parts.hand_R.add(p.lunch.sticks);
+  }
+  if (!p.lunch) return;
+  p.lunch.box.visible = p.lunch.sticks.visible = true;
+  const k = (1 - Math.cos(t * 3.2)) / 2; // 0 at the box, 1 at the mouth
+  p.parts.arm_L.rotation.set(-1.15, 0, -0.25);
+  p.lunch.box.position.set(0.04, -0.17, 0.06);
+  p.lunch.box.rotation.set(1.15, 0, 0); // kept level in the tilted hand
+  p.parts.arm_R.rotation.set(-1.0 - 0.75 * k, 0, 0.25 + 0.3 * k);
+  p.lunch.sticks.position.set(0, -0.14, 0.02);
+  p.parts.head.rotation.set(0.25 - 0.15 * k, 0, 0); // looking down into the box, then up for the bite
+}
+
 // the face going red while someone pushes, yellow when they're stuck (변비)
 const flushOf = (u) => [u.h && !u.cn ? Math.min(1, 0.25 + (u.p || 0) / 100) : 0, u.cn ? 1 : 0];
 

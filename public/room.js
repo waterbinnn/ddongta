@@ -186,7 +186,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   // each wall: hinoki slats up to a rail at 1.05 m, lime plaster above
   const PANEL = 1.05;
   const wall = (w, rotY, x, z) => {
-    const upper = add(new THREE.PlaneGeometry(w, H - PANEL), lambert('#ffffff', { map: plasterTex(w / 1.2, (H - PANEL) / 1.2) }), x, PANEL + (H - PANEL) / 2, z, { cast: false });
+    const upper = add(new THREE.PlaneGeometry(w, H - PANEL), lambert('#5a4f45', { map: plasterTex(w / 1.2, (H - PANEL) / 1.2) }), x, PANEL + (H - PANEL) / 2, z, { cast: false }); // a deep, dark wall colour
     upper.rotation.y = rotY;
     const lower = add(new THREE.PlaneGeometry(w, PANEL), lambert('#ffffff', { map: slatTex(w / 0.6) }), x, PANEL / 2, z, { cast: false });
     lower.rotation.y = rotY;
@@ -268,13 +268,13 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   cyl(0.006, 0.006, 0.2, lambert('#2e2a28'), 0.2, 2.5, -1.4, 6, { cast: false });
   cyl(0.04, 0.22, 0.16, new THREE.MeshLambertMaterial({ color: '#2e2a28', side: THREE.DoubleSide }), 0.2, 2.32, -1.4, 24, { cast: false });
   ball(0.07, new THREE.MeshBasicMaterial({ color: '#fff3d6' }), 0.2, 2.22, -1.4, { cast: false, receive: false });
-  const lamp = new THREE.PointLight('#ffd6a3', 6, 7, 1.4);
+  const lamp = new THREE.PointLight('#ffcf98', 4, 7, 1.4); // a low, warm light
   lamp.position.set(0.2, 2.1, -1.4);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.bias = -0.004;
   group.add(lamp);
-  const fill = new THREE.PointLight('#fff1dc', 1.6, 6, 1.2); // soft light from behind the camera, so faces aren't dark
+  const fill = new THREE.PointLight('#ffe6c8', 0.9, 6, 1.2); // soft light from behind the camera, so faces aren't lost in the dark
   fill.position.set(0, 1.9, 1.0);
   group.add(fill);
 
@@ -290,6 +290,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     head: new THREE.Vector3(tx, 1.5, TOILET.z + 0.3),   // over the sitter's head (local)
     knock: new THREE.Vector3(0.45, 1.55, -1.1),        // where a knock on the door shows (local)
     washSpot: new THREE.Vector3(sx - 0.48, 0, sz),     // where you stand to wash, facing the sink (local)
+    standSpot: new THREE.Vector3(tx + 0.5, 0, TOILET.z + 0.85), // standing up, beside the toilet (local)
     tap: new THREE.Vector3(sx - 0.02, 1.0, sz),         // the water falls from here into the basin (local)
   };
 }

@@ -4,6 +4,7 @@ import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown,
 import { buildGrounds } from './grounds.js';
 import { buildPrivateRoom } from './room.js';
 import { makeBeanstalk, beanHeight, heightText } from './beanstalk.js';
+import { doorWoodCanvas } from './nature.js';
 
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
@@ -29,7 +30,7 @@ const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at 
 const SEAT_TOP = 0.46; // where the sitter's hips rest: perched on the seat, face clear of the door
 const BENCH_TOP = 0.45; // terrace chairs
 const PX_M = 0.05; // meters per sprite pixel
-const TOWER_MAX = 15; // the most poops drawn on one head (the count keeps going)
+const HEAD_STACK = 8; // this many stack up on the head; after that they stick all over the body
 
 const INK = '#2a1f2b';
 // a casual fast-food restroom: butter-yellow tile, ketchup-red doors, cream stalls, warm daylight
@@ -167,18 +168,6 @@ const ICONS = {
   poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
 };
 
-const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
-function drawNumber(g, n, cx, y, color) {
-  const s = String(n);
-  let x = Math.round(cx - (s.length * 4 - 1) / 2);
-  g.fillStyle = color;
-  for (const ch of s) {
-    const bits = DIGITS[+ch];
-    for (let i = 0; i < 15; i++) if (bits[i] === '1') g.fillRect(x + (i % 3), y + Math.floor(i / 3), 1, 1);
-    x += 4;
-  }
-}
-
 // ---------- three.js setup ----------
 
 const sceneEl = $('#scene');
@@ -223,6 +212,8 @@ let roomPerson = null;
 let roomPersonFor = '';
 let roomShake = 0;
 let roomWashUntil = 0; // washing at the room's sink until then
+let roomStanding = false; // up off the toilet, standing in the room
+let roomSpot = ''; // where I am in the room: 'seat', 'stand' or 'wash'
 let snapCam = false; // jump the camera instead of flying it (going into or out of the room)
 
 let W = 1;
@@ -267,31 +258,6 @@ function canvas(w, h, draw) {
   return c;
 }
 
-const floorCanvas = canvas(32, 32, (g) => {
-  for (let y = 0; y < 2; y++) {
-    for (let x = 0; x < 2; x++) {
-      g.fillStyle = (x + y) % 2 ? PAL.floorB : PAL.floorA;
-      g.fillRect(x * 16, y * 16, 16, 16);
-    }
-  }
-  g.fillStyle = PAL.floorLine;
-  g.fillRect(0, 15, 32, 1);
-  g.fillRect(0, 31, 32, 1);
-  g.fillRect(15, 0, 1, 32);
-  g.fillRect(31, 0, 1, 32);
-});
-// the private restroom's walls: smooth lime plaster, faintly mottled
-const plasterCanvas = canvas(64, 32, (g) => {
-  g.fillStyle = '#e7e0d2';
-  g.fillRect(0, 0, 64, 32);
-  let seed = 3;
-  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let k = 0; k < 260; k++) {
-    const v = rand() < 0.5 ? 'rgba(200, 190, 170, 0.35)' : 'rgba(245, 240, 230, 0.4)';
-    g.fillStyle = v;
-    g.fillRect(rand() * 64, rand() * 32, 1 + rand() * 3, 1 + rand() * 2);
-  }
-});
 // natural lawn: a fresh, even green with fine blades and a little clover, drawn smooth; 1.6 m per tile
 const grassCanvas = canvas(512, 512, (g) => {
   g.fillStyle = '#93bf66';
@@ -347,34 +313,45 @@ const mirrorCanvas = canvas(12, 16, (g) => {
   g.fillRect(3, 2, 1, 2);
 });
 // a door texture per stall: number on top, cracks as it gets knocked
+// a public stall door: light wood, a framed panel, a small dark number plate; cracks once it's knocked about.
+// Drawn on a 160 x 104 canvas in 20 x 13 units.
+let doorWood = null;
 function drawDoorCanvas(c, n, crack) {
   const g = c.getContext('2d');
-  const w = c.width;
-  const h = c.height;
-  g.fillStyle = PAL.doorDark;
-  g.fillRect(0, 0, w, h);
-  g.fillStyle = PAL.door;
-  g.fillRect(1, 1, w - 2, h - 2);
-  g.fillStyle = PAL.doorLight;
-  g.fillRect(1, 1, w - 2, 1);
-  g.fillRect(1, 1, 1, h - 2);
-  g.fillStyle = PAL.doorDark;
-  g.fillRect(3, 9, w - 6, 1);
-  g.fillRect(3, 9, 1, h - 12);
-  g.fillStyle = PAL.doorLight;
-  g.fillRect(4, 10, w - 8, 1);
-  drawNumber(g, n, w / 2, 2, PAL.number);
+  doorWood ??= doorWoodCanvas();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(doorWood, 0, 0, c.width, c.height);
+  g.setTransform(c.width / 20, 0, 0, c.height / 13, 0, 0);
+  g.strokeStyle = 'rgba(80, 58, 38, 0.55)';
+  g.lineWidth = 0.25;
+  g.strokeRect(0.4, 0.4, 19.2, 12.2);
+  g.strokeRect(3, 7.5, 14, 4.2); // the lower panel
+  g.fillStyle = '#3e3328'; // the number plate
+  g.beginPath();
+  g.roundRect(7.2, 1.6, 5.6, 4, 0.6);
+  g.fill();
+  g.fillStyle = '#efe6d4';
+  g.font = 'bold 3.2px -apple-system, "Apple SD Gothic Neo", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(String(n), 10, 3.7);
   if (crack > 0) {
-    g.fillStyle = '#d9d4cc'; // light cracks show on the dark door
-    const pts = [
-      [[5, 4], [6, 5], [6, 6], [7, 7], [7, 8], [8, 9]],
-      [[w - 6, h - 9], [w - 7, h - 8], [w - 7, h - 7], [w - 8, h - 6], [w - 9, h - 5]],
-      [[9, 9], [10, 10], [9, 11], [10, 12]],
+    g.strokeStyle = 'rgba(60, 40, 25, 0.85)';
+    g.lineWidth = 0.3;
+    const lines = [
+      [[5, 4], [6, 5.5], [6.4, 7], [7.6, 9]],
+      [[14, 4], [13, 5.6], [13.6, 7.2], [12.4, 8.8]],
+      [[9, 8], [10.4, 9.6], [9.4, 11], [10.6, 12.4]],
     ];
-    for (let k = 0; k < crack; k++) for (const [x, y] of pts[k]) g.fillRect(x, y, 1, 1);
-    g.fillStyle = `rgba(230,60,60,${crack * 0.12})`;
-    g.fillRect(0, 0, w, h);
+    for (let k = 0; k < crack; k++) {
+      g.beginPath();
+      lines[k].forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+      g.stroke();
+    }
+    g.fillStyle = `rgba(200, 60, 50, ${crack * 0.1})`;
+    g.fillRect(0, 0, 20, 13);
   }
+  g.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 // ---------- materials & shared geometry ----------
@@ -436,8 +413,8 @@ function buildRoom() {
   worldRoot.clear();
   lamps.clear();
   const { ground } = buildGrounds({
-    L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, pixelTex, M, wishHits, vendingMachine, planter,
-    tex: { grass: grassCanvas, floor: floorCanvas, tile: TILE, plaster: plasterCanvas },
+    L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, M, wishHits, vendingMachine, planter,
+    tex: { grass: grassCanvas },
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
   floorMesh = ground;
@@ -592,15 +569,6 @@ const OAK = canvas(16, 16, (g) => {
   for (const [x, y] of [[2, 2], [9, 3], [5, 7], [12, 8], [3, 12], [10, 13]]) g.fillRect(x, y, 3, 1);
 });
 // square sky-blue tiles for the walls and the island
-const TILE = canvas(16, 16, (g) => {
-  g.fillStyle = PAL.tileA;
-  g.fillRect(0, 0, 16, 16);
-  g.fillStyle = PAL.tileLine;
-  for (const v of [7, 15]) {
-    g.fillRect(0, v, 16, 1);
-    g.fillRect(v, 0, 1, 16);
-  }
-});
 // famous paintings, redrawn as little pixel parodies, in gilt frames
 const ART_W = 30;
 const ART_H = 40;
@@ -1062,10 +1030,12 @@ function makeStall(i) {
 
   // door with its own pixel texture
   const doorCanvas = document.createElement('canvas');
-  doorCanvas.width = 20;
-  doorCanvas.height = 13;
+  doorCanvas.width = 160;
+  doorCanvas.height = 104;
   drawDoorCanvas(doorCanvas, L.no, 0);
-  const doorTex = pixelTex(doorCanvas);
+  const doorTex = new THREE.CanvasTexture(doorCanvas);
+  doorTex.colorSpace = THREE.SRGBColorSpace;
+  doorTex.anisotropy = 4;
   const face = new THREE.MeshLambertMaterial({ map: doorTex });
   const hinge = new THREE.Group();
   hinge.position.set(0.08, 0, 0);
@@ -1860,6 +1830,8 @@ function syncRoom(t, dt) {
   if (want !== roomFor) {
     roomFor = want;
     inRoom = want >= 0;
+    roomStanding = false; // you come in and sit down
+    roomSpot = '';
     room.group.visible = inRoom;
     worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
     for (const o of outdoorLights()) o.visible = !inRoom;
@@ -1880,24 +1852,29 @@ function syncRoom(t, dt) {
     roomPersonFor = meId;
   }
   const washing = performance.now() < roomWashUntil;
+  const spot = washing ? 'wash' : roomStanding ? 'stand' : 'seat';
   const g = roomPerson.group;
-  if (washing && g.parent !== room.group) {
-    // up off the toilet, shorts on, over to the sink
-    room.group.add(g);
-    g.position.copy(room.washSpot);
-    g.rotation.y = Math.PI / 2;
-    setPantsDown(roomPerson, false);
-  } else if (!washing && g.parent !== room.seat) {
-    room.seat.add(g);
-    g.position.set(0, 0, 0);
-    g.rotation.y = 0;
-    setPantsDown(roomPerson, true);
+  if (spot !== roomSpot) {
+    roomSpot = spot;
+    if (spot === 'seat') {
+      room.seat.add(g);
+      g.position.set(0, 0, 0);
+      g.rotation.y = 0;
+      setPantsDown(roomPerson, true);
+    } else {
+      // up off the toilet, shorts on: standing beside it, or over at the sink
+      room.group.add(g);
+      g.position.copy(spot === 'wash' ? room.washSpot : room.standSpot);
+      g.rotation.y = spot === 'wash' ? Math.PI / 2 : 0;
+      setPantsDown(roomPerson, false);
+    }
   }
   if (u) {
     syncTower(roomPerson, meId, u.pl, dt);
-    syncUnder(roomPerson, meId, Boolean(u.un) && !washing, false);
+    syncUnder(roomPerson, meId, Boolean(u.un) && spot === 'seat', false);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
+    else if (spot === 'stand') pose(roomPerson, { mode: 'stand', t: t / 1000, seed: me.s });
     else {
       pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
       g.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
@@ -2030,11 +2007,29 @@ function leaveBehind(p, id) {
   if (leftovers.length > 40) fxRoot.remove(leftovers.shift().s);
   underGold.delete(id);
 }
-const TOWER_STEP = 0.17;
-const towerHeight = (count) => Math.min(count || 0, TOWER_MAX) * TOWER_STEP;
+const TOWER_STEP = 0.11;
+const POOP_PX = 0.018; // a small poop
+const towerHeight = (count) => Math.min(count || 0, HEAD_STACK) * TOWER_STEP;
+const DRAW_MOST = 600; // past this many on one person, the extra ones are counted but not drawn (just for the frame rate)
+const RING = 8; // poops round the body in each row
+const ROWS = [0.92, 0.76, 0.6, 0.44, 0.28, 0.12]; // heights of the rows, from the shoulders to the ankles
+// where the k-th poop sits: on top of the head first, then rows of them all round the body, layer on layer
+function poopSpot(k, out) {
+  if (k < HEAD_STACK) return out.set((((k * 7) % 3) - 1) * 0.012, k * TOWER_STEP, 0);
+  const j = k - HEAD_STACK;
+  const perLayer = RING * ROWS.length;
+  const layer = Math.floor(j / perLayer);
+  const row = Math.floor((j % perLayer) / RING);
+  const col = j % RING;
+  const a = (col / RING) * Math.PI * 2 + row * 0.39 + layer * 0.21;
+  const r = 0.27 + layer * 0.07;
+  return out.set(Math.sin(a) * r, ROWS[row] * HEIGHT - 0.03, Math.cos(a) * r);
+}
 function syncTower(p, id, count, dt) {
   if (!p.tower) {
+    // two groups: the stack riding on the head, and the coat of poops round the body (turning with it, lying down too)
     p.tower = new THREE.Group();
+    p.coat = new THREE.Group();
     const head = p.parts.head;
     if (head) {
       head.geometry.computeBoundingBox();
@@ -2044,21 +2039,25 @@ function syncTower(p, id, count, dt) {
       p.tower.position.y = HEIGHT;
       p.group.add(p.tower);
     }
+    p.spin.add(p.coat);
   }
-  const tower = p.tower;
-  const want = Math.min(count || 0, TOWER_MAX);
+  const want = Math.min(count || 0, DRAW_MOST);
+  const onHead = Math.min(want, HEAD_STACK);
+  const onBody = want - onHead;
   const golds = poopGolds.get(id);
-  while (tower.children.length > want) tower.remove(tower.children.at(-1));
-  while (tower.children.length < want) {
-    const k = tower.children.length;
-    const s = pixelSprite(golds?.has(k) ? PROPS.goldPoop : PROPS.poop, 0.028);
-    s.position.set((((k * 7) % 3) - 1) * 0.015, k * TOWER_STEP + 0.8, 0); // drops in from above
-    tower.add(s);
-  }
-  for (let k = 0; k < tower.children.length; k++) {
-    const s = tower.children[k];
-    s.position.y += (k * TOWER_STEP - s.position.y) * Math.min(1, dt * 10);
-  }
+  const fill = (group, n, offset) => {
+    while (group.children.length > n) group.remove(group.children.at(-1));
+    while (group.children.length < n) {
+      const k = offset + group.children.length;
+      const s = pixelSprite(golds?.has(k) ? PROPS.goldPoop : PROPS.poop, POOP_PX);
+      s.userData.to = poopSpot(k, new THREE.Vector3());
+      s.position.copy(s.userData.to).add(new THREE.Vector3(0, 0.6, 0)); // drops in from above
+      group.add(s);
+    }
+    for (const s of group.children) s.position.lerp(s.userData.to, Math.min(1, dt * 10));
+  };
+  fill(p.tower, onHead, 0);
+  fill(p.coat, onBody, HEAD_STACK);
 }
 
 // ---------- the beanstalk: fertilizer from everyone, in every room; it never stops growing ----------
@@ -2096,10 +2095,10 @@ function onFert(m) {
     // the whole tower flies over to the beanstalk, one poop after another
     beanHoldUntil = performance.now() + 2500;
     const to = bean.landing();
-    const n = Math.min(m.n, TOWER_MAX);
+    const n = Math.min(m.n, 30); // a stream of them, not every single one
     for (let k = 0; k < n; k++) {
-      const p = pixelSprite(PROPS.poop, 0.028);
-      const start = from.clone().add(new THREE.Vector3(0, k * TOWER_STEP - towerHeight(m.n), 0));
+      const p = pixelSprite(PROPS.poop, POOP_PX);
+      const start = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, -Math.random() * 0.8, (Math.random() - 0.5) * 0.4));
       p.position.copy(start);
       fxRoot.add(p);
       flights.push({ p, from: start, to, t: -k * 0.07, dur: 1.2, arc: 2 + start.distanceTo(to) * 0.12, land: k === n - 1 ? () => growBean(m.total, true) : null });
@@ -2598,10 +2597,10 @@ function renderActions() {
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
   const anyFree = stalls.some((_, i) => freeFor(i));
-  const mode = inStall ? 'inside' : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean' : nearSink() ? 'sink'
+  const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
-  const key = mode === 'bean' ? `bean${me.pl}` : mode; // the fertilizer button shows how many you carry
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -2624,7 +2623,13 @@ function renderActions() {
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     pad.append(push); // only the poop button lives in the bottom-right
     if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
-    else bar.append(miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+    else {
+      if (inRoom) bar.append(miniBtn('bench', '일어나기', () => { setHold(false); roomStanding = true; }));
+      bar.append(miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+    }
+  } else if (mode === 'standing') {
+    // standing in my own room: sit back down whenever
+    bar.append(mainBtn('bench', '다시 앉기', () => { roomStanding = false; }), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -2662,7 +2667,7 @@ function renderActions() {
       if (i >= 0) walkToStall(i);
     }));
   }
-  if (mode !== 'inside' && mode !== 'rolling' && mode !== 'squatting') {
+  if (!['inside', 'standing', 'rolling', 'squatting'].includes(mode)) {
     const go = miniBtn('pin', '공간 이동', () => setMoveMenu(moveMenu.hidden));
     go.dataset.move = '1';
     bar.append(go);
@@ -3299,6 +3304,10 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     spaceHeld = true;
     if (me.s !== -1 || me.q) {
+      if (inRoom && roomStanding) {
+        if (!e.repeat) roomStanding = false; // Space sits you back down
+        return;
+      }
       if (!e.repeat) setHold(true);
       return;
     }

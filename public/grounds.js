@@ -4,7 +4,14 @@
 // The stalls themselves are built by app.js (makeStall); this file builds everything around them.
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
-import { leafTexture, grassTuftTexture, stoneTexture, cardsGeometry, stoneGeometry } from './nature.js';
+import {
+  leafTexture, grassTuftTexture, stoneTexture, cardsGeometry, stoneGeometry, crownGeometry,
+  wallTileTexture, floorSlabTexture, plasterTexture, timberTexture, roofTexture,
+} from './nature.js';
+const rep = (t, x, y) => {
+  t.repeat.set(x, y);
+  return t;
+};
 
 const U = 0.01; // centimetres to metres
 const rnd = (k) => {
@@ -34,7 +41,7 @@ function signTexture(text, { bg = '#fffaf0', ink = '#4a3520', w = 512, h = 128, 
 }
 
 export function buildGrounds(kit) {
-  const { L, root, lamps, lampLights, mesh, mat, pixelTex, tex, vendingMachine, planter, M, wishHits, lampColor, lampPower } = kit;
+  const { L, root, lamps, lampLights, mesh, mat, tex, vendingMachine, planter, M, wishHits, lampColor, lampPower } = kit;
   const C = L.center * U; // the plaza's middle, in metres (x and z)
   const P = (p) => [p.x * U, p.y * U]; // a layout point to world x, z
 
@@ -80,11 +87,6 @@ export function buildGrounds(kit) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(...size), new THREE.MeshBasicMaterial({ map: signTexture(text, style), transparent: true }));
     m.rotation.y = rotY;
     return add(m, x, y, z);
-  };
-  const tiled = (t, rx, ry) => {
-    const map = pixelTex(t, true);
-    map.repeat.set(rx, ry);
-    return map;
   };
 
   // ---------- ground: grass that stays flat round the grounds and curves away like a small planet ----------
@@ -212,9 +214,9 @@ export function buildGrounds(kit) {
     const x1 = p.x1 * U;
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
-    const floor = new THREE.MeshPhongMaterial({ map: tiled(tex.floor, (x1 - x0) / 1.2, (z1 - z0) / 1.2), shininess: 28, specular: '#3a3428' });
+    const floor = new THREE.MeshPhongMaterial({ map: rep(floorSlabTexture(), (x1 - x0) / 1.2, (z1 - z0) / 1.2), shininess: 30, specular: '#3a3428' });
     strip(x0, z0, x1, z1, floor, 0.015);
-    const tile = (w, h) => new THREE.MeshLambertMaterial({ map: tiled(tex.tile, w / 1.2, h / 1.2) });
+    const tile = (w, h) => new THREE.MeshLambertMaterial({ map: rep(wallTileTexture(), w / 1.2, h / 1.2) });
     const WH = L.wallH * U; // walls well over head height, so the building towers over you
     block(x1 - x0 + 0.4, WH, 0.2, tile(x1 - x0, WH), (x0 + x1) / 2, WH / 2, z0 - 0.1);    // back wall
     for (const x of [x0, x1]) block(0.2, WH, z1 - z0, tile(z1 - z0, WH), x, WH / 2, (z0 + z1) / 2); // side walls
@@ -249,15 +251,15 @@ export function buildGrounds(kit) {
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
     const WH = L.wallH * U;
-    const wall = new THREE.MeshLambertMaterial({ map: tiled(tex.plaster, (x1 - x0) / 1.6, WH / 0.8) });
+    const wall = new THREE.MeshLambertMaterial({ map: rep(plasterTexture(), (x1 - x0) / 1.6, WH / 1.6) });
     block(x1 - x0, WH, z1 - z0, wall, (x0 + x1) / 2, WH / 2, (z0 + z1) / 2);
     // a pitched roof, like a cottage: a long triangular prism, eaves hanging over the walls
     const depth = z1 - z0 + 0.9;
-    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), mat('#4b4f52'), { cast: true, receive: true }); // dark grey roof tiles
+    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), new THREE.MeshLambertMaterial({ map: rep(roofTexture(), 3, 10) }), { cast: true, receive: true }); // dark grey roof tiles
     roof.rotation.set(-Math.PI / 2, 0, Math.PI / 2); // lying along the building, one flat face down, the ridge up
     roof.scale.set(1, 1, 0.7);
     add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
-    const timber = mat('#4a3a2e');
+    const timber = new THREE.MeshLambertMaterial({ map: rep(timberTexture(), 1, 2) });
     block(x1 - x0 + 0.3, 0.32, 0.2, timber, (x0 + x1) / 2, 2.6, z1 + 0.1);                  // a dark timber beam over the doors
     // timber posts between the doors and at the corners, like a bathhouse front
     for (let k = 0; k <= 8; k++) block(0.14, 2.6, 0.16, timber, x0 + 0.2 + k * L.stallW * U - 0.01, 1.3, z1 + 0.08);
@@ -354,11 +356,9 @@ export function buildGrounds(kit) {
   const round = treeSpots.filter((t) => !t.cedar);
   const cedars = treeSpots.filter((t) => t.cedar);
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.2, 1, 8), mat('#5b4636'), treeSpots.length);
-  const crownLeaves = leafTexture(true);
-  crownLeaves.repeat.set(3, 2);
-  const crowns = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: '#ffffff', map: crownLeaves }), round.length * 3);
+  const crowns = new THREE.InstancedMesh(crownGeometry(1), new THREE.MeshLambertMaterial({ color: '#ffffff' }), round.length * 3);
   const tiers = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 12), new THREE.MeshLambertMaterial({ color: '#ffffff' }), cedars.length * 3);
-  const crownColors = ['#ffffff', '#eef6e4', '#f6faee', '#e6f0dc']; // tints over the leaf texture
+  const crownColors = ['#5f9a4a', '#548d43', '#6aa553', '#5a9447']; // fresh, natural greens
   const cedarColors = ['#3f7048', '#38643f'];
   const m4 = new THREE.Matrix4();
   const q0 = new THREE.Quaternion();

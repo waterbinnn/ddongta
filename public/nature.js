@@ -152,3 +152,163 @@ export function stoneGeometry(seed) {
   g.computeVertexNormals();
   return g;
 }
+
+// a tree crown: a soft, lumpy ball (no painted leaves), shaded smoothly
+export function crownGeometry(seed) {
+  const g = new THREE.IcosahedronGeometry(1, 3);
+  const rand = seeded(seed * 53 + 7);
+  const bumps = Array.from({ length: 9 }, () => new THREE.Vector3(rand() - 0.5, rand() * 0.8 - 0.2, rand() - 0.5).normalize());
+  const p = g.attributes.position;
+  const nrm = g.attributes.normal;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = v.clone().normalize();
+    let r = 0.92;
+    for (const b of bumps) r += Math.pow(Math.max(0, n.dot(b)), 3) * 0.16;
+    if (n.y < -0.3) r *= 0.9; // a flatter underside
+    v.copy(n).multiplyScalar(r);
+    p.setXYZ(i, v.x, v.y, v.z);
+    nrm.setXYZ(i, n.x, n.y, n.z); // round-ball normals: smooth light over the lumps
+  }
+  return g;
+}
+
+// ---------- building materials, painted at a size where they read as real surfaces ----------
+
+function canvasOf(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  draw(c.getContext('2d'), w, h);
+  return c;
+}
+const speckle = (g, w, h, rand, n, dark, light) => {
+  for (let k = 0; k < n; k++) {
+    g.fillStyle = rand() < 0.5 ? dark : light;
+    g.fillRect(rand() * w, rand() * h, 1 + rand() * 2, 1 + rand() * 2);
+  }
+};
+
+// wall tiles: 30 cm squares of warm grey stone, each a little different, with pale grout; the canvas is 1.2 m square
+export function wallTileTexture() {
+  return texture(canvasOf(512, 512, (g) => {
+    const rand = seeded(41);
+    g.fillStyle = '#b9b2a5'; // grout
+    g.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const t = 0.93 + rand() * 0.1;
+        const grad = g.createLinearGradient(x * 128, y * 128, x * 128 + 128, y * 128 + 128);
+        grad.addColorStop(0, `rgb(${Math.round(222 * t)}, ${Math.round(215 * t)}, ${Math.round(202 * t)})`);
+        grad.addColorStop(1, `rgb(${Math.round(208 * t)}, ${Math.round(200 * t)}, ${Math.round(186 * t)})`);
+        g.fillStyle = grad;
+        g.fillRect(x * 128 + 3, y * 128 + 3, 122, 122);
+      }
+    }
+    speckle(g, 512, 512, rand, 2600, 'rgba(150, 140, 125, 0.25)', 'rgba(250, 246, 238, 0.3)');
+  }), { repeat: true });
+}
+
+// floor slabs: 60 cm squares of honed stone, darker than the walls
+export function floorSlabTexture() {
+  return texture(canvasOf(512, 512, (g) => {
+    const rand = seeded(43);
+    g.fillStyle = '#8c857a';
+    g.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        const t = 0.92 + rand() * 0.12;
+        g.fillStyle = `rgb(${Math.round(186 * t)}, ${Math.round(178 * t)}, ${Math.round(164 * t)})`;
+        g.fillRect(x * 256 + 3, y * 256 + 3, 250, 250);
+        for (let k = 0; k < 5; k++) { // soft veins in the stone
+          g.strokeStyle = `rgba(150, 140, 125, ${0.15 + rand() * 0.15})`;
+          g.lineWidth = 1 + rand() * 2;
+          g.beginPath();
+          g.moveTo(x * 256 + rand() * 256, y * 256 + rand() * 256);
+          g.quadraticCurveTo(x * 256 + rand() * 256, y * 256 + rand() * 256, x * 256 + rand() * 256, y * 256 + rand() * 256);
+          g.stroke();
+        }
+      }
+    }
+    speckle(g, 512, 512, rand, 3000, 'rgba(120, 110, 95, 0.25)', 'rgba(230, 225, 214, 0.25)');
+  }), { repeat: true });
+}
+
+// lime plaster: warm off-white, softly clouded
+export function plasterTexture() {
+  return texture(canvasOf(256, 256, (g) => {
+    const rand = seeded(47);
+    g.fillStyle = '#efe9dd';
+    g.fillRect(0, 0, 256, 256);
+    for (let k = 0; k < 40; k++) {
+      const x = rand() * 256;
+      const y = rand() * 256;
+      const r = 20 + rand() * 50;
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, rand() < 0.5 ? 'rgba(215, 205, 186, 0.12)' : 'rgba(252, 250, 244, 0.18)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = grad;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    speckle(g, 256, 256, rand, 900, 'rgba(190, 178, 160, 0.15)', 'rgba(255, 252, 245, 0.25)');
+  }), { repeat: true });
+}
+
+// dark weathered timber, the grain running along its length (the canvas's height)
+export function timberTexture() {
+  return texture(canvasOf(128, 512, (g) => {
+    const rand = seeded(53);
+    g.fillStyle = '#4e3d2f';
+    g.fillRect(0, 0, 128, 512);
+    for (let k = 0; k < 60; k++) {
+      g.strokeStyle = rand() < 0.5 ? `rgba(35, 26, 18, ${0.3 + rand() * 0.3})` : `rgba(110, 88, 66, ${0.2 + rand() * 0.25})`;
+      g.lineWidth = 1 + rand() * 2;
+      const x = rand() * 128;
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.bezierCurveTo(x + (rand() - 0.5) * 14, 170, x + (rand() - 0.5) * 14, 340, x + (rand() - 0.5) * 8, 512);
+      g.stroke();
+    }
+  }), { repeat: true });
+}
+
+// roof tiles: rows of dark grey curved tiles, each row shading into the next
+export function roofTexture() {
+  return texture(canvasOf(256, 256, (g) => {
+    const rand = seeded(59);
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const x = col * 32;
+        const y = row * 32;
+        const t = 0.9 + rand() * 0.15;
+        const grad = g.createLinearGradient(x, 0, x + 32, 0);
+        grad.addColorStop(0, `rgb(${Math.round(58 * t)}, ${Math.round(61 * t)}, ${Math.round(64 * t)})`);
+        grad.addColorStop(0.5, `rgb(${Math.round(92 * t)}, ${Math.round(96 * t)}, ${Math.round(99 * t)})`);
+        grad.addColorStop(1, `rgb(${Math.round(52 * t)}, ${Math.round(55 * t)}, ${Math.round(58 * t)})`);
+        g.fillStyle = grad;
+        g.fillRect(x, y, 32, 32);
+      }
+      g.fillStyle = 'rgba(20, 22, 24, 0.55)'; // the shadow under each row's lip
+      g.fillRect(0, row * 32 + 28, 256, 4);
+    }
+  }), { repeat: true });
+}
+
+// light wood for the stall doors, the grain running across
+export function doorWoodCanvas() {
+  return canvasOf(160, 104, (g) => {
+    const rand = seeded(61);
+    g.fillStyle = '#a98a68';
+    g.fillRect(0, 0, 160, 104);
+    for (let k = 0; k < 50; k++) {
+      g.strokeStyle = rand() < 0.5 ? `rgba(120, 90, 60, ${0.15 + rand() * 0.2})` : `rgba(200, 175, 140, ${0.15 + rand() * 0.2})`;
+      g.lineWidth = 1 + rand() * 1.5;
+      const y = rand() * 104;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(50, y + (rand() - 0.5) * 8, 110, y + (rand() - 0.5) * 8, 160, y + (rand() - 0.5) * 5);
+      g.stroke();
+    }
+  });
+}

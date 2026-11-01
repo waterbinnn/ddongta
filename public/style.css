@@ -130,6 +130,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .toast.out { opacity: 0; }
 .badge[hidden], .toast[hidden] { display: none; }
 
+/* the name of the place you just walked into, like a title card */
+.place-name {
+  position: fixed;
+  top: calc(108px + var(--top-edge));
+  left: 50%;
+  z-index: 17;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translate(-50%, -6px);
+  color: #fffaf0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 rgba(90, 58, 20, 0.55), 0 0 12px rgba(60, 40, 10, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.place-name::before, .place-name::after { content: ''; width: 28px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0.8; }
+.place-name.on { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 520px) { .place-name { font-size: 19px; top: calc(96px + var(--top-edge)); } }
+
 /* ---------- labels over the scene ---------- */
 
 /* the way to the wish page, pinned under the golden poop on the back wall */

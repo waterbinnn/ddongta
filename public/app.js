@@ -193,7 +193,9 @@ sceneEl.append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(PAL.sky);
 scene.fog = new THREE.Fog(PAL.sky, 60, 230);
-const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 600);
+const FOV = 50; // a wide lens outdoors, so you see the sky and the space around you, not a tunnel
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 600);
+const WALK_VIEW = { pitch: 0.28, dist: 8 }; // the usual view behind me: low enough to see the horizon
 const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
 const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // the sun by day, the moon at night
 sun.castShadow = true;
@@ -1536,7 +1538,7 @@ function sendMove(force) {
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
 // starts low and far back, looking in through the entrance at the whole plaza
-const cam = { yaw: 0, pitch: 0.22, dist: 16, tYaw: 0, tPitch: 0.22, tDist: 16, fx: 20, fz: 38, look: 0, tLook: 0 }; // look: tilting the view up at the sky
+const cam = { yaw: 0, pitch: 0.2, dist: 13, tYaw: 0, tPitch: 0.2, tDist: 13, fx: 20, fz: 38, look: 0, tLook: 0 }; // look: tilting the view up at the sky
 // link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
   entrance: { fx: 20, fz: 37, yaw: 0, pitch: 0.24, dist: 18 },
@@ -1595,7 +1597,7 @@ function focusCamera() {
     cam.tLook = 0;
     // far enough back that about four stalls fit across the screen, so the neighbours show on a phone too
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    cam.tDist = key === 'room' ? ROOM_DIST[1] : clamp(Math.max(8, 4.4 / (2 * halfW)), DIST_MIN, 16);
+    cam.tDist = key === 'room' ? ROOM_DIST[1] : clamp(Math.max(6.5, 4.4 / (2 * halfW)), DIST_MIN, 16);
   } else if (camBefore) {
     cam.tYaw = camBefore.yaw;
     cam.tPitch = camBefore.pitch;
@@ -1612,9 +1614,9 @@ let walkedYet = false;
 // back to the usual view of me: from the room side, a little above, at a comfortable distance
 function recenterCam() {
   cam.tYaw = Math.PI * 2 * Math.round(cam.tYaw / (Math.PI * 2)); // yaw 0, the short way round
-  cam.tPitch = 0.4;
+  cam.tPitch = WALK_VIEW.pitch;
   cam.tLook = 0;
-  cam.tDist = 9;
+  cam.tDist = WALK_VIEW.dist;
   manualCamAt = 0;
   focusKey = ''; // sitting or washing: let the focus view take over again from here
 }
@@ -1625,8 +1627,8 @@ function followWalk(dt) {
   if (!walkedYet) {
     // the wide welcome view closes in behind you once you start walking
     walkedYet = true;
-    if (cam.tDist > 10) cam.tDist = 9;
-    cam.tPitch = Math.max(cam.tPitch, 0.35);
+    if (cam.tDist > 10) cam.tDist = WALK_VIEW.dist;
+    cam.tPitch = Math.max(cam.tPitch, WALK_VIEW.pitch);
   }
   cam.tLook = 0; // walking off again brings the eyes back down from the sky
   const fx = -Math.sin(cam.tYaw);
@@ -1858,7 +1860,7 @@ function syncRoom(t) {
     room.group.visible = inRoom;
     worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
     for (const o of outdoorLights()) o.visible = !inRoom;
-    camera.fov = inRoom ? 55 : 36; // a wider lens in the small room, so the whole room fits even on a phone
+    camera.fov = inRoom ? 55 : FOV; // a wider lens in the small room, so the whole room fits even on a phone
     camera.updateProjectionMatrix();
     snapCam = true;
   }
@@ -2422,6 +2424,7 @@ function frame(t) {
   lastFrame = t;
   if (me.ready && me.s === -1) moveMe(dt);
   syncRoom(t);
+  updatePlaceName();
   placeWalkers(dt, t);
   animateStalls(dt, t);
   updateEffects(dt);
@@ -2506,6 +2509,55 @@ function renderActions() {
   else setMoveMenu(false);
 }
 
+// ---------- the name of the place you're in, shown for a moment when you walk into it ----------
+
+function placeAt(x, y) {
+  const L = GROUNDS;
+  const near = (p, r) => Math.hypot(x - p.x, y - p.y) <= r;
+  const P = L.public;
+  const V = L.private;
+  if (x > P.x0 - 40 && x < P.x1 + 40 && y > P.y0 && y < P.y1 + 40) return '공중화장실';
+  if (x > V.x0 - 120 && x < V.x1 + 120 && y > V.y1 && y < V.y1 + 280) return '개인 화장실';
+  if (near(L.garden, 260)) return '작은 정원';
+  if (near({ x: L.center, y: L.center }, L.plazaR + 20)) return '카페 테라스';
+  if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
+  if (near(L.pond, L.pond.r + 160)) return '연못';
+  if (near(L.bush, L.bush.r)) return '풀숲';
+  if (near(L.gate, 420)) return '정문';
+  if (Math.abs(Math.hypot(x - L.center, y - L.center) - L.pathR) < L.pathW / 2 + 40) return '산책로';
+  return '';
+}
+
+let placeShown = '';
+let placeSeen = { name: '', since: 0 };
+let placeTimer = 0;
+let placeStall = -1;
+function showPlaceName(name) {
+  const el = $('#placeName');
+  el.textContent = name;
+  el.classList.add('on');
+  clearTimeout(placeTimer);
+  placeTimer = setTimeout(() => el.classList.remove('on'), 2400);
+}
+function updatePlaceName() {
+  if (!me.ready || !GROUNDS || OG) return;
+  if (me.s !== placeStall) {
+    // sitting down in a stall names that stall; getting up doesn't re-announce the restroom
+    placeStall = me.s;
+    if (me.s !== -1) showPlaceName(stallName(me.s));
+    return;
+  }
+  if (me.s !== -1) return;
+  const now = performance.now();
+  const name = placeAt(me.x, me.y);
+  if (name !== placeSeen.name) placeSeen = { name, since: now };
+  // only once you've been there a moment, and not again for the place you were just in
+  if (name && name !== placeShown && now - placeSeen.since > 300) {
+    placeShown = name;
+    showPlaceName(name);
+  }
+}
+
 // ---------- 공간 이동: a shortcut to each place on the grounds (walking there still works) ----------
 
 const moveMenu = $('#moveMenu');
@@ -2541,7 +2593,7 @@ function moveTo(spot) {
     pendingWash = false;
     sendMove(true);
     // look out over the place you arrived at, without the camera flying across the grounds
-    Object.assign(cam, { tYaw: spot.yaw, tPitch: 0.4, tDist: 9, tLook: 0 });
+    Object.assign(cam, { tYaw: spot.yaw, tPitch: WALK_VIEW.pitch, tDist: WALK_VIEW.dist, tLook: 0 });
     focusKey = '';
     camBefore = null;
     walkedYet = true;

@@ -125,22 +125,23 @@ export function buildGrounds(kit) {
   ring.rotation.x = -Math.PI / 2;
   add(ring, C, 0.006, C);
   const paving = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1) });
-  paving.map.repeat.set(14, 14);
-  disc(6.2, paving, C, C, 0.012);
-  for (const r of [5.4, 3.6]) {
+  paving.map.repeat.set(L.plazaR * U * 2.2, L.plazaR * U * 2.2);
+  const PZ = L.plazaR * U;
+  disc(PZ, paving, C, C, 0.012);
+  for (const r of [PZ - 0.8, PZ * 0.6]) {
     const line = mesh(new THREE.RingGeometry(r - 0.04, r + 0.04, 96), new THREE.MeshLambertMaterial({ color: '#d6c7a2' }));
     line.rotation.x = -Math.PI / 2;
     add(line, C, 0.014, C);
   }
   const ex = P(L.exercise);
   const bushIn = (L.center - L.bush.x - L.bush.r) * U; // how far west the bushes start
-  strip(C - 0.75, C + 6.0, C + 0.75, C + PR - PW / 2, dirt);              // south, to the gate
-  strip(C + 6.0, ex[1] - 0.75, ex[0] - L.exercise.r * U + 0.3, ex[1] + 0.75, dirt); // east, to the exercise lawn
-  strip(C - bushIn - 0.1, C - 0.75, C - 6.0, C + 0.75, dirt);              // west, to the bushes
+  strip(C - 0.75, C + PZ - 0.2, C + 0.75, C + PR - PW / 2, dirt);              // south, to the gate
+  strip(C + PZ - 0.2, ex[1] - 0.75, ex[0] - L.exercise.r * U + 0.3, ex[1] + 0.75, dirt); // east, to the exercise lawn
+  strip(C - bushIn - 0.1, C - 0.75, C - PZ + 0.2, C + 0.75, dirt);              // west, to the bushes
   // a paved forecourt in front of both restrooms, joining the plaza
   const court = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1) });
   court.map.repeat.set(22, 4);
-  strip(L.private.x0 * U - 0.6, L.private.y1 * U, L.public.x1 * U + 0.6, C - 5.9, court, 0.011);
+  strip(L.private.x0 * U - 0.6, L.private.y1 * U, L.public.x1 * U + 0.6, C - PZ + 0.3, court, 0.011);
 
   // ---------- plaza: café terrace, coffee cart, vending machine, the golden-poop sign ----------
   const white = mat('#fffaf0');
@@ -236,7 +237,6 @@ export function buildGrounds(kit) {
     const tile = (w, h) => new THREE.MeshLambertMaterial({ map: tiled(tex.tile, w / 1.2, h / 1.2) });
     block(x1 - x0 + 0.4, 3.0, 0.2, tile(x1 - x0, 3), (x0 + x1) / 2, 1.5, z0 - 0.1);    // back wall
     for (const x of [x0, x1]) block(0.2, 3.0, z1 - z0, tile(z1 - z0, 3), x, 1.5, (z0 + z1) / 2); // side walls
-    block(x1 - x0 + 0.4, 0.45, 0.25, mat('#a9d2ec'), (x0 + x1) / 2, 2.85, z1);          // a header across the open front
     // the sink counter along the east wall, with a long mirror above it
     const sc = L.sinkCounter;
     const cx = ((sc.x0 + sc.x1) / 2) * U;
@@ -313,7 +313,7 @@ export function buildGrounds(kit) {
       const x = bx + Math.cos(a) * d;
       const z = bz + Math.sin(a) * d;
       if (onPath(x, z)) s = 0; // keep the walking path clear
-      m4.compose(new THREE.Vector3(x, s * 0.5, z), new THREE.Quaternion(), new THREE.Vector3(s, s * 0.8, s));
+      m4.compose(new THREE.Vector3(x, s * 0.2, z), new THREE.Quaternion(), new THREE.Vector3(s * 0.65, s * 0.45, s * 0.65)); // about waist high: you hide in it, but still show
       balls.setMatrixAt(k, m4);
       balls.setColorAt(k, new THREE.Color(colors[k % 3]));
     }

@@ -136,12 +136,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   left: 0;
   top: 0;
   z-index: 6;
-  padding: 3px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(58, 110, 40, 0.8);
-  color: #f2ffe0;
+  background: rgba(40, 80, 30, 0.78); /* like the golden poop's label, in leaf green */
+  color: #e6ffc8;
   font-size: 12px;
-  font-weight: 700;
+  box-shadow: 0 0 12px rgba(150, 220, 110, 0.4);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -196,9 +196,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .bubble,
 .pop { position: absolute; left: 0; top: 0; will-change: transform; }
+/* the key for each button, written right beside its label */
+.act kbd, .move-chip kbd { margin-left: 2px; padding: 1px 5px; border-radius: 5px; background: rgba(90, 60, 30, 0.1); color: inherit; opacity: 0.7; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 10px; font-weight: 600; line-height: 1.4; }
+@media (hover: none) and (pointer: coarse) { .act kbd, .move-chip kbd { display: none; } } /* no keyboard on a phone */
+
+/* name tags over heads: small and quiet, in a plain font */
+.nametag { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 999px; background: rgba(40, 32, 24, 0.42); color: #fffaf0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; will-change: transform; }
+.nametag[hidden] { display: none; }
 /* a wish rising from the golden poop */
 .pop.wish-pop { padding: 6px 14px; border-radius: 999px; background: rgba(255, 240, 190, 0.9); color: #6b4a12; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; font-size: 15px; font-weight: 500; letter-spacing: 0; white-space: nowrap; box-shadow: 0 2px 10px rgba(200, 150, 40, 0.35); } /* plain text, not the pixel font */
-/* the chat box turns golden in front of the statue: it takes wishes there */
+/* no chat: the box shows only in front of the golden poop, for a wish */
+body:not(.wish-near) .chat { display: none; }
+/* golden in front of the statue */
 .chat.wishing { box-shadow: 0 0 0 2px rgba(230, 180, 70, 0.8), var(--shadow); }
 
 .bubble {
@@ -473,43 +482,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .loading.done { opacity: 0; pointer-events: none; }
 
 /* ---------- room-wide chat feed, top-left ---------- */
-.chat-hidden .feed { display: none; }
-.feed {
-  position: fixed;
-  top: calc(62px + var(--top-edge));
-  left: 12px;
-  width: min(340px, calc(100vw - 24px));
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  z-index: 17;
-  pointer-events: none;
-}
-
-.feed .line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 5px 10px 5px 8px;
-  border-radius: 999px;
-  background: var(--glass-soft);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  font-size: 12px;
-  animation: fly-in 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
-  transition: opacity 0.8s, transform 0.8s;
-}
-
-.feed .line i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
-.feed .line b { flex-shrink: 0; font-weight: 400; color: var(--muted); font-size: 11px; }
-.feed .line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* my own lines: more solid, with "나" in brown, so they read on the yellow room */
-.feed .line.mine { background: rgba(255, 252, 242, 0.72); border-color: rgba(138, 74, 18, 0.4); }
-.feed .line.mine b { color: var(--emph); }
-.feed .line.out { opacity: 0; transform: translateY(-8px); }
 
 @keyframes fly-in {
   from { opacity: 0; transform: translateX(-40px) scale(0.9); }
@@ -575,8 +547,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 
 /* golden poop announcements stand out in the feed */
-.feed .line.gold { background: rgba(255, 214, 80, 0.55); border-color: #e0a91c; }
-.feed .line.gold span { color: #7a4d00; font-weight: 700; }
 
 /* no "save image" callout or dragging when you hold a button on a phone */
 img { -webkit-touch-callout: none; -webkit-user-drag: none; pointer-events: none; }
@@ -621,7 +591,7 @@ body.typing .keys { display: none; }
 }
 
 /* ?og: the link-preview frame */
-.og .top, .og .dock, .og .feed, .og .toast, .og .badge, .og .joy, .og .loading { display: none !important; }
+.og .top, .og .dock, .og .toast, .og .badge, .og .joy, .og .loading { display: none !important; }
 
 /* ---------- the server is down ---------- */
 .down {
@@ -690,5 +660,4 @@ body.typing .keys { display: none; }
 
 /* phones: no blur behind the chat feed, so it doesn't cover the room */
 @media (max-width: 600px) {
-  .feed .line { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

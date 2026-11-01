@@ -40,7 +40,6 @@
       <span class="item"><span id="todayIcon"></span><span class="today-word">오늘</span><b id="todayCount">0</b></span>
     </div>
     <div class="right">
-      <button class="chip sound" id="chatToggle" type="button" aria-label="채팅 목록 숨기기"></button>
       <button class="chip sound" id="recenterBtn" type="button" aria-label="내 시점으로" title="내 시점으로 (R)"></button>
       <button class="chip sound" id="soundBtn" type="button" aria-label="소리 설정" aria-haspopup="true" aria-expanded="false"></button>
       <div class="sound-menu" id="soundMenu" role="menu" hidden>
@@ -59,7 +58,6 @@
   <div class="chip toast" id="toast" hidden></div>
   <div class="place-name" id="placeName" aria-live="polite"></div>
 
-  <div class="feed" id="feed" aria-live="polite"></div>
 
   <div class="joy" id="joy" aria-hidden="true"><div class="knob"></div></div>
 
@@ -67,23 +65,9 @@
     <div class="push-pad" id="pushPad"></div>
     <nav class="actions" id="actions"></nav>
     <form class="chat" id="chatBox">
-      <input id="chatInput" maxlength="80" placeholder="주변에 한마디…" autocomplete="off" enterkeyhint="send">
+      <input id="chatInput" maxlength="80" placeholder="황금똥에게 소원 빌기…" autocomplete="off" enterkeyhint="send">
       <button type="submit" aria-label="보내기">↵</button>
     </form>
-    <div class="keys" id="hint">
-      <div class="row">
-        <span><kbd>Space</kbd> 앉기·힘주기·노크·손 씻기·의자</span>
-        <span><kbd>J</kbd> 점프</span>
-        <span><kbd>F</kbd> 비료</span>
-        <span><kbd>B</kbd> 에티켓벨</span>
-      </div>
-      <div class="row">
-        <span><kbd>Esc</kbd> 나가기</span>
-        <span><kbd>M</kbd> 공간 이동</span>
-        <span><kbd>R</kbd> 내 시점</span>
-        <span><kbd>H</kbd> 채팅 숨기기</span>
-        <span>드래그 회전 · 휠 확대</span>
-      </div>
     </div>
   </div>
 

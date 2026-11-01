@@ -1,6 +1,6 @@
 // 똥타 — a roomy three.js restroom rendered at low resolution, with hand-drawn pixel sprites standing in it.
 import * as THREE from '/vendor/three.module.js';
-import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
+import { peopleReady, makePerson, hairFor, disposePerson, setFace, setFlush, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
 import { RoomEnvironment } from '/vendor/jsm/environments/RoomEnvironment.js';
 import { buildPrivateRoom } from './room.js';
@@ -29,7 +29,7 @@ const PART_BOT = 0.3;
 const PART_TOP = 1.75;
 const SEAT_Z = -0.88; // where the person on the toilet sits (bowl center is at -1.1)
 const SEAT_TOP = 0.46; // where the sitter's hips rest: perched on the seat, face clear of the door
-const BENCH_TOP = 0.45; // terrace chairs
+const BENCH_TOP = 0.03; // sitting on a picnic mat, right on the ground
 const PX_M = 0.05; // meters per sprite pixel
 const HEAD_STACK = 8; // this many stack up on the head; after that they stick all over the body
 
@@ -150,11 +150,8 @@ const ICONS = {
   knock: icon(['..FFFF...', '.FFFFFF..', 'FFfFfFFF.', 'FFFFFFFF.', 'FFFFFFFF.', '.FFFFFF..', '..FFFF...']),
   bird: icon(['...BBB...', '..BBBBW..', '.BBBBBBYY', 'BBBbBBB..', '.BBbbBB..', '..BBBB...', '...y.y...']),
   exit: icon(['DDDD.....', 'D..D..A..', 'D..D..AA.', 'D..AAAAAA', 'D..D..AA.', 'D..D..A..', 'DDDD.....']),
-  chat: icon(['.WWWWWWW.', 'WWWWWWWWW', 'WGWWGWWGW', 'WWWWWWWWW', '.WWWWWWW.', '..WW.....', '.W.......']),
   find: icon(['.GGG....', 'GgggG...', 'GgggG...', 'GgggG...', '.GGGHH..', '....HH..', '.....HH.', '......HH']),
   people: icon(['.HHHH.', 'HFFFFH', '.FFFF.', '..FF..', '.AAAA.', 'AAAAAA', 'AAAAAA']),
-  chat: icon(['.SSSSSSS.', 'SWWWWWWWS', 'SWSSSSSWS', 'SWWWWWWWS', '.SSSSSSS.', '..SS.....', '..S......']),
-  chatOff: icon(['xSSSSSSS.', 'SxWWWWWWS', 'SWxSSSSWS', 'SWWxWWWWS', '.SSSxSSS.', '..SS.x...', '..S...x..']),
   recenter: icon(['...S...', '.SSSSS.', '.S...S.', 'SS.S.SS', '.S...S.', '.SSSSS.', '...S...']),
   soundOn: icon(['...S.....', '..SS..W..', 'SSSS.W.W.', 'SSSS.W.W.', '..SS..W..', '...S.....']),
   soundOff: icon(['...S.....', '..SS.....', 'SSSS.x.x.', 'SSSS..x..', '..SS.x.x.', '...S.....']),
@@ -419,7 +416,7 @@ function pixelSprite(c, density = PX_M) {
 
 let floorMesh = null;
 let builtFor = 0;
-const benchSpots = []; // terrace tables, in server units (sitting reuses the old bench logic)
+const benchSpots = []; // the terrace's picnic mats, in server units (sitting reuses the old bench logic)
 const benchSeats = []; // the chairs round each table
 
 function buildRoom() {
@@ -427,7 +424,7 @@ function buildRoom() {
   vendings.length = 0;
   lamps.clear();
   const { ground } = buildGrounds({
-    L: GROUNDS, root: worldRoot, lamps, lampLights, mesh, mat, M, wishHits, vendingMachine, planter, goldEnv,
+    L: GROUNDS, root: worldRoot, lamps, lampLights, glows, mesh, mat, M, wishHits, vendingMachine, planter, goldEnv,
     tex: { grass: grassCanvas },
     lampColor: PAL.lamps[0], lampPower: PAL.lampPower,
   });
@@ -435,9 +432,9 @@ function buildRoom() {
   placeBeanstalk();
   benchSpots.length = 0;
   benchSeats.length = 0;
-  GROUNDS.terrace.tables.forEach((t, k) => {
+  GROUNDS.terrace.picnics.forEach((t, k) => {
     benchSpots.push({ x: t.x, y: t.y });
-    benchSeats.push(GROUNDS.seats.filter((s) => s.table === k).map((s) => ({ x: s.x, y: s.y })));
+    benchSeats.push(GROUNDS.seats.filter((s) => s.picnic === k).map((s) => ({ x: s.x, y: s.y })));
   });
   applyTimeOfDay();
 }
@@ -1077,6 +1074,7 @@ function planter(x, z, size, seed, kind = 'bush') {
 // The sky and the light follow the visitor's clock: blue sky by day, a pink-orange sunset,
 // a starry night with the ceiling lights turned up, and a lilac dawn. ?hour=21 previews an hour.
 const lampLights = []; // [light, share of PAL.lampPower]
+const glows = []; // (dark) => void: lantern paper and the gold, glowing more or less as night falls
 const DAYTIME = [
   // hour, sky at the top, in the middle, at the horizon, sky light, sun, sun colour, ceiling lights
   [0, '#03060f', '#0a1228', '#18223f', 0.55, 0.3, '#a9b8ff', 2.6],
@@ -1133,6 +1131,8 @@ function applyTimeOfDay() {
   sun.color.copy(mix(a[5], b[5]));
   const lampScale = lerp(a[6], b[6], f);
   for (const [light, share] of lampLights) light.intensity = PAL.lampPower * share * lampScale;
+  const dark = clamp((lampScale - 1) / 1.6, 0, 1); // 0 by day, 1 at night
+  for (const glow of glows) glow(dark);
   room.windowMat.color.copy(skyUniforms.mid.value).lerp(skyUniforms.horizon.value, 0.4);
 }
 setInterval(applyTimeOfDay, 60 * 1000);
@@ -1326,10 +1326,17 @@ function makeWalker(u) {
   const marker = frontMarker();
   marker.visible = false;
   charRoot.add(p.group, blob, marker);
-  return { data: u, p, blob, marker, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
+  // a small name tag over the head (not on me: I have the arrow)
+  const tag = document.createElement('div');
+  tag.className = 'nametag';
+  tag.textContent = u.name || '';
+  tag.hidden = true;
+  if (u.id !== meId) $('#labels').append(tag);
+  return { data: u, p, blob, marker, tag, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
 }
 
 function removeWalker(e) {
+  e.tag.remove();
   charRoot.remove(e.p.group, e.blob, e.marker);
   if (e.cup) charRoot.remove(e.cup);
   disposePerson(e.p);
@@ -1404,8 +1411,6 @@ function handle(m) {
   } else if (m.t === 'state') {
     applyState(m);
     $('#loading').classList.add('done');
-  } else if (m.t === 'chat') {
-    floatChat(m.id, m.text);
   } else if (m.t === 'toast') {
     if (m.direct) toast(m.text);
   } else if (m.t === 'poop') {
@@ -1569,7 +1574,6 @@ function tryKnock(i) {
 }
 
 const ringBell = () => send({ t: 'bell' });
-const jump = () => me.s === -1 && !me.rolling && send({ t: 'jump' });
 // the sinks in the public restroom: where you stand, and the basin you look at
 function nearestSink(x, y) {
   const s = GROUNDS.sinks.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
@@ -1613,7 +1617,7 @@ function freeSeat(k) {
 function goSitOnBench(k) {
   const seat = freeSeat(k);
   if (!seat) {
-    toast('이 테이블은 자리가 꽉 찼어요');
+    toast('이 돗자리는 자리가 꽉 찼어요');
     return;
   }
   target = { x: seat.x, y: seat.y };
@@ -1780,7 +1784,8 @@ function focusCamera() {
     pitch = 0.75;
   } else if (me.b) {
     key = 'bench';
-    yaw = benchFacing(me.x, me.y) + 0.35; // close, from across the table (a little aside of the parasol pole), looking at me
+    // close and in front of me, a little to one side: across the mat, or wherever I sat down
+    yaw = (onAMat(me.x, me.y) ? benchFacing(me.x, me.y) : users.get(meId)?.turn ?? 0) + 0.35;
     pitch = 0.22;
   }
   if (key === focusKey) return;
@@ -1841,12 +1846,14 @@ function clearDist(fx, fz, yaw, pitch, dist) {
     { x0: P.x0, x1: P.x1, y0: P.y0, y1: P.doorLine }, // the stalls and the back wall
     { x0: P.x0 - 20, x1: P.x0 + 20, y0: P.y0, y1: P.y1 }, // the side walls
     { x0: P.x1 - 20, x1: P.x1 + 20, y0: P.y0, y1: P.y1 },
+    ...GROUNDS.terrace.vendings.map((v) => ({ x0: v.x - 55, x1: v.x + 55, y0: v.y - 50, y1: v.y + 50, h: 2.1 })), // the vending machines
   ];
   const cp = Math.cos(pitch);
   for (let k = 0.6; k <= dist; k += 0.15) {
     const x = (fx + Math.sin(yaw) * cp * k) / U;
     const z = (fz + Math.cos(yaw) * cp * k) / U;
-    if (0.9 + Math.sin(pitch) * k < GROUNDS.wallH * U + 0.5 && walls.some((w) => x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
+    const y = 0.9 + Math.sin(pitch) * k;
+    if (walls.some((w) => y < (w.h ?? GROUNDS.wallH * U + 0.5) && x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
       return Math.max(1.8, k - 0.35);
     }
   }
@@ -1946,8 +1953,10 @@ function overHead(obj, x, baseY, z, h) {
 }
 
 // people on benches face out, away from the wash island
+// sitting on a picnic mat (else just on the grass, wherever you are)
+const onAMat = (x, y) => GROUNDS.terrace.picnics.some((m) => Math.hypot(m.x - x, m.y - y) < 110);
 const benchFacing = (x, y) => {
-  const t = GROUNDS.terrace.tables.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
+  const t = GROUNDS.terrace.picnics.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
   return Math.atan2(t.x - x, t.y - y);
 };
 
@@ -2008,9 +2017,9 @@ function placeWalkers(dt, t) {
     if (washing) {
       const sink = nearestSink(e.rx, e.ry);
       want = Math.atan2(sink.lookX - e.rx, sink.lookY - e.ry);
-    } else if (benched) want = benchFacing(e.rx, e.ry);
+    } else if (benched) want = onAMat(e.rx, e.ry) ? benchFacing(e.rx, e.ry) : e.turn;
     else if (move === 'drink') want = cam.yaw;
-    else if (e.kickT > 0 || (mine && nearVendingHere() && !e.walking)) {
+    else if (e.kickT > 0 || (mine && nearVendingHere() && !e.walking && !(u.pk || []).length)) {
       // at a vending machine: face it, so the kick lands on it
       const v = GROUNDS.terrace.vendings.reduce((a, b) => (Math.hypot(b.x - e.rx, b.y - e.ry) < Math.hypot(a.x - e.rx, a.y - e.ry) ? b : a));
       want = Math.atan2(v.x - e.rx, v.y - e.ry);
@@ -2021,6 +2030,7 @@ function placeWalkers(dt, t) {
     e.turn = lerpAngle(e.turn, want, Math.min(1, dt * (e.walking ? 12 : 4)));
 
     syncTower(p, id, u.pl, dt);
+    setFlush(p, ...(squatting ? flushOf(u) : [0, u.cn ? 1 : 0]));
     const under = squatting && Boolean(u.un);
     if (e.under && !under && !u.un && p.under) leaveBehind(p, id); // got up: it stays on the ground
     e.under = under;
@@ -2104,6 +2114,7 @@ function syncRoom(t, dt) {
   }
   if (u) {
     syncTower(roomPerson, meId, u.pl, dt);
+    setFlush(roomPerson, ...(spot === 'seat' ? flushOf(u) : [0, u.cn ? 1 : 0]));
     syncUnder(roomPerson, meId, Boolean(u.un) && spot === 'seat', false);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
@@ -2164,6 +2175,7 @@ function animateStalls(dt, t) {
       const face = exprOf(u, i);
       if (s.person) {
         syncTower(s.person, occId, u.pl, dt);
+        setFlush(s.person, ...flushOf(u));
         syncUnder(s.person, occId, Boolean(u.un), false);
         setFace(s.person, face);
         pose(s.person, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: i });
@@ -2356,19 +2368,22 @@ function growBean(total, popIt) {
 
 // the height, pinned under the stalk (text drawn in 3D would blur)
 const beanAt = new THREE.Vector3();
+// the place labels (콩나무, 황금똥) show only once you've walked up close
+const LABEL_NEAR = 520;
+const walkedUpTo = (p) => me.s === -1 && Math.hypot(me.x - p.x, me.y - p.y) <= LABEL_NEAR;
+
 function placeBeanLabel() {
   const el = $('#beanLabel');
-  if (!bean || inRoom || OG) {
+  if (!bean || inRoom || OG || !walkedUpTo(GROUNDS.bean)) {
     el.hidden = true;
     return;
   }
   beanAt.set(toX(GROUNDS.bean.x), 0, toZ(GROUNDS.bean.y));
-  const far = beanAt.distanceTo(camera.position) > 30;
   beanAt.project(camera);
-  const on = !far && beanAt.z < 1 && Math.abs(beanAt.x) < 0.95 && beanAt.y > -0.7 && beanAt.y < 0.95;
+  const on = beanAt.z < 1 && Math.abs(beanAt.x) < 0.95 && beanAt.y > -0.7 && beanAt.y < 0.95;
   el.hidden = !on;
   if (!on) return;
-  const text = `콩나무 ${heightText(bean.height)}`;
+  const text = `콩나무 ${heightText(bean.height)} · 똥을 비료로 주면 자라요`;
   if (el.textContent !== text) el.textContent = text;
   el.style.transform = `translate(${((beanAt.x + 1) / 2) * W}px, ${((1 - beanAt.y) / 2) * H + 8}px) translate(-50%, 0)`;
 }
@@ -2676,7 +2691,7 @@ const wishAt = new THREE.Vector3();
 function placeWishLink() {
   const link = $('#wishLink');
   const emblem = wishHits[0];
-  if (!emblem || inRoom) {
+  if (!emblem || inRoom || !walkedUpTo(GROUNDS.wish)) {
     link.hidden = true;
     return;
   }
@@ -2688,8 +2703,28 @@ function placeWishLink() {
   if (on) link.style.transform = `translate(${((wishAt.x + 1) / 2) * W}px, ${((1 - wishAt.y) / 2) * H}px) translate(-50%, 0)`;
 }
 
+// name tags: over everyone's head, out of the way of the poop tower; hidden far off, in private rooms and in mine
+const tagAt = new THREE.Vector3();
+function placeNameTags() {
+  for (const [id, e] of users) {
+    if (id === meId) continue;
+    const seat = e.data.s;
+    const hide = inRoom || OG || (seat !== -1 && LAYOUT[seat]?.type === 'private');
+    const h = hide ? null : headOf(id);
+    if (!h || h.distanceTo(camera.position) > 24) {
+      e.tag.hidden = true;
+      continue;
+    }
+    tagAt.copy(h).addScaledVector(camUp, 0.12);
+    const p = toScreen(tagAt);
+    e.tag.hidden = !p.on;
+    if (p.on) e.tag.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
+  }
+}
+
 function updateLabels(dt) {
   placeWishLink();
+  placeNameTags();
   for (let i = floats.length - 1; i >= 0; i--) {
     const f = floats[i];
     f.age += dt;
@@ -2711,56 +2746,6 @@ function updateLabels(dt) {
       floats.splice(i, 1);
     }
   }
-}
-
-// chat is anonymous: just the words, my own bubbles are yellow
-function floatChat(id, text) {
-  const h = headOf(id);
-  if (!h) return;
-  feedChat(id, text);
-  // one bubble per person: a new line replaces the old one
-  for (let k = floats.length - 1; k >= 0; k--) {
-    if (floats[k].id === id) {
-      floats[k].el.remove();
-      floats.splice(k, 1);
-    }
-  }
-  const el = document.createElement('div');
-  el.className = id === meId ? 'bubble mine' : 'bubble';
-  el.textContent = text;
-  $('#labels').append(el);
-  floats.push({ id, el, anchor: h, stack: 0, age: 0, life: 6, rise: 0.25 });
-  while (floats.length > 40) floats.shift().el.remove();
-}
-
-// the room-wide chat feed in the top-left: who (shirt color), where, and what
-function placeOf(id) {
-  const e = users.get(id);
-  if (!e) return '광장';
-  const u = e.data;
-  const seat = id === meId ? me.s : u.s;
-  if (seat !== -1) return stallName(seat);
-  if (u.b) return '테라스';
-  if (sinkGap(e.rx, e.ry) < 140) return '세면대';
-  return '광장';
-}
-
-function feedChat(id, text, kind = '') {
-  const e = users.get(id);
-  const box = $('#feed');
-  const row = document.createElement('div');
-  row.className = `line${id === meId ? ' mine' : ''}${kind ? ` ${kind}` : ''}`;
-  const dot = document.createElement('i');
-  dot.style.background = e ? e.data.c : '#ccc';
-  const where = document.createElement('b');
-  where.textContent = id === meId ? `나 · ${placeOf(id)}` : placeOf(id);
-  const msg = document.createElement('span');
-  msg.textContent = text;
-  row.append(dot, where, msg);
-  box.append(row);
-  while (box.children.length > (innerWidth < 600 ? 4 : 10)) box.firstChild.remove(); // fewer lines on a phone
-  setTimeout(() => row.classList.add('out'), 10000);
-  setTimeout(() => row.remove(), 10800);
 }
 
 function floatWish(anchor, text) {
@@ -2846,11 +2831,10 @@ function renderActions() {
   const near = out && nearestEmptyStall(me.x, me.y) >= 0;
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
-  const anyFree = stalls.some((_, i) => freeFor(i));
   const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
-      : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : anyFree ? 'far' : 'full';
+      : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
   const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
@@ -2872,6 +2856,7 @@ function renderActions() {
       setHold(true);
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
+    push.insertAdjacentHTML('beforeend', '<kbd>Space</kbd>');
     pad.append(push); // only the poop button lives in the bottom-right
     if ((me.pk || []).length) bar.append(mainBtn('wash', '쾌변음료 마시기', drinkNow, 'drink'));
     if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
@@ -2896,7 +2881,7 @@ function renderActions() {
     const stage = Number(mode.slice(5));
     bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
-    bar.append(mainBtn('bench', '의자에 앉기', () => goSitOnBench(bench)));
+    bar.append(mainBtn('bench', '돗자리에 앉기', () => goSitOnBench(bench)));
   } else if (mode === 'wish') {
     // at the golden poop: rub it, put your palms together, and write a wish in the box below
     bar.append(mainBtn('rub', '황금똥 문지르기', () => send({ t: 'rub' })), mainBtn('pray', '합장하기', () => send({ t: 'pray' })));
@@ -2909,25 +2894,53 @@ function renderActions() {
   } else if (mode === 'lawn') {
     // 쾌변 체조: any move, any time; a few of them and the signal comes
     for (const [move, label] of EX_MOVES) bar.append(miniBtn(null, label, () => doExercise(move)));
-  } else if (mode === 'full') {
-    bar.append(mainBtn('knock', '만칸이에요 · 노크하러 가기', () => {
-      const i = closestAnywhere((k) => stalls[k] && stalls[k] !== meId);
-      if (i >= 0) {
-        target = { x: LAYOUT[i].x, y: LAYOUT[i].y };
-        pendingEnter = -1;
-        showTapMark(toX(target.x), toZ(target.y));
-      }
-    }));
   } else {
-    bar.append(mainBtn('find', '빈 칸 찾기', () => {
-      const i = closestAnywhere(freeFor);
-      if (i >= 0) walkToStall(i);
-    }));
+    bar.append(mainBtn('find', '똥 누러 가기', goPoop));
   }
+  // 앉기: sit down right where you are, anywhere, while just walking about (not where a place has its own buttons;
+  // on a mat 돗자리에 앉기 takes you to a place on it instead)
+  if (mode === 'far') bar.append(miniBtn('bench', '앉기', sitHere));
   if ((me.pk || []).length && !['inside', 'rolling', 'squatting'].includes(mode)) bar.append(miniBtn('wash', '쾌변음료 마시기', drinkNow)); // a drink in hand
   const canMove = !['inside', 'standing', 'rolling', 'squatting'].includes(mode);
   $('#moveBtn').disabled = !canMove;
   if (!canMove) setMoveMenu(false);
+  labelKeys(bar);
+}
+
+// every button shows its key beside it, like the sauna's bar: Space for the main one, then 1, 2, 3 …
+// (in a stall or a squat, Space is the push button)
+function labelKeys(bar) {
+  let n = 1;
+  let spaceTaken = Boolean($('#pushPad .act.push'));
+  for (const b of bar.querySelectorAll('button')) {
+    let key;
+    if (!spaceTaken && b.classList.contains('main')) {
+      key = 'Space';
+      spaceTaken = true;
+    } else key = String(n++);
+    b.dataset.key = key;
+    b.insertAdjacentHTML('beforeend', `<kbd>${key}</kbd>`);
+  }
+}
+
+function sitHere() {
+  target = null;
+  sendMove(true);
+  send({ t: 'bench', on: true });
+}
+
+// 똥 누러 가기: off to the nearest free stall, or to the bushes when every stall is taken
+function goPoop() {
+  const i = closestAnywhere(freeFor);
+  if (i >= 0) {
+    walkToStall(i);
+    return;
+  }
+  const b = GROUNDS.bushes.reduce((a, c) => (Math.hypot(c.x - me.x, c.y - me.y) < Math.hypot(a.x - me.x, a.y - me.y) ? c : a));
+  target = settleLocal({ x: b.x, y: b.y });
+  pendingEnter = -1;
+  showTapMark(toX(target.x), toZ(target.y));
+  toast('칸이 다 찼어요. 가까운 풀숲으로 가요');
 }
 
 // ---------- the vending machines, the drink in your hand, and 변비 ----------
@@ -2946,7 +2959,10 @@ function drinkNow() {
 
 function onKick(m) {
   const e = users.get(m.id);
-  if (e) e.kickT = 0.001;
+  if (e) {
+    e.kickT = 0.001;
+    if (m.kept) e.idle = 9; // a drink in hand: turn to the front right away, to show it
+  }
   const vending = vendings[m.v] || vendings[0];
   if (vending) vending.shake = 0.35;
   const at = vending ? vending.slot() : null;
@@ -2991,10 +3007,13 @@ function syncHand(p, kind) {
 }
 // tipping it back: the hand up at the mouth, the head back
 function drinkPose(p) {
-  // the bottle up at the corner of the mouth, out in front and to the side, so the face doesn't hide it
-  p.parts.arm_R?.rotation.set(-1.95, 0.35, 0.2);
-  p.parts.head?.rotation.set(-0.3, -0.15, 0);
+  // the bottle up beside the cheek, out to the side and a little in front, so the face never hides it
+  p.parts.arm_R?.rotation.set(-1.55, 0, -0.55);
+  p.parts.head?.rotation.set(-0.3, 0, -0.18); // head tipped back and toward the bottle
 }
+// the face going red while someone pushes, yellow when they're stuck (변비)
+const flushOf = (u) => [u.h && !u.cn ? Math.min(1, 0.25 + (u.p || 0) / 100) : 0, u.cn ? 1 : 0];
+
 // what someone holds and whether they're drinking it, after their pose for this frame
 function handFor(p, id, u, free) {
   const now = drinkingNow(id);
@@ -3023,7 +3042,7 @@ function onStuck(m) {
   const h = headOf(m.id);
   if (m.id === meId) {
     buzz([60, 40, 60]);
-    toast((me.pk || []).length ? '변비에 걸렸어요! 쾌변음료를 마셔 볼까요?' : '변비에 걸렸어요! 손에 음료가 없어요. 자판기를 차러 가 볼까요?');
+    toast((me.pk || []).length ? '변비에 걸렸어요! 쾌변음료를 마시면 풀려요' : '변비에 걸렸어요! 쾌변음료를 한 병 마시거나 체조를 한 번 하면 풀려요');
   } else if (h) pop(h.clone(), '끄으응…');
 }
 
@@ -3040,9 +3059,11 @@ function placeCup(e, u, X, Z) {
     e.cupKind = want;
     charRoot.add(e.cup);
   }
-  const t = GROUNDS.terrace.tables.reduce((a, b) => (Math.hypot(b.x - e.rx, b.y - e.ry) < Math.hypot(a.x - e.rx, a.y - e.ry) ? b : a));
   e.cup.visible = true;
-  e.cup.position.set(lerp(X, toX(t.x), 0.55), 0.82, lerp(Z, toZ(t.y), 0.55));
+  if (onAMat(e.rx, e.ry)) {
+    const t = GROUNDS.terrace.picnics.reduce((a, b) => (Math.hypot(b.x - e.rx, b.y - e.ry) < Math.hypot(a.x - e.rx, a.y - e.ry) ? b : a));
+    e.cup.position.set(lerp(X, toX(t.x), 0.6), 0.08, lerp(Z, toZ(t.y), 0.6)); // on the mat in front of you
+  } else e.cup.position.set(X + Math.sin(e.turn) * 0.4, 0.07, Z + Math.cos(e.turn) * 0.4); // on the grass in front of you
 }
 
 // ---------- the bushes and the 쾌변 체조 lawn ----------
@@ -3058,8 +3079,11 @@ function doExercise(move) {
 
 function onSignal(m) {
   const h = headOf(m.id);
-  if (h) pop(h.clone(), '신호가 왔다!');
-  if (m.id === meId) buzz([40, 60, 40]);
+  if (h) pop(h.clone(), '신호가 왔다!', m.id === meId && inRoom);
+  if (m.id === meId) {
+    buzz([40, 60, 40]);
+    if (m.cure) toast('변비가 풀렸어요');
+  }
 }
 
 // ---------- the name of the place you're in, shown for a moment when you walk into it ----------
@@ -3073,7 +3097,7 @@ function placeAt(x, y) {
   if (x > V.x0 - 120 && x < V.x1 + 120 && y > V.y1 && y < V.y1 + 280) return '개인 화장실';
   if (near(L.garden, 260)) return '작은 정원';
   if (near(L.bean, L.plazaR + 20)) return '콩나무 광장';
-  if (near(L.terrace, L.terraceR + 40)) return '카페 테라스';
+  if (near(L.terrace, L.terraceR + 40)) return '테라스';
   if (near(L.exercise, L.exercise.r + 20)) return '쾌변 체조장';
   if (near(L.pond, L.pond.r + 160)) return '연못';
   if (L.bushes.some((b) => near(b, b.r))) return '풀숲';
@@ -3114,7 +3138,7 @@ function updatePlaceName() {
 // ---------- 공간 이동: a shortcut to each place on the grounds (walking there still works) ----------
 
 const moveMenu = $('#moveMenu');
-$('#moveBtn').innerHTML = `${icoImg('pin')}<span>공간 이동</span>`;
+$('#moveBtn').innerHTML = `${icoImg('pin')}<span>공간 이동</span><kbd>M</kbd>`;
 $('#moveBtn').addEventListener('click', () => setMoveMenu(moveMenu.hidden));
 function setMoveMenu(open) {
   if (open && (!GROUNDS || me.s !== -1 || me.rolling)) return;
@@ -3219,17 +3243,19 @@ document.addEventListener('contextmenu', (e) => {
 chatBox.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
-  if (text) send({ t: wishing ? 'wish' : 'chat', text });
+  if (text && wishing) send({ t: 'wish', text });
   chatInput.value = '';
 });
-// in front of the golden poop, the chat box asks for a wish instead
+// there's no chat: the only box to type in is the wish box, and it shows only in front of the golden poop
 let wishing = false;
 function updateWishBox() {
   const now = nearWishHere();
   if (now === wishing) return;
   wishing = now;
-  chatInput.placeholder = wishing ? '황금똥에게 소원 빌기…' : '주변에 한마디…';
+  chatInput.placeholder = '황금똥에게 소원 빌기…';
   chatBox.classList.toggle('wishing', wishing);
+  document.body.classList.toggle('wish-near', wishing);
+  if (!wishing) chatInput.blur();
 }
 
 // ---------- toast (one line, only things about me) ----------
@@ -3594,27 +3620,6 @@ const startSoundOnce = () => {
 document.addEventListener('pointerdown', startSoundOnce, true);
 document.addEventListener('keydown', startSoundOnce, true);
 
-// hide the chat feed on the left (the bubbles over heads stay); remembered for next time
-let chatHidden = false;
-try {
-  chatHidden = localStorage.getItem('ddongta.chatHidden') === '1';
-} catch {}
-function setChatHidden(on) {
-  chatHidden = on;
-  document.body.classList.toggle('chat-hidden', on);
-  const btn = $('#chatToggle');
-  btn.innerHTML = icoImg(on ? 'chatOff' : 'chat');
-  btn.setAttribute('aria-label', on ? '채팅 목록 보이기' : '채팅 목록 숨기기');
-  btn.title = on ? '채팅 목록 보이기 (H)' : '채팅 목록 숨기기 (H)';
-  try {
-    localStorage.setItem('ddongta.chatHidden', on ? '1' : '0');
-  } catch {}
-}
-setChatHidden(chatHidden);
-$('#chatToggle').addEventListener('click', () => {
-  setChatHidden(!chatHidden);
-  toast(chatHidden ? '채팅 목록을 숨겼어요' : '채팅 목록을 다시 보여줘요');
-});
 $('#recenterBtn').innerHTML = icoImg('recenter');
 $('#recenterBtn').addEventListener('click', recenterCam);
 // the sound button opens a small menu: effects only / with music / off
@@ -3694,46 +3699,16 @@ window.addEventListener('keydown', (e) => {
     }
     // holding a direction: Space means run, not sit or knock
     if (MOVE_KEYS.some((k) => keys.has(k))) return;
-    if (me.b) {
-      if (!e.repeat) send({ t: 'bench', on: false }); // Space again gets you up
-      return;
-    }
-    if (me.pl > 0 && nearBean()) {
-      if (!e.repeat) fertilize();
-      return;
-    }
-    if (nearSink()) {
-      if (!e.repeat) washHands();
-      return;
-    }
-    if (inBushHere()) {
-      if (!e.repeat) send({ t: 'squat', on: true });
-      return;
-    }
-    const bench = nearBench();
-    if (bench >= 0) {
-      if (!e.repeat) goSitOnBench(bench);
-      return;
-    }
-    const free = nearestEmptyStall(me.x, me.y);
-    if (free >= 0) {
-      if (!e.repeat) tryEnter(free);
-    } else {
-      tryKnock(nearestOccupiedStall(me.x, me.y));
-    }
-  } else if (e.code === 'KeyB') {
-    if (me.s !== -1) ringBell();
-  } else if (e.code === 'KeyJ') {
-    jump();
-  } else if (e.code === 'KeyF') {
-    fertilize();
+    // otherwise Space is the main button, whatever it is right now (knocks repeat while held)
+    const main = $('#actions').querySelector('button[data-key="Space"]');
+    if (main && !main.disabled && (!e.repeat || main.classList.contains('knock'))) main.click();
+  } else if (/^Digit[1-9]$/.test(e.code)) {
+    const b = $('#actions').querySelector(`button[data-key="${e.code.slice(5)}"]`);
+    if (b && !b.disabled && !e.repeat) b.click();
   } else if (e.code === 'KeyR') {
     recenterCam();
   } else if (e.code === 'KeyM') {
     setMoveMenu(moveMenu.hidden);
-  } else if (e.code === 'KeyH') {
-    setChatHidden(!chatHidden);
-    toast(chatHidden ? '채팅 목록을 숨겼어요' : '채팅 목록을 다시 보여줘요');
   } else if (e.code === 'KeyQ') {
     cam.tYaw = clamp(cam.tYaw + 0.35, -YAW_MAX, YAW_MAX);
     manualCamAt = performance.now();
@@ -3752,9 +3727,9 @@ window.addEventListener('keydown', (e) => {
       setHold(false);
       send({ t: 'squat', on: false });
     }
-  } else if (e.key === 'Enter') {
+  } else if (e.key === 'Enter' && wishing) {
     e.preventDefault();
-    openChat();
+    openChat(); // the only typing left: a wish at the golden poop
   }
 });
 

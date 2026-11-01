@@ -41,7 +41,8 @@ function signTexture(text, { bg = '#fffaf0', ink = '#4a3520', w = 512, h = 128, 
 }
 
 export function buildGrounds(kit) {
-  const { L, root, lamps, lampLights, mesh, mat, tex, vendingMachine, planter, M, wishHits, lampColor, lampPower } = kit;
+  const { L, root, lamps, lampLights, glows, mesh, mat, tex, vendingMachine, planter, M, wishHits, lampColor, lampPower } = kit;
+  glows.length = 0; // things that change from day to night: (dark) => void, dark 0 by day and 1 at night
   const C = L.center * U; // the plaza's middle, in metres (x and z)
   const P = (p) => [p.x * U, p.y * U]; // a layout point to world x, z
 
@@ -61,26 +62,13 @@ export function buildGrounds(kit) {
     m.rotation.x = -Math.PI / 2;
     return add(m, (x0 + x1) / 2, y, (z0 + z1) / 2);
   };
-  // flowers and picket fences are gathered as they're placed, then drawn in a few instanced meshes at the end
+  // flowers are gathered as they're placed, then drawn in a few instanced meshes at the end
   const flowers = [];
-  const pickets = [];
-  const rails = [];
   function flowerPatch(x, z, r, n, seed) {
     for (let k = 0; k < n; k++) {
       const a = rnd(seed * 31 + k) * Math.PI * 2;
       const d = Math.sqrt(rnd(seed * 17 + k + 3)) * r;
       flowers.push({ x: x + Math.cos(a) * d, z: z + Math.sin(a) * d, c: (seed + Math.floor(k / 5)) % 6, s: 0.8 + rnd(seed + k * 7) * 0.5 });
-    }
-  }
-  function picketArc(cx, cz, r, a0, a1) {
-    const n = Math.max(2, Math.round(((a1 - a0) * r) / 1.1)); // posts a metre or so apart, two rails between
-    let prev = null;
-    for (let k = 0; k <= n; k++) {
-      const a = a0 + ((a1 - a0) * k) / n;
-      const p = { x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r, a };
-      pickets.push(p);
-      if (prev) rails.push({ x: (p.x + prev.x) / 2, z: (p.z + prev.z) / 2, len: Math.hypot(p.x - prev.x, p.z - prev.z), rot: Math.atan2(p.x - prev.x, p.z - prev.z) });
-      prev = p;
     }
   }
   const sign = (text, x, y, z, rotY = 0, size = [2.2, 0.55], style = {}) => {
@@ -124,42 +112,63 @@ export function buildGrounds(kit) {
   grassMap.anisotropy = 8;
   const ground = add(mesh(gg, new THREE.MeshLambertMaterial({ map: grassMap }), { receive: true }), C, 0, C);
 
-  // ---------- the café terrace, on the grass: tables, a coffee cart, a vending machine ----------
+  // bright yellow gold: half metal so the yellow itself shows, a gleam on top, and a warm glow from within by day
+  // that dims at night so it doesn't shine like a lamp in the dark
+  const goldMat = new THREE.MeshStandardMaterial({ color: '#ffd400', metalness: 0.5, roughness: 0.25, envMap: kit.goldEnv, envMapIntensity: 1.1, emissive: '#c99400', emissiveIntensity: 0.35 });
+  glows.push((dark) => {
+    goldMat.emissiveIntensity = 0.35 - 0.31 * dark;
+    goldMat.envMapIntensity = 1.1 - 0.75 * dark; // the studio light it reflects goes down with the sun
+  });
+
+  // ---------- the terrace: colourful picnic mats on the grass, a beach parasol at each, string lights, vending machines ----------
   const white = mat('#fffaf0');
   const metal = mat('#3b3a36');
-  const shades = ['#ead8b4', '#c9dcc6', '#f0cdb6']; // soft sand, sage and peach parasols
-  L.terrace.tables.forEach((t, k) => {
-    const [x, z] = P(t);
-    add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 28), white, { cast: true, receive: true }), x, 0.74, z);
-    add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.72, 8), metal), x, 0.37, z);
-    add(mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.03, 16), metal), x, 0.02, z);
-    add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.6, 8), white), x, 1.5, z);
-    add(mesh(new THREE.ConeGeometry(1.2, 0.42, 12), mat(shades[k % 3]), { cast: true }), x, 2.25, z);
-    add(mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.09, 12), mat('#ffffff')), x + 0.14, 0.81, z + 0.06); // a cup
-  });
-  for (const s of L.seats) {
-    const t = L.terrace.tables[s.table];
-    const face = Math.atan2(t.x - s.x, t.y - s.y); // the sitter faces the table
-    const chair = new THREE.Group();
-    const seat = mesh(new THREE.BoxGeometry(0.42, 0.05, 0.42), white, { cast: true });
-    seat.position.y = 0.43;
-    const back = mesh(new THREE.BoxGeometry(0.42, 0.42, 0.05), white, { cast: true });
-    back.position.set(0, 0.66, -0.2);
-    chair.add(seat, back);
-    for (const [ox, oz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) {
-      const leg = mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.42, 6), metal);
-      leg.position.set(ox, 0.21, oz);
-      chair.add(leg);
+  const matStripes = [['#e5484d', '#fff4e6'], ['#2f80c8', '#ffe28a'], ['#16a34a', '#fdf6d8'], ['#f08a24', '#ffffff'], ['#8e5bd8', '#ffe1ec']];
+  const shades = ['#ff7a59', '#4fb3e8', '#ffd43b', '#6dd3a0'];
+  L.terrace.picnics.forEach((m, k) => {
+    const [x, z] = P(m);
+    // a woven mat in bold stripes, with a fringe of the lighter colour at the ends
+    const [a, b] = matStripes[k % matStripes.length];
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 192;
+    const g = c.getContext('2d');
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? b : a;
+      g.fillRect(i * 32, 0, 32, 192);
     }
-    chair.rotation.y = face;
-    add(chair, ...[s.x * U, 0, s.y * U]);
-  }
+    g.fillStyle = 'rgba(255, 255, 255, 0.12)'; // the weave
+    for (let y = 0; y < 192; y += 6) g.fillRect(0, y, 256, 2);
+    g.fillStyle = b;
+    g.fillRect(0, 0, 256, 10);
+    g.fillRect(0, 182, 256, 10);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    const rug = mesh(new THREE.BoxGeometry(1.8, 0.02, 1.35), new THREE.MeshLambertMaterial({ map: t }), { receive: true });
+    rug.rotation.y = m.rot + Math.PI / 2; // its stripes run across, its long side between the two places
+    add(rug, x, 0.012, z);
+    // a beach parasol planted at the mat's side, leaning over it
+    const px = x + Math.cos(m.rot) * 0.7;
+    const pz = z - Math.sin(m.rot) * 0.7;
+    const pole = mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.1, 8), white);
+    pole.position.set(px, 1.05, pz);
+    root.add(pole);
+    const shade = mesh(new THREE.ConeGeometry(1.2, 0.42, 12), mat(shades[k % shades.length]), { cast: true });
+    shade.position.set(px, 2.15, pz);
+    root.add(shade);
+    // a picnic basket on the mat
+    const basket = mesh(new THREE.BoxGeometry(0.28, 0.16, 0.2), mat('#c9965e'), { cast: true });
+    basket.position.set(x - Math.cos(m.rot) * 0.45, 0.1, z + Math.sin(m.rot) * 0.45);
+    basket.rotation.y = m.rot;
+    root.add(basket);
+  });
   // string lights over the terrace
   const bulbMat = new THREE.MeshBasicMaterial({ color: '#fff1c2' });
-  const tables = L.terrace.tables.map(P);
+  const tables = L.terrace.picnics.map(P);
   const lx0 = Math.min(...tables.map((t) => t[0])) - 1.6;
   const lx1 = Math.max(...tables.map((t) => t[0])) + 1.6;
-  const lz = Math.max(...tables.map((t) => t[1])) + 1.2;
+  const lz = Math.max(...tables.map((t) => t[1])) + 1.4;
   for (const x of [lx0, lx1]) add(mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.7, 8), mat('#5b4636'), { cast: true }), x, 1.35, lz);
   const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 8, 6), bulbMat, 18);
   for (let k = 0; k < 18; k++) {
@@ -197,7 +206,7 @@ export function buildGrounds(kit) {
       const poop = gltf.scene;
       poop.traverse((o) => {
         if (o.isMesh) {
-          o.material = new THREE.MeshStandardMaterial({ color: '#ffcc4d', metalness: 1, roughness: 0.18, envMap: kit.goldEnv, envMapIntensity: 1.3, emissive: '#5a3a00', emissiveIntensity: 0.12 }); // polished gold
+          o.material = goldMat;
           o.castShadow = true;
         }
       });
@@ -205,8 +214,8 @@ export function buildGrounds(kit) {
       poop.position.set(x, 0.78, z);
       root.add(poop);
     });
-    // a warm light on it at night
-    const glow = new THREE.PointLight(lampColor, lampPower * 0.6, 9, 1.6);
+    // a soft light on it at night, no more than the lanterns round it
+    const glow = new THREE.PointLight(lampColor, lampPower * 0.25, 7, 1.8);
     glow.position.set(x, 3.6, z + 2.4);
     lamps.add(glow);
   }
@@ -266,16 +275,11 @@ export function buildGrounds(kit) {
     roof.scale.set(1, 1, 0.7);
     add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
     block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1); // a wooden fascia over the doors
-    // little warm lamps between the doors
-    const glow = new THREE.MeshBasicMaterial({ color: '#ffe3a6' });
-    for (let k = 0; k <= 8; k++) {
-      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.3, z1 + 0.08);
-    }
     planter(x0 - 0.5, z1 + 0.5, 1.1, 5);
     planter(x1 + 0.5, z1 + 0.5, 1.1, 6);
   }
 
-  // ---------- the 쾌변 exercise ground: a wide lawn in a clearing, mats in rows, a white picket fence ----------
+  // ---------- the 쾌변 exercise ground: a wide open lawn in a clearing, mats in rows, walk in from any side ----------
   {
     const [x, z] = P(L.exercise);
     const r = L.exercise.r * U;
@@ -284,8 +288,6 @@ export function buildGrounds(kit) {
     L.mats.forEach((m, k) => {
       block(m.w * U, 0.03, m.d * U, mat(matColors[k % matColors.length]), m.x * U, 0.02, m.y * U, { receive: true });
     });
-    // the fence goes round the lawn, open on the plaza side (west) where the path comes in
-    picketArc(x, z, r + 0.15, -Math.PI * 0.8, Math.PI * 0.8);
     flowerPatch(x - r * 0.15, z - r - 0.6, 1.6, 26, 11);
     flowerPatch(x - r * 0.2, z + r + 0.6, 1.6, 26, 12);
   }
@@ -342,16 +344,33 @@ export function buildGrounds(kit) {
     root.add(shrubMesh, cores, tuftMesh);
   }
 
-  // ---------- lanterns up the way in, round the courtyard and by each place; the forest round the edge ----------
-  const lampCount = L.lampPosts.length;
-  const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 2.6, 6), mat('#5b4636'), lampCount);
-  const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color: '#fff1c2' }), lampCount);
-  L.lampPosts.forEach((l, k) => {
-    const [x, z] = P(l);
-    posts.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 1.3, z));
-    heads.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 2.66, z));
-  });
-  root.add(posts, heads);
+  // ---------- lanterns up the way in and round the courtyard: low garden lanterns, a paper box on a wooden post
+  // under a little hipped cap. Cream paper by day, glowing warm at night ----------
+  {
+    const n = L.lampPosts.length;
+    const wood = mat('#4a3a2c');
+    const paper = new THREE.MeshLambertMaterial({ color: '#f3e7cc', emissive: '#ffb85c', emissiveIntensity: 0.05 });
+    glows.push((dark) => (paper.emissiveIntensity = 0.05 + 1.05 * dark));
+    const parts = [
+      [new THREE.BoxGeometry(0.4, 0.12, 0.4), mat('#8d8a82'), 0.06], // a stone footing
+      [new THREE.BoxGeometry(0.09, 1.25, 0.09), wood, 0.72], // the post
+      [new THREE.BoxGeometry(0.34, 0.05, 0.34), wood, 1.37], // the tray the lantern sits on
+      [new THREE.BoxGeometry(0.27, 0.36, 0.27), paper, 1.57], // the paper lantern
+      [new THREE.BoxGeometry(0.3, 0.025, 0.3), wood, 1.76], // its top frame
+      [new THREE.ConeGeometry(0.3, 0.2, 4).rotateY(Math.PI / 4), wood, 1.87], // the little roof
+      [new THREE.SphereGeometry(0.035, 8, 6), wood, 1.98], // a knob on top
+    ];
+    const m4 = new THREE.Matrix4();
+    for (const [geo, material, y] of parts) {
+      const im = new THREE.InstancedMesh(geo, material, n);
+      L.lampPosts.forEach((l, k) => {
+        const [x, z] = P(l);
+        im.setMatrixAt(k, m4.makeTranslation(x, y, z));
+      });
+      im.castShadow = material !== paper;
+      root.add(im);
+    }
+  }
 
   // ---------- trees, 동물의 숲 style: round, soft broadleaf trees and some cedars ----------
   // the forest beyond the path is scenery; the few trees on the grounds (L.trees) are obstacles on the server too
@@ -484,7 +503,7 @@ export function buildGrounds(kit) {
   flowerPatch(L.gate.x * U - 2.2, L.gate.y * U - 1.4, 0.9, 18, 40);
   flowerPatch(L.gate.x * U + 2.2, L.gate.y * U - 1.4, 0.9, 18, 41);
 
-  // ---------- build the flowers and fences gathered above ----------
+  // ---------- build the flowers gathered above ----------
   {
     const petals = ['#ffffff', '#f6c9d4', '#f7e39a', '#d9c8f0', '#ffffff', '#f4d1a8']; // small wild flowers in soft colours
     const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 10, 6), new THREE.MeshLambertMaterial({ color: '#ffffff' }), flowers.length);
@@ -495,17 +514,6 @@ export function buildGrounds(kit) {
       leafs.setMatrixAt(k, m4.compose(v(f.x, 0.1 * f.s, f.z), q0, v(f.s, f.s, f.s)));
     });
     root.add(heads, leafs);
-    const white = mat('#6b5844'); // weathered dark wood, not a white picket fence
-    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.62, 0.05), white, pickets.length);
-    pickets.forEach((p, k) => posts.setMatrixAt(k, m4.compose(v(p.x, 0.31, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -p.a, 0)), v(1, 1, 1))));
-    const bars = new THREE.InstancedMesh(new THREE.BoxGeometry(0.04, 0.05, 1), white, rails.length * 2);
-    rails.forEach((r, k) => {
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, r.rot, 0));
-      bars.setMatrixAt(k * 2, m4.compose(v(r.x, 0.22, r.z), q, v(1, 1, r.len)));
-      bars.setMatrixAt(k * 2 + 1, m4.compose(v(r.x, 0.46, r.z), q, v(1, 1, r.len)));
-    });
-    posts.castShadow = bars.castShadow = true;
-    root.add(posts, bars);
   }
 
   // mountains far off, blue in the haze, so the place has a horizon round it

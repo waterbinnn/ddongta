@@ -44,8 +44,20 @@ const ROLL_MS = 1600;
 const PANTS_MS = 4000;
 const BELL_GAP_MS = 5500;
 
-const ADJ = ['급한', '묵직한', '시원한', '조용한', '다급한', '느긋한', '수상한', '당당한', '촉촉한', '굳센', '쾌활한', '소심한', '배부른', '졸린', '비장한'];
-const NOUN = ['고구마', '바나나', '감자', '옥수수', '두부', '호떡', '만두', '푸딩', '식빵', '김밥', '도토리', '양배추', '순두부', '찐빵', '군밤'];
+// random names (PLAN 3장): 「형용사 + 화장실·광장 물건」, 30 x 30, nothing rude and no 「똥」
+const ADJ = ['개운한', '시원한', '느긋한', '뽀송한', '말랑한', '따끈한', '촉촉한', '홀가분한', '든든한', '졸린', '조용한', '수줍은', '꾸벅꾸벅 조는', '콧노래 부르는', '멍때리는',
+  '기지개 켜는', '여유로운', '상쾌한', '포근한', '나른한', '설레는', '해맑은', '꼼꼼한', '느릿한', '반짝이는', '산뜻한', '다정한', '엉뚱한', '차분한', '한가로운'];
+const NOUN = ['두루마리', '휴지심', '비누거품', '물방울', '방향제', '환풍기', '타일', '세면대', '에티켓벨', '바나나우유', '연유라떼', '요구르트', '푸룬', '파라솔', '체조 매트',
+  '풀잎', '구름', '달빛', '손수건', '슬리퍼', '수도꼭지', '거울', '돗자리', '콩나무', '조약돌', '연잎', '등불', '솔방울', '햇살', '바람'];
+// a name nobody else in the room has right now
+function freshName(room) {
+  const taken = new Set([...room.users].map((u) => u.name));
+  for (let k = 0; k < 20; k++) {
+    const name = `${pick(ADJ)} ${pick(NOUN)}`;
+    if (!taken.has(name)) return name;
+  }
+  return `${pick(ADJ)} ${pick(NOUN)}`;
+}
 const COLORS = ['#ff8a65', '#4fc3f7', '#aed581', '#ffd54f', '#ba68c8', '#4db6ac', '#f06292', '#9575cd', '#ffb74d', '#81c784'];
 const BAD_WORDS = /시발|씨발|ㅅㅂ|병신|ㅂㅅ|개새끼|좆|fuck/gi;
 const PHONE = /01[016789][-\s.]?\d{3,4}[-\s.]?\d{4}/g;
@@ -146,6 +158,18 @@ const POCKET_MAX = 1; // one drink, held in your hand
 const DRINKS = ['banana', 'latte', 'americano', 'yogurt', 'prune'];
 const KICK_DROP = 0.3; // about one kick in three drops a drink
 const GOLD_CAN = 0.01;
+
+// 변비 goes with one drink or one 쾌변 체조 move: the colour comes back to the face and the signal comes.
+// Sitting down, it all comes out at once; walking about, the next sitting goes smoothly.
+function unstick(room, u) {
+  if (!u.stuck) return;
+  u.stuck = false;
+  u.signal = true;
+  room.dirty = true;
+  broadcast(room, { t: 'signal', id: u.id, cure: 1 });
+  if (u.stall !== -1 || u.squat) poopNow(room, u);
+  else u.progress = 0;
+}
 
 function poopNow(room, u) {
   u.progress = 0;
@@ -279,7 +303,7 @@ setInterval(() => {
       if (!u.holding || (u.stall === -1 && !u.squat)) continue;
       u.progress += PUSH_PER_TICK;
       room.dirty = true;
-      // halfway through, now and then it gets stuck: 변비. Only a drink gets it going again (or the 쾌변 체조 signal keeps it away)
+      // halfway through, now and then it gets stuck: 변비. One drink or one 쾌변 체조 move gets it going again (and the signal keeps it away)
       if (u.progress >= 50 && !u.checked) {
         u.checked = true;
         if (!u.signal && Math.random() < STUCK_CHANCE) {
@@ -351,7 +375,7 @@ wss.on('connection', (ws, req) => {
   const now = Date.now();
   const user = {
     id: nextId++,
-    name: isValidName(q.get('name')) ? q.get('name') : `${pick(ADJ)} ${pick(NOUN)}`,
+    name: isValidName(q.get('name')) ? q.get('name') : freshName(room),
     color: pick(COLORS),
     ws,
     x: GROUNDS.spawn.x + (Math.random() - 0.5) * 240, // just inside the gate
@@ -505,14 +529,7 @@ wss.on('connection', (ws, req) => {
       }
       room.dirty = true;
       broadcast(room, { t: 'drink', id: user.id, drink, cure: wasStuck ? 1 : 0 });
-      if (wasStuck) {
-        setTimeout(() => {
-          if (!room.users.has(user) || !user.stuck) return;
-          user.stuck = false;
-          if (user.stall !== -1 || user.squat) poopNow(room, user);
-          else user.progress = 0;
-        }, 1800);
-      }
+      if (wasStuck) setTimeout(() => room.users.has(user) && unstick(room, user), 1800);
     } else if (m.t === 'hold') {
       user.holding = Boolean(m.on) && (user.stall !== -1 || user.squat);
       room.dirty = true;
@@ -533,17 +550,11 @@ wss.on('connection', (ws, req) => {
       user.bench = false;
       user.exCount++;
       room.dirty = true;
-      if (user.exCount >= EX_FOR_SIGNAL && !user.signal) {
+      if (user.stuck) unstick(room, user);
+      else if (user.exCount >= EX_FOR_SIGNAL && !user.signal) {
         user.signal = true;
         broadcast(room, { t: 'signal', id: user.id });
       }
-    } else if (m.t === 'chat') {
-      const now = Date.now();
-      if (now - user.lastChat < CHAT_GAP_MS) return;
-      const text = cleanChat(m.text);
-      if (!text) return;
-      user.lastChat = now;
-      broadcast(room, { t: 'chat', id: user.id, name: user.name, text });
     }
   });
 

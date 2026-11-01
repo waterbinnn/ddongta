@@ -208,6 +208,21 @@ export function disposePerson(p) {
   p.face?.material.dispose();
 }
 
+// the face's colour: going red as you push (0 to 1), yellow when 변비 sets in (0 to 1).
+// Each person gets their own skin material for the head the first time, so others aren't tinted too.
+const RED = new THREE.Color('#ff7f6e');
+const YELLOW = new THREE.Color('#ecd24a');
+export function setFlush(p, red = 0, yellow = 0) {
+  const key = `${red.toFixed(2)}|${yellow.toFixed(2)}`;
+  if (p.flushKey === key || !p.parts.head) return;
+  p.flushKey = key;
+  if (!p.flushMat) {
+    p.flushMat = p.parts.head.material.clone();
+    for (const n of ['head', 'ear_L', 'ear_R']) if (p.parts[n]) p.parts[n].material = p.flushMat;
+  }
+  p.flushMat.color.set(LOOK.skin).lerp(RED, red * 0.65).lerp(YELLOW, yellow * 0.75);
+}
+
 export function setFace(p, expr) {
   if (p.expr === expr || !p.face) return;
   p.expr = expr;

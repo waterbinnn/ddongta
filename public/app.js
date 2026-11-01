@@ -1449,7 +1449,7 @@ function handle(m) {
     me.ready = false;
     me.s = -1;
     if (m.notice) toast(m.notice);
-    else if (!greeted) toast('어서 오세요. 빈 칸에 앉아 편하게 볼일 보세요');
+    else if (!greeted) toast('안녕하세요. 편하게 똥타임 가지세요');
     greeted = true;
   } else if (m.t === 'state') {
     applyState(m);

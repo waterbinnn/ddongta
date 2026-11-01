@@ -3152,9 +3152,9 @@ function renderActions() {
   // the bottom bar: the one main thing to do here (Space), and only what belongs to this place
   if (mode === 'inside') {
     // in my own room everything is on the side rail; in a public stall, washing and going out are here
-    if (!inRoom) bar.append(withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+    if (!inRoom) bar.append(miniBtn('wash', '손 씻기', washFromStall), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   } else if (mode === 'squatting') {
-    bar.append(withKey(miniBtn('jump', '일어나기', () => send({ t: 'squat', on: false })), 'F'));
+    bar.append(miniBtn('jump', '일어나기', () => send({ t: 'squat', on: false })));
   } else if (mode === 'standing') {
     // up and about in my own room: the seats are on the side rail
   } else if (mode === 'resting') {
@@ -3164,9 +3164,9 @@ function renderActions() {
     b.disabled = true;
     bar.append(b);
   } else if (mode === 'lying') {
-    bar.append(withKey(mainBtn('jump', '일어나기', () => send({ t: 'lie', on: false })), 'F'));
+    bar.append(mainBtn('jump', '일어나기', () => send({ t: 'lie', on: false })));
   } else if (mode === 'benched') {
-    bar.append(withKey(mainBtn('jump', '일어나기', () => send({ t: 'bench', on: false })), 'F'));
+    bar.append(mainBtn('jump', '일어나기', () => send({ t: 'bench', on: false })));
   } else if (mode === 'sink') {
     bar.append(mainBtn('wash', '손 씻기', washHands));
   } else if (mode === 'near') {
@@ -3204,19 +3204,19 @@ function renderActions() {
   const rail = $('#rail');
   rail.innerHTML = '';
   if ((me.pk || []).length && mode !== 'rolling') {
-    const b = withKey(miniBtn('drink', '쾌변음료 마시기', drinkNow), 'C');
+    const b = miniBtn('drink', '쾌변음료 마시기', drinkNow);
     if (me.cn) b.classList.add('urge'); // stuck: this is the way out
     rail.append(b);
   }
   const pickHere = ((mode === 'inside' || mode === 'squatting') && me.un) || (canMove && mode !== 'rolling' && nearDropHere());
-  if (pickHere) rail.append(withKey(miniBtn('poop', '줍기', () => send({ t: 'pick' })), 'G'));
-  if (mode === 'inside') rail.append(withKey(miniBtn('lunch', '도시락 먹기', () => send({ t: 'lunch' })), 'L'));
+  if (pickHere) rail.append(miniBtn('poop', '줍기', () => send({ t: 'pick' })));
+  if (mode === 'inside') rail.append(miniBtn('lunch', '도시락 먹기', () => send({ t: 'lunch' })));
   // out walking about (the exercise lawn too): sit or lie down right where you are
   // out walking about (the exercise lawn too): sit or lie down right where you are. Round buttons in the bottom right
   // corner, across from the stick, always out (never folded away)
   if (mode === 'far' || mode === 'lawn') {
-    for (const [ico, label, fn, key] of [['bench', '앉기', sitHere, 'F'], ['lie', '눕기', lieDown, 'Z']]) {
-      const b = withKey(miniBtn(ico, label, fn), key);
+    for (const [ico, label, fn] of [['bench', '앉기', sitHere], ['lie', '눕기', lieDown]]) {
+      const b = miniBtn(ico, label, fn);
       b.classList.add('pose');
       rail.append(b);
     }
@@ -3228,26 +3228,25 @@ function renderActions() {
       const by = nearSeat();
       const toilet = () => { roomStanding = false; danceUntil = 0; };
       // at the basin, washing your hands comes first (highlighted, Space or H)
-      if (nearBasin()) rail.append(withKey(mainBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('bench', '변기에 앉기', toilet), 'F'));
-      else if (by >= 0) rail.append(mainBtn('bench', room.seats[by].label, () => { roomSeat = by; danceUntil = 0; }), withKey(miniBtn('bench', '변기에 앉기', toilet), 'F'));
-      else rail.append(withKey(mainBtn('bench', '변기에 앉기', toilet), 'F'));
+      if (nearBasin()) rail.append(mainBtn('wash', '손 씻기', washFromStall), miniBtn('bench', '변기에 앉기', toilet));
+      else if (by >= 0) rail.append(mainBtn('bench', room.seats[by].label, () => { roomSeat = by; danceUntil = 0; }), miniBtn('bench', '변기에 앉기', toilet));
+      else rail.append(mainBtn('bench', '변기에 앉기', toilet));
     }
     // then my own room's little things, standing or sitting: read, dance, the lights, wash, go
     rail.append(
-      withKey(miniBtn('read', bookOpen ? '책 덮기' : '책 읽기', toggleBook), 'N'),
-      withKey(miniBtn('dance', '춤추기', dance), 'K'),
-      withKey(miniBtn('lamp', '조명 바꾸기', nextMood), 'T'),
+      miniBtn('read', bookOpen ? '책 덮기' : '책 읽기', toggleBook),
+      miniBtn('dance', '춤추기', dance),
+      miniBtn('lamp', '조명 바꾸기', nextMood),
     );
-    if (!nearBasin()) rail.append(withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'));
+    if (!nearBasin()) rail.append(miniBtn('wash', '손 씻기', washFromStall));
   }
-  if (mode === 'inside' || mode === 'standing' || mode === 'resting') rail.append(withKey(miniBtn('bird', '에티켓벨', ringBell), 'B'));
+  if (mode === 'inside' || mode === 'standing' || mode === 'resting') rail.append(miniBtn('bird', '에티켓벨', ringBell));
   if (inRoom) rail.append(withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
-  labelKeys(rail);
   // (phones) the fold-away button shows only when there are small buttons to fold away
   const fold = $('#railToggle');
   fold.hidden = !rail.querySelector('.act.mini:not(.pose)');
   if (fold.hidden) setRailOpen(false);
-  labelKeys(bar);
+  labelKeys([bar, rail]);
 }
 
 // Phones: the rail's small buttons fold away behind one round button (CSS hides them while it's shut). A tap on it
@@ -3260,25 +3259,25 @@ $('#railToggle').addEventListener('click', () => setRailOpen(!$('#rail').classLi
 $('#rail').addEventListener('click', (e) => e.target.closest('.act.mini') && setRailOpen(false));
 addEventListener('pointerdown', (e) => !e.target.closest?.('#rail, #railToggle') && setRailOpen(false));
 
-// a button that always answers to the same key, wherever it shows up
+// a button that always answers to the same key, wherever it shows up (only 나가기 has one: Esc)
 function withKey(b, key) {
   b.dataset.key = key;
   return b;
 }
 
-// every button shows its key beside it, like the sauna's bar: Space for the main one, then 1, 2, 3 …
-// (buttons with their own key keep it)
+// every button shows its key beside it: Space for the main (highlighted) one, then 1, 2, 3 … for the rest in the
+// order they're on screen, the bar's first and then the side ones (and Esc for 나가기)
 // (in a stall or a squat, Space is the push button)
-function labelKeys(bar) {
+function labelKeys(groups) {
   let n = 1;
   let spaceTaken = Boolean($('#pushPad .act.push'));
-  for (const b of bar.querySelectorAll('button')) {
+  for (const b of groups.flatMap((g) => [...g.querySelectorAll('button')])) {
     let key;
-    if (b.dataset.key) key = b.dataset.key; // a button with its own key (F, G, C, H, Esc …)
+    if (b.dataset.key === 'Esc') key = 'Esc';
     else if (!spaceTaken && b.classList.contains('main')) {
       key = 'Space';
       spaceTaken = true;
-    } else key = String(n++);
+    } else key = String(n++ % 10); // (the tenth is 0)
     b.dataset.key = key;
     b.insertAdjacentHTML('beforeend', `<kbd>${key}</kbd>`);
   }
@@ -4486,10 +4485,10 @@ window.addEventListener('keydown', (e) => {
     // holding a direction: Space means run, not sit or knock
     if (MOVE_KEYS.some((k) => keys.has(k))) return;
     // otherwise Space is the main button, whatever it is right now (knocks repeat while held)
-    const main = $('#actions').querySelector('button[data-key="Space"]') || $('#actions').querySelector('button.main'); // a main button with its own key answers to Space too
+    const main = document.querySelector('#actions button[data-key="Space"], #rail button[data-key="Space"]');
     if (main && !main.disabled && (!e.repeat || main.classList.contains('knock'))) main.click();
-  } else if (/^Digit[1-9]$/.test(e.code)) {
-    const b = $('#actions').querySelector(`button[data-key="${e.code.slice(5)}"]`);
+  } else if (/^(Digit|Numpad)[0-9]$/.test(e.code)) {
+    const b = document.querySelector(`#actions button[data-key="${e.code.slice(-1)}"], #rail button[data-key="${e.code.slice(-1)}"]`);
     if (b && !b.disabled && !e.repeat) b.click();
   } else if (e.code === 'KeyR') {
     recenterCam();
@@ -4501,11 +4500,6 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'KeyE') {
     cam.tYaw = clamp(cam.tYaw - 0.35, -YAW_MAX, YAW_MAX);
     manualCamAt = performance.now();
-  } else if (/^Key[A-Z]$/.test(e.code)) {
-    // the buttons with their own letter key: 앉기·일어나기 F, 줍기 G, 쾌변음료 C, 손 씻기 H, 도시락 L, 에티켓벨 B
-    const k = e.code.slice(3);
-    const b = document.querySelector(`#actions button[data-key="${k}"], #rail button[data-key="${k}"]`);
-    if (b && !b.disabled && !e.repeat) b.click();
   } else if (e.key === '=' || e.key === '+') {
     cam.tDist = clamp(cam.tDist * 0.8, DIST_MIN, DIST_MAX);
     manualCamAt = performance.now();

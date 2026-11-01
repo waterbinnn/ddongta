@@ -36,7 +36,7 @@ NECK_Z = 0.50
 HEAD_C = Vector((0, 0, NECK_Z + 0.26))   # middle of the head
 HEAD_R = 0.29
 HEAD_SCALE = Vector((1.06, 1.0, 0.92))   # wider than tall, like a mochi
-SHOULDER = Vector((0.112, 0, 0.445))   # tucked into the top of the body, so the arm grows out of it
+SHOULDER = Vector((0.098, 0, 0.47))   # at the round top corners of the tee
 LEG_X = 0.068
 
 
@@ -89,6 +89,26 @@ def capsule_bm(top, bottom, r_top, r_bottom, segs=16, rings=12):
     return bm
 
 
+def squircle_bm(top_z, bottom_z, center_xy, rx, ry, n=4.0, segs=28, rx_bottom=None, ry_bottom=None):
+    """An upright tube with a rounded-square section and flat ends (shorts that meet flat, without a V between
+    them); give it a wider bottom and it flares out like a tee."""
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=segs, radius1=1.0, radius2=1.0, depth=1.0)
+    for v in bm.verts:
+        x, y = v.co.x, v.co.y
+        r = math.hypot(x, y)
+        if r > 1e-6:
+            c, s = x / r, y / r
+            x = math.copysign(abs(c) ** (2 / n), c) * r
+            y = math.copysign(abs(s) ** (2 / n), s) * r
+        t = v.co.z + 0.5  # 1 at the top
+        z = bottom_z + t * (top_z - bottom_z)
+        wx = rx if rx_bottom is None else rx_bottom + (rx - rx_bottom) * t
+        wy = ry if ry_bottom is None else ry_bottom + (ry - ry_bottom) * t
+        v.co = Vector((center_xy[0] + x * wx, center_xy[1] + y * wy, z))
+    return bm
+
+
 def bean_bm(center, radii, flare=0.12):
     """An ellipsoid a little wider at the bottom, like a bean."""
     bm = ellipsoid_bm((0, 0, 0), radii, 24, 14)
@@ -101,31 +121,35 @@ def bean_bm(center, radii, flare=0.12):
 
 
 # ---------- body ----------
-# the seat of the shorts: sits up at the waist, flat underneath, no bulge between the legs
-seat = ellipsoid_bm((0, 0, HIP_Z + 0.05), (0.134, 0.108, 0.06), 24, 14)
-for v in seat.verts:
-    v.co.z = max(v.co.z, HIP_Z + 0.008)
-hips = new_object('hips', seat, Vector((0, 0, HIP_Z)))
-torso = new_object('torso', bean_bm((0, 0, WAIST_Z + 0.1), (0.152, 0.128, 0.145), flare=0.05), Vector((0, 0, WAIST_Z)), hips)   # tee, round shoulders
+# the seat of the shorts: as wide and deep as the two legs of the shorts together, so nothing sticks out
+hips = new_object('hips', squircle_bm(HIP_Z + 0.075, HIP_Z - 0.005, (0, 0), 0.13, 0.068, n=3.2), Vector((0, 0, HIP_Z)))
+# an A-line tee: narrow at the round shoulders, flaring a little to a hem that hangs over the top of the shorts
+tee = squircle_bm(NECK_Z - 0.01, HIP_Z + 0.035, (0, 0), 0.098, 0.084, n=3.0, rx_bottom=0.136, ry_bottom=0.106)
+made = bmesh.ops.create_uvsphere(tee, u_segments=24, v_segments=12, radius=1.0)
+for v in made['verts']:
+    v.co = Vector((v.co.x * 0.1, v.co.y * 0.086, v.co.z * 0.04)) + Vector((0, 0, NECK_Z - 0.01))
+torso = new_object('torso', tee, Vector((0, 0, WAIST_Z)), hips)
 head = new_object('head', ellipsoid_bm(HEAD_C, (HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z), 40, 24), Vector((0, 0, NECK_Z)), torso)
 
 for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they face -y
     ellipsoid(f'ear_{tag}', (0, 0, NECK_Z), HEAD_C + Vector((side * 0.3, 0.01, -0.03)), (0.04, 0.034, 0.055), head)
     sh = Vector((side * SHOULDER.x, 0, SHOULDER.z))
     # a puffy short sleeve, then a bare arm hanging a little away from the body, ending in a round hand
-    elbow = sh + Vector((side * 0.03, 0, -0.085))
-    wrist = sh + Vector((side * 0.052, 0, -0.185))
-    arm = new_object(f'arm_{tag}', capsule_bm(sh, elbow, 0.056, 0.05), sh, torso)
-    hand = capsule_bm(elbow + Vector((0, 0, 0.02)), wrist, 0.034, 0.033)
-    made = bmesh.ops.create_uvsphere(hand, u_segments=14, v_segments=10, radius=0.043)
+    # a short sleeve flaring a little at the end, a thin arm, and a round ball of a hand
+    elbow = sh + Vector((side * 0.03, 0, -0.065))
+    wrist = sh + Vector((side * 0.06, 0, -0.175))
+    arm = new_object(f'arm_{tag}', capsule_bm(sh, elbow, 0.044, 0.054), sh, torso)
+    hand = capsule_bm(elbow, wrist, 0.025, 0.024)
+    made = bmesh.ops.create_uvsphere(hand, u_segments=16, v_segments=12, radius=0.05)
     for v in made['verts']:
-        v.co += wrist + Vector((side * 0.004, -0.004, -0.018))
+        v.co += wrist + Vector((side * 0.008, 0, -0.022))
     new_object(f'hand_{tag}', hand, sh, arm)
     hip = Vector((side * LEG_X, 0, HIP_Z))
-    leg = ellipsoid(f'leg_{tag}', hip, hip + Vector((0, 0, -0.085)), (0.052, 0.055, 0.095), hips)   # bare legs under the shorts
+    leg = new_object(f'leg_{tag}', capsule_bm(hip + Vector((0, 0, -0.01)), hip + Vector((0, 0, -0.15)), 0.042, 0.04), hip, hips)   # thin bare legs
     # a short leg of the shorts round each thigh, so it reads as shorts, not a skirt
-    new_object(f'short_{tag}', capsule_bm(hip + Vector((-side * 0.006, 0, 0.035)), hip + Vector((side * 0.004, 0, -0.03)), 0.064, 0.062), hip, leg)   # ends well above the knee
-    ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.172)), (0.062, 0.082, 0.036), leg)
+    # each leg of the shorts: flat-sided, so the two meet in a plain line down the middle; flat hems above the knee
+    new_object(f'short_{tag}', squircle_bm(hip.z + 0.02, hip.z - 0.06, (side * 0.066, 0), 0.064, 0.066), hip, leg)
+    ellipsoid(f'shoe_{tag}', hip, hip + Vector((0, -0.02, -0.17)), (0.058, 0.08, 0.04), leg)   # chunky little shoes
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=False, segments=20, radius1=0.072, radius2=0.066, depth=0.05)
     for v in bm.verts:

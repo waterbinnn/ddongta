@@ -1,5 +1,5 @@
 // 3D people: one chibi character from Blender (public/models/person.glb, made by tools/blender/person.py).
-// Everyone who comes as a person looks the same, like the monks on 산사; they are posed in code
+// Everyone who comes as a person looks the same apart from hair colour; they are posed in code
 // (legs and arms swing on their joints) and the face is a drawn decal that changes with the mood.
 import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
@@ -25,6 +25,14 @@ export const peopleReady = new Promise((resolve) => {
 
 // the one look: fair skin, soft brown hair, a butter-yellow tee, sky-blue shorts, white sneakers
 export const LOOK = { skin: '#fff1e8', hair: '#6b4630', shirt: '#ffe28a', pants: '#8db6ea', shoes: '#fbf8f2', undies: '#ffffff' };
+
+// the only thing that differs between people: hair colour, picked from their id so it stays the same
+const HAIR_COLORS = ['#6b4630', '#2b2226', '#8a4b2a', '#d9814a', '#e8c26a'];
+export function hairFor(id) {
+  let x = Math.imul((id | 0) + 1, 2654435761) >>> 0;
+  x ^= x >>> 15;
+  return HAIR_COLORS[(x >>> 0) % HAIR_COLORS.length];
+}
 
 // soft cartoon shading: three flat tones instead of a smooth gradient
 const toonRamp = (() => {

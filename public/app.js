@@ -1,6 +1,6 @@
 // 똥타 — a roomy three.js restroom rendered at low resolution, with hand-drawn pixel sprites standing in it.
 import * as THREE from '/vendor/three.module.js';
-import { peopleReady, makePerson, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
+import { peopleReady, makePerson, hairFor, disposePerson, setFace, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 
 // ---------- world constants (keep in sync with server.js) ----------
 const STALL_W = 110;
@@ -1378,7 +1378,7 @@ function setPile(s, count) {
 // ---------- characters ----------
 
 function makeWalker(u) {
-  const p = makePerson();
+  const p = makePerson(hairFor(u.id));
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
@@ -2047,7 +2047,7 @@ function animateStalls(dt, t) {
         s.person = null;
       }
       if (occ) {
-        s.person = makePerson();
+        s.person = makePerson(hairFor(occId));
         setPantsDown(s.person, true);
         s.seatSpot.add(s.person.group);
       }

@@ -256,8 +256,11 @@ export function buildGrounds(kit) {
     const floor = new THREE.MeshPhongMaterial({ map: tiled(tex.floor, (x1 - x0) / 1.2, (z1 - z0) / 1.2), shininess: 28, specular: '#3a3428' });
     strip(x0, z0, x1, z1, floor, 0.015);
     const tile = (w, h) => new THREE.MeshLambertMaterial({ map: tiled(tex.tile, w / 1.2, h / 1.2) });
-    block(x1 - x0 + 0.4, 3.0, 0.2, tile(x1 - x0, 3), (x0 + x1) / 2, 1.5, z0 - 0.1);    // back wall
-    for (const x of [x0, x1]) block(0.2, 3.0, z1 - z0, tile(z1 - z0, 3), x, 1.5, (z0 + z1) / 2); // side walls
+    const WH = L.wallH * U; // walls well over head height, so the building towers over you
+    block(x1 - x0 + 0.4, WH, 0.2, tile(x1 - x0, WH), (x0 + x1) / 2, WH / 2, z0 - 0.1);    // back wall
+    for (const x of [x0, x1]) block(0.2, WH, z1 - z0, tile(z1 - z0, WH), x, WH / 2, (z0 + z1) / 2); // side walls
+    for (const x of [x0, x1]) block(0.34, 0.16, z1 - z0 + 0.1, mat('#e8f3fa'), x, WH + 0.08, (z0 + z1) / 2); // copings
+    block(x1 - x0 + 0.5, 0.16, 0.34, mat('#e8f3fa'), (x0 + x1) / 2, WH + 0.08, z0 - 0.1);
     // the sink counter along the east wall, with a long mirror above it
     const sc = L.sinkCounter;
     const cx = ((sc.x0 + sc.x1) / 2) * U;
@@ -286,14 +289,20 @@ export function buildGrounds(kit) {
     const x1 = p.x1 * U;
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
-    const wall = new THREE.MeshLambertMaterial({ map: tiled(tex.brick, (x1 - x0) / 0.8, 3.2 / 0.4), color: '#ffe9d6' });
-    block(x1 - x0, 3.2, z1 - z0, wall, (x0 + x1) / 2, 1.6, (z0 + z1) / 2);
-    block(x1 - x0 + 0.6, 0.2, z1 - z0 + 0.6, mat('#b8775a'), (x0 + x1) / 2, 3.3, (z0 + z1) / 2); // roof
-    block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.9, z1 + 0.1);                  // a wooden fascia
+    const WH = L.wallH * U;
+    const wall = new THREE.MeshLambertMaterial({ map: tiled(tex.brick, (x1 - x0) / 0.8, WH / 0.4), color: '#ffe9d6' });
+    block(x1 - x0, WH, z1 - z0, wall, (x0 + x1) / 2, WH / 2, (z0 + z1) / 2);
+    // a pitched roof, like a cottage: a long triangular prism, eaves hanging over the walls
+    const depth = z1 - z0 + 0.9;
+    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), mat('#c4694a'), { cast: true, receive: true });
+    roof.rotation.set(-Math.PI / 2, 0, Math.PI / 2); // lying along the building, one flat face down, the ridge up
+    roof.scale.set(1, 1, 0.7);
+    add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
+    block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1);                  // a wooden fascia over the doors
     // little warm lamps between the doors
     const glow = new THREE.MeshBasicMaterial({ color: '#ffe3a6' });
     for (let k = 0; k <= 8; k++) {
-      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.35, z1 + 0.08);
+      add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glow), x0 + 0.2 + k * L.stallW * U - 0.01, 2.3, z1 + 0.08);
     }
     planter(x0 - 0.5, z1 + 0.5, 1.1, 5);
     planter(x1 + 0.5, z1 + 0.5, 1.1, 6);
@@ -353,22 +362,23 @@ export function buildGrounds(kit) {
   {
     const [x, z] = P(L.gate);
     const wood = mat('#8a5a34');
-    for (const sx of [-1.2, 1.2]) add(mesh(new THREE.CylinderGeometry(0.14, 0.16, 2.7, 10), wood, { cast: true }), x + sx, 1.35, z);
-    block(3.0, 0.32, 0.3, wood, x, 2.7, z);
-    sign('똥타', x, 2.7, z - 0.16, Math.PI, [1.2, 0.32], { bg: '#ffe28a', ink: '#5b3a0c', font: 80 });
-    sign('똥타', x, 2.7, z + 0.16, 0, [1.2, 0.32], { bg: '#ffe28a', ink: '#5b3a0c', font: 80 });
+    for (const sx of [-1.2, 1.2]) add(mesh(new THREE.CylinderGeometry(0.16, 0.19, 3.8, 10), wood, { cast: true }), x + sx, 1.9, z);
+    block(3.3, 0.36, 0.34, wood, x, 3.8, z);
+    block(2.6, 0.18, 0.24, wood, x, 3.25, z);
+    sign('똥타', x, 3.8, z - 0.18, Math.PI, [1.4, 0.36], { bg: '#ffe28a', ink: '#5b3a0c', font: 80 });
+    sign('똥타', x, 3.8, z + 0.18, 0, [1.4, 0.36], { bg: '#ffe28a', ink: '#5b3a0c', font: 80 });
   }
 
   // ---------- lamps along the path, trees round the outside ----------
   const lampCount = 24;
-  const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.06, 1.5, 6), mat('#5b4636'), lampCount);
+  const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 2.6, 6), mat('#5b4636'), lampCount);
   const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color: '#fff1c2' }), lampCount);
   for (let k = 0; k < lampCount; k++) {
     const a = (k / lampCount) * Math.PI * 2 + 0.1;
     const x = C + Math.cos(a) * L.lampR * U;
     const z = C + Math.sin(a) * L.lampR * U;
-    posts.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 0.75, z));
-    heads.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 1.55, z));
+    posts.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 1.3, z));
+    heads.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, 2.66, z));
   }
   root.add(posts, heads);
 
@@ -380,11 +390,11 @@ export function buildGrounds(kit) {
     const r = (L.treeR0 + rnd(k + 100) * (L.treeR1 - L.treeR0)) * U;
     const x = C + Math.cos(a) * r;
     const z = C + Math.sin(a) * r;
-    if (Math.abs(L.gate.x * U - x) < 3 && z > C) continue; // keep the way in clear
+    if (Math.abs(L.gate.x * U - x) < 7 && z > C) continue; // keep the way in clear, and the view through the gate
     if (Math.hypot(x - L.bush.x * U, z - L.bush.y * U) < L.bush.r * U * 0.6) continue; // a clearing in the thicket
-    treeSpots.push({ x, z, y: groundY(r), s: 1.0 + rnd(k + 200) * 0.8, cedar: rnd(k + 300) < 0.3, k });
+    treeSpots.push({ x, z, y: groundY(r), s: 1.7 + rnd(k + 200) * 1.5, cedar: rnd(k + 300) < 0.3, k }); // 4 to 8 m tall
   }
-  L.trees.forEach((t, n) => treeSpots.push({ x: t.x * U, z: t.y * U, y: 0, s: t.s, cedar: false, k: 600 + n }));
+  L.trees.forEach((t, n) => treeSpots.push({ x: t.x * U, z: t.y * U, y: 0, s: t.s * 1.5, cedar: false, k: 600 + n }));
   const round = treeSpots.filter((t) => !t.cedar);
   const cedars = treeSpots.filter((t) => t.cedar);
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.2, 1, 8), mat('#9a6a44'), treeSpots.length);
@@ -489,6 +499,14 @@ export function buildGrounds(kit) {
     root.add(posts, bars);
   }
 
+  // mountains far off, blue in the haze, so the place has a horizon round it
+  const peakMat = new THREE.MeshLambertMaterial({ color: '#8fb3c4', flatShading: true });
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2 + rnd(k + 800) * 0.25;
+    const r = 175 + rnd(k + 810) * 25;
+    const peak = mesh(new THREE.ConeGeometry(30 + rnd(k + 820) * 25, 35 + rnd(k + 830) * 40, 7), peakMat);
+    add(peak, C + Math.cos(a) * r, groundY(r) + 8, C + Math.sin(a) * r);
+  }
   // low hills on the far rim, softened by the haze
   const hillMat = new THREE.MeshLambertMaterial({ color: '#8fbf78', flatShading: true });
   for (let k = 0; k < 14; k++) {
@@ -501,7 +519,7 @@ export function buildGrounds(kit) {
 
   // ---------- night lights: a few warm lights where people gather ----------
   lampLights.length = 0;
-  const light = (x, z, share, y = 3.2) => {
+  const light = (x, z, share, y = 3.8) => {
     const l = new THREE.PointLight(lampColor, lampPower * share, 16, 1.6);
     l.position.set(x, y, z);
     lamps.add(l);

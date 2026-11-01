@@ -4,7 +4,7 @@ import * as THREE from '/vendor/three.module.js';
 
 const CM_PER_POOP = 5;
 const DRAW_MAX = 300; // past this many metres it's lost in the sky anyway
-export const beanHeight = (total) => 1.2 + (total * CM_PER_POOP) / 100; // a seedling of 1.2 m to start with
+export const beanHeight = (total) => 2.5 + (total * CM_PER_POOP) / 100; // planted at 2.5 m, so it stands out in the plaza
 export const heightText = (m) => (m < 1 ? `${Math.round(m * 100)}cm` : m < 100 ? `${m.toFixed(1)}m` : `${Math.round(m)}m`);
 
 export function makeBeanstalk(x, z) {

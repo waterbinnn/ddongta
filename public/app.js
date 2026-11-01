@@ -192,10 +192,10 @@ sceneEl.append(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(PAL.sky);
-scene.fog = new THREE.Fog(PAL.sky, 60, 230);
+scene.fog = new THREE.Fog(PAL.sky, 70, 260);
 const FOV = 50; // a wide lens outdoors, so you see the sky and the space around you, not a tunnel
 const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 600);
-const WALK_VIEW = { pitch: 0.28, dist: 8 }; // the usual view behind me: low enough to see the horizon
+const WALK_VIEW = { pitch: 0.2, dist: 5.8 }; // the usual view: close behind me and low, so the place towers round you
 const hemi = new THREE.HemisphereLight(PAL.hemi[0], PAL.hemi[1], PAL.hemi[2]);
 const sun = new THREE.DirectionalLight(PAL.moon[0], PAL.moon[1]); // the sun by day, the moon at night
 sun.castShadow = true;
@@ -1524,10 +1524,10 @@ function sendMove(force) {
 // ---------- camera: drag to look around, wheel/pinch to zoom ----------
 
 // starts low and far back, looking in through the entrance at the whole plaza
-const cam = { yaw: 0, pitch: 0.2, dist: 13, tYaw: 0, tPitch: 0.2, tDist: 13, fx: 20, fz: 38, look: 0, tLook: 0 }; // look: tilting the view up at the sky
+const cam = { yaw: 0, pitch: 0.24, dist: 9, tYaw: 0, tPitch: 0.24, tDist: 9, fx: 20, fz: 38, look: 0, tLook: 0 }; // look: tilting the view up at the sky
 // link-preview frames (?og, ?og=plaza, ?og=stalls, ?og=above, ?og=bench, ?og=inside): where the camera looks and from where
 const OG_VIEWS = {
-  entrance: { fx: 20, fz: 37, yaw: 0, pitch: 0.24, dist: 18 },
+  entrance: { fx: 20, fz: 35, yaw: 0, pitch: 0.3, dist: 11 },
   plaza: { fx: 20, fz: 20, yaw: 0.5, pitch: 0.5, dist: 16 },
   stalls: { fx: 20, fz: 11.5, yaw: 0, pitch: 0.35, dist: 16 },
   above: { fx: 20, fz: 19, yaw: 0.3, pitch: 0.95, dist: 36 },
@@ -1540,7 +1540,7 @@ if (OG_VIEW) Object.assign(cam, { yaw: OG_VIEW.yaw, tYaw: OG_VIEW.yaw, pitch: OG
 const DIST_MIN = 3.5;
 const ROOM_DIST = [2.4, 3.3]; // how near and far the camera can be inside the private room
 const YAW_MAX = 1000; // free rotation; the camera is kept inside the room instead
-const DIST_MAX = 32;
+const DIST_MAX = 40;
 
 // pooping, washing or sitting turns the camera around to face me, and puts it back afterwards
 let focusKey = '';
@@ -1641,7 +1641,7 @@ function clearDist(fx, fz, yaw, pitch, dist) {
   for (let k = 0.6; k <= dist; k += 0.15) {
     const x = (fx + Math.sin(yaw) * cp * k) / U;
     const z = (fz + Math.cos(yaw) * cp * k) / U;
-    if (0.9 + Math.sin(pitch) * k < 3.4 && walls.some((w) => x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
+    if (0.9 + Math.sin(pitch) * k < GROUNDS.wallH * U + 0.5 && walls.some((w) => x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
       return Math.max(1.8, k - 0.35);
     }
   }

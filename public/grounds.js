@@ -110,7 +110,7 @@ export function buildGrounds(kit) {
   }
   strip(C - 0.75, C + 6.0, C + 0.75, C + 14.3, dirt);                     // south, to the gate
   strip(C + 6.0, C - 0.75, C + 8.6, C + 0.75, dirt);                      // east, to the exercise ground
-  strip(C - 7.3, C - 0.75, C - 6.0, C + 0.75, dirt);                      // west, to the bushes
+  strip(C - 10.6, C - 0.75, C - 6.0, C + 0.75, dirt);                     // west, to the bushes
   // a paved forecourt in front of both restrooms, joining the plaza
   const court = new THREE.MeshLambertMaterial({ map: tiled(tex.pavement, 1, 1) });
   court.map.repeat.set(22, 4);
@@ -266,34 +266,41 @@ export function buildGrounds(kit) {
     sign('쾌변 체조', x, 1.45, z - 2.97, 0, [2.0, 0.5], { bg: '#fffaf0', ink: '#c0563a', font: 72 });
   }
 
-  // ---------- the bushes: a thicket west of the plaza where animals (and anyone without a stall) go ----------
+  // ---------- the bushes: a thicket out west where the forest starts, where animals (and anyone without a stall) go ----------
   {
     const [bx, bz] = P(L.bush);
     const r = L.bush.r * U;
-    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#94c461' }), bx, bz, 0.007, 40);
-    const n = 30;
+    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#94c461' }), bx, bz, 0.004, 48); // under the walking path
+    const onPath = (x, z) => {
+      const d = Math.hypot(x - C, z - C);
+      return d > 13.7 && d < 16.3;
+    };
+    const n = 80;
     const balls = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), n);
     const colors = ['#5fae57', '#4b9446', '#7cc26a'];
     const m4 = new THREE.Matrix4();
     for (let k = 0; k < n; k++) {
       const a = rnd(k + 400) * Math.PI * 2;
       const d = Math.sqrt(rnd(k + 500)) * (r - 0.4);
-      const s = 0.45 + rnd(k + 600) * 0.5;
-      m4.compose(new THREE.Vector3(bx + Math.cos(a) * d, s * 0.5, bz + Math.sin(a) * d), new THREE.Quaternion(), new THREE.Vector3(s, s * 0.8, s));
+      let s = 0.45 + rnd(k + 600) * 0.6;
+      const x = bx + Math.cos(a) * d;
+      const z = bz + Math.sin(a) * d;
+      if (onPath(x, z)) s = 0; // keep the walking path clear
+      m4.compose(new THREE.Vector3(x, s * 0.5, z), new THREE.Quaternion(), new THREE.Vector3(s, s * 0.8, s));
       balls.setMatrixAt(k, m4);
       balls.setColorAt(k, new THREE.Color(colors[k % 3]));
     }
     balls.castShadow = true;
     root.add(balls);
-    const blades = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.5, 5), new THREE.MeshLambertMaterial({ color: '#6dbb4f' }), 50);
-    for (let k = 0; k < 50; k++) {
+    const blades = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.5, 5), new THREE.MeshLambertMaterial({ color: '#6dbb4f' }), 160);
+    for (let k = 0; k < 160; k++) {
       const a = rnd(k + 700) * Math.PI * 2;
       const d = Math.sqrt(rnd(k + 800)) * r;
       blades.setMatrixAt(k, new THREE.Matrix4().makeTranslation(bx + Math.cos(a) * d, 0.25, bz + Math.sin(a) * d));
     }
     root.add(blades);
-    add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 8), mat('#8a5a34'), { cast: true }), bx + r + 0.3, 0.65, bz);
-    sign('풀숲 · 동물 화장실', bx + r + 0.31, 1.3, bz, Math.PI / 2, [1.8, 0.4], { bg: '#f3f9e8', ink: '#3f7a3a', font: 56 });
+    add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 8), mat('#8a5a34'), { cast: true }), bx + r + 0.3, 0.65, bz - 1.2);
+    sign('풀숲 · 동물 화장실', bx + r + 0.31, 1.3, bz - 1.2, Math.PI / 2, [1.8, 0.4], { bg: '#f3f9e8', ink: '#3f7a3a', font: 56 });
   }
 
   // ---------- the gate ----------
@@ -324,13 +331,20 @@ export function buildGrounds(kit) {
   const leaves = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.75, 0), new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), treeCount * 3);
   const leafColors = ['#5fae57', '#4b9446', '#7cc26a'];
   const m4 = new THREE.Matrix4();
+  const none = new THREE.Matrix4().makeScale(0, 0, 0); // a skipped tree takes no space
   for (let k = 0; k < treeCount; k++) {
+    trunks.setMatrixAt(k, none);
+    for (let n = 0; n < 3; n++) {
+      leaves.setMatrixAt(k * 3 + n, none);
+      leaves.setColorAt(k * 3 + n, new THREE.Color(leafColors[n]));
+    }
     const a = rnd(k) * Math.PI * 2;
     const r = 18.6 + rnd(k + 100) * 8;
     const x = C + Math.cos(a) * r;
     const z = C + Math.sin(a) * r;
     const gx = (L.gate.x * U) - x;
     if (Math.abs(gx) < 3 && z > C + 13) continue; // keep the way in clear
+    if (Math.hypot(x - L.bush.x * U, z - L.bush.y * U) < L.bush.r * U * 0.6) continue; // a clearing in the thicket
     const size = 1.2 + rnd(k + 200) * 1.4;
     const y = groundY(r);
     m4.compose(new THREE.Vector3(x, y + 0.6 * size, z), new THREE.Quaternion(), new THREE.Vector3(size, size, size));

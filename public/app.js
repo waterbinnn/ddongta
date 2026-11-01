@@ -410,9 +410,19 @@ function settleLocal(p) {
   const dx = p.x - c;
   const dy = p.y - c;
   const d = Math.hypot(dx, dy);
-  if (d > GROUNDS.walkR) {
-    p.x = c + (dx / d) * GROUNDS.walkR;
-    p.y = c + (dy / d) * GROUNDS.walkR;
+  const B = GROUNDS.bush;
+  const bx = p.x - B.x;
+  const by = p.y - B.y;
+  const bd = Math.hypot(bx, by);
+  if (d > GROUNDS.walkR && bd > B.r) {
+    // off the grounds: back to the nearer of the grounds' edge or the bushes' edge
+    if (bd - B.r < d - GROUNDS.walkR) {
+      p.x = B.x + (bx / bd) * B.r;
+      p.y = B.y + (by / bd) * B.r;
+    } else {
+      p.x = c + (dx / d) * GROUNDS.walkR;
+      p.y = c + (dy / d) * GROUNDS.walkR;
+    }
   }
   for (const o of GROUNDS.obstacles) {
     const x0 = o.x0 - 30;
@@ -1482,6 +1492,7 @@ const OG_VIEWS = {
   plaza: { fx: 20, fz: 20, yaw: 0.5, pitch: 0.5, dist: 14 },
   stalls: { fx: 21, fz: 9, yaw: -0.3, pitch: 0.35, dist: 12 },
   above: { fx: 20, fz: 17, yaw: 0.3, pitch: 0.95, dist: 26 },
+  bushes: { fx: 3, fz: 20, yaw: 1.57, pitch: 0.6, dist: 17 },
   bench: { fx: 19.5, fz: 22, yaw: 0.25, pitch: 0.36, dist: 9.5 },
   inside: { fx: 20, fz: 30, yaw: Math.PI, pitch: 0.55, dist: 17 }, // from the gate, looking back out
 };

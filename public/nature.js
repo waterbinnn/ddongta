@@ -22,7 +22,7 @@ export function leafTexture(solid = false) {
   const g = c.getContext('2d');
   const rand = seeded(solid ? 11 : 5);
   if (solid) {
-    g.fillStyle = '#4a6338'; // the shade between leaves, not too dark
+    g.fillStyle = '#466c34'; // the shade between leaves, not too dark
     g.fillRect(0, 0, 256, 256);
   }
   const n = solid ? 900 : 420;
@@ -32,9 +32,9 @@ export function leafTexture(solid = false) {
     // leaves near the middle in the cut-out version, so the card reads as a round clump
     if (!solid && Math.hypot(x - 128, y - 128) > 118 - rand() * 30) continue;
     const light = 1 - y / 300 + (rand() - 0.5) * 0.35; // lighter toward the top, like sun from above
-    const r = Math.round(75 + 60 * light);
-    const gr = Math.round(105 + 65 * light);
-    const b = Math.round(55 + 30 * light);
+    const r = Math.round(70 + 55 * light);
+    const gr = Math.round(120 + 75 * light);
+    const b = Math.round(45 + 25 * light);
     g.save();
     g.translate(x, y);
     g.rotate(rand() * Math.PI * 2);
@@ -66,7 +66,7 @@ export function grassTuftTexture() {
     const lean = (rand() - 0.5) * 50;
     const w = 2 + rand() * 2.5;
     const shade = rand();
-    g.fillStyle = shade < 0.4 ? '#5d7444' : shade < 0.8 ? '#748c52' : '#93a868';
+    g.fillStyle = shade < 0.4 ? '#5a8040' : shade < 0.8 ? '#73a04c' : '#97bf63';
     g.beginPath();
     g.moveTo(x - w, 128);
     g.quadraticCurveTo(x + lean * 0.3, 128 - h * 0.6, x + lean, 128 - h);

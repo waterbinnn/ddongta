@@ -125,7 +125,7 @@ export function buildGrounds(kit) {
   // ---------- the café terrace, on the grass: tables, a coffee cart, a vending machine ----------
   const white = mat('#fffaf0');
   const metal = mat('#3b3a36');
-  const shades = ['#e6dcc6', '#d8c8a8', '#cbb894']; // linen and khaki parasols
+  const shades = ['#ead8b4', '#c9dcc6', '#f0cdb6']; // soft sand, sage and peach parasols
   L.terrace.tables.forEach((t, k) => {
     const [x, z] = P(t);
     add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 28), white, { cast: true, receive: true }), x, 0.74, z);
@@ -275,8 +275,8 @@ export function buildGrounds(kit) {
   {
     const [x, z] = P(L.exercise);
     const r = L.exercise.r * U;
-    disc(r, new THREE.MeshLambertMaterial({ color: '#a7bd83' }), x, z, 0.008, 64);
-    const matColors = ['#c9b9a0', '#a7b49c', '#c4a58c', '#b6ae9f', '#9fae9b', '#cdbfa6']; // natural cotton and linen
+    disc(r, new THREE.MeshLambertMaterial({ color: '#a2c47c' }), x, z, 0.008, 64);
+    const matColors = ['#e0b9a0', '#b5cfa6', '#ecd29c', '#c9bbdc', '#a9c9d4', '#ecc6c6']; // soft cotton colours
     L.mats.forEach((m, k) => {
       block(m.w * U, 0.03, m.d * U, mat(matColors[k % matColors.length]), m.x * U, 0.02, m.y * U, { receive: true });
     });
@@ -290,12 +290,12 @@ export function buildGrounds(kit) {
   {
     const [bx, bz] = P(L.bush);
     const r = L.bush.r * U;
-    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#8fa86c' }), bx, bz, 0.004, 48);
+    disc(r + 0.4, new THREE.MeshLambertMaterial({ color: '#86b062' }), bx, bz, 0.004, 48);
     // leafy shrubs: crossed cards of painted leaves round a dark core, about waist high
-    const n = 90;
+    const n = 150;
     const leafy = new THREE.MeshLambertMaterial({ map: leafTexture(), alphaTest: 0.5, side: THREE.DoubleSide });
     const shrubs = new THREE.InstancedMesh(cardsGeometry(3, true), leafy, n);
-    const cores = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#4a6338'), n); // the shade inside, same as between the leaves
+    const cores = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat('#466c34'), n); // the shade inside, same as between the leaves
     const tints = ['#ffffff', '#e8eedc', '#f4f0dc'];
     const m4 = new THREE.Matrix4();
     for (let k = 0; k < n; k++) {
@@ -313,11 +313,12 @@ export function buildGrounds(kit) {
     root.add(shrubs, cores);
     // tall grass all through the thicket
     const tuft = new THREE.MeshLambertMaterial({ map: grassTuftTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
-    const tufts = new THREE.InstancedMesh(cardsGeometry(2, false), tuft, 220);
-    for (let k = 0; k < 220; k++) {
+    const TUFTS = 1100; // thick with grass: a real thicket
+    const tufts = new THREE.InstancedMesh(cardsGeometry(2, false), tuft, TUFTS);
+    for (let k = 0; k < TUFTS; k++) {
       const a = rnd(k + 700) * Math.PI * 2;
-      const d = Math.sqrt(rnd(k + 800)) * r;
-      const s = 0.45 + rnd(k + 900) * 0.35;
+      const d = Math.sqrt(rnd(k * 1.37 + 800)) * (r + 0.6);
+      const s = 0.5 + rnd(k + 900) * 0.45;
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd(k + 950) * Math.PI, 0));
       tufts.setMatrixAt(k, m4.compose(new THREE.Vector3(bx + Math.cos(a) * d, 0, bz + Math.sin(a) * d), q, new THREE.Vector3(s, s, s)));
     }
@@ -357,8 +358,8 @@ export function buildGrounds(kit) {
   crownLeaves.repeat.set(3, 2);
   const crowns = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: '#ffffff', map: crownLeaves }), round.length * 3);
   const tiers = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 12), new THREE.MeshLambertMaterial({ color: '#ffffff' }), cedars.length * 3);
-  const crownColors = ['#56724a', '#4d6943', '#5f7b51', '#506c46'];
-  const cedarColors = ['#3e5a40', '#36503a'];
+  const crownColors = ['#ffffff', '#eef6e4', '#f6faee', '#e6f0dc']; // tints over the leaf texture
+  const cedarColors = ['#3f7048', '#38643f'];
   const m4 = new THREE.Matrix4();
   const q0 = new THREE.Quaternion();
   const stoneTex = stoneTexture();
@@ -441,7 +442,7 @@ export function buildGrounds(kit) {
     const [x, z] = P(L.pond);
     const r = L.pond.r * U;
     disc(r + 0.35, mat('#a39a86'), x, z, 0.009, 48); // a rim of grey stones
-    disc(r, new THREE.MeshPhongMaterial({ color: '#4f7f80', shininess: 90, specular: '#cfe3e0', emissive: '#10292c', emissiveIntensity: 0.3 }), x, z, 0.02, 48);
+    disc(r, new THREE.MeshPhongMaterial({ color: '#4f8f98', shininess: 90, specular: '#d8ecea', emissive: '#10292c', emissiveIntensity: 0.3 }), x, z, 0.02, 48);
     const pebbles = new THREE.InstancedMesh(stoneGeometry(1), new THREE.MeshLambertMaterial({ map: stoneTex }), 14);
     for (let k = 0; k < 14; k++) {
       const a = (k / 14) * Math.PI * 2 + rnd(k + 70) * 0.3;
@@ -468,7 +469,7 @@ export function buildGrounds(kit) {
 
   // ---------- build the flowers and fences gathered above ----------
   {
-    const petals = ['#f1eee4', '#e6dfc4', '#cdc5d8', '#ded3b8', '#f1eee4', '#d6cfc0']; // small, pale wild flowers
+    const petals = ['#ffffff', '#f6c9d4', '#f7e39a', '#d9c8f0', '#ffffff', '#f4d1a8']; // small wild flowers in soft colours
     const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 10, 6), new THREE.MeshLambertMaterial({ color: '#ffffff' }), flowers.length);
     const leafs = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.2, 5), mat('#5d7a49'), flowers.length);
     flowers.forEach((f, k) => {

@@ -294,7 +294,7 @@ const plasterCanvas = canvas(64, 32, (g) => {
 });
 // natural lawn: a fresh, even green with fine blades and a little clover, drawn smooth; 1.6 m per tile
 const grassCanvas = canvas(512, 512, (g) => {
-  g.fillStyle = '#9db776';
+  g.fillStyle = '#93bf66';
   g.fillRect(0, 0, 512, 512);
   let seed = 7;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -317,7 +317,7 @@ const grassCanvas = canvas(512, 512, (g) => {
     const x = rand() * 512;
     const y = rand() * 512;
     const shade = rand();
-    g.strokeStyle = shade < 0.45 ? 'rgba(125, 152, 92, 0.5)' : shade < 0.9 ? 'rgba(178, 198, 132, 0.5)' : 'rgba(205, 214, 160, 0.5)';
+    g.strokeStyle = shade < 0.45 ? 'rgba(110, 155, 75, 0.5)' : shade < 0.9 ? 'rgba(170, 205, 120, 0.5)' : 'rgba(200, 222, 150, 0.5)';
     g.lineWidth = 1.2;
     g.beginPath();
     g.moveTo(x, y);

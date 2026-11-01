@@ -1,6 +1,6 @@
 // The private toilet room behind a door of the private restroom (개인 화장실). There is only one: whoever goes in
 // sees their own room, and nobody else's. It follows the blockout in tools/blender/concept_stall.py
-// (Blender x, y, z become x, z-up, -y here): cream brick-tile walls, a soft pink floor, a window with the sky,
+// (Blender x, y, z become x, z-up, -y here), in bathhouse materials: hinoki slats under lime plaster, an oak floor, a window with the sky,
 // the toilet against the back wall, a side table with a magazine, a sink with a mirror, a chest with a diffuser,
 // a framed picture and a pendant lamp. The room is closed all round so the camera sits inside it.
 import * as THREE from '/vendor/three.module.js';
@@ -23,39 +23,80 @@ function canvasTex(w, h, draw, repeat) {
   return t;
 }
 
-// brick tiles 30 x 15 cm in rows, half a tile offset each row; the canvas holds 4 x 4 of them (1.2 x 0.6 m)
-function brickTex(repeatX, repeatY) {
-  return canvasTex(512, 256, (g, w, h) => {
-    g.fillStyle = '#e4c6a8';
-    g.fillRect(0, 0, w, h);
-    const tw = w / 4;
-    const th = h / 4;
-    for (let row = 0; row < 4; row++) {
-      const shift = (row % 2) * (tw / 2);
-      for (let col = -1; col < 5; col++) {
-        const x = col * tw + shift;
-        const shade = 0.96 + (((row * 7 + col * 13) % 5) / 5) * 0.06;
-        g.fillStyle = `rgb(${Math.round(243 * shade)}, ${Math.round(220 * shade)}, ${Math.round(196 * shade)})`;
+function seeded(seed) {
+  let v = seed;
+  return () => (v = (v * 16807) % 2147483647) / 2147483647;
+}
+
+// warm oak floorboards, 12 cm wide, staggered joints; the canvas holds 4 boards (48 cm) by 1.2 m
+function floorTex(repeatX, repeatY) {
+  return canvasTex(256, 640, (g) => {
+    const rand = seeded(9);
+    for (let b = 0; b < 4; b++) {
+      const x = b * 64;
+      const tone = 0.94 + rand() * 0.1;
+      g.fillStyle = `rgb(${Math.round(196 * tone)}, ${Math.round(160 * tone)}, ${Math.round(118 * tone)})`;
+      g.fillRect(x, 0, 64, 640);
+      for (let k = 0; k < 26; k++) { // the grain
+        g.strokeStyle = `rgba(140, 100, 65, ${0.12 + rand() * 0.15})`;
+        g.lineWidth = 1 + rand();
+        const gx = x + 4 + rand() * 56;
         g.beginPath();
-        g.roundRect(x + 3, row * th + 3, tw - 6, th - 6, 5);
-        g.fill();
-        g.fillStyle = 'rgba(255,255,255,0.22)'; // a soft glaze along the top
-        g.fillRect(x + 8, row * th + 6, tw - 16, 5);
+        g.moveTo(gx, 0);
+        g.bezierCurveTo(gx + (rand() - 0.5) * 10, 200, gx + (rand() - 0.5) * 10, 440, gx + (rand() - 0.5) * 6, 640);
+        g.stroke();
       }
+      g.fillStyle = 'rgba(90, 60, 35, 0.55)'; // the gap between boards
+      g.fillRect(x, 0, 2, 640);
+      const joint = (b % 2 ? 160 : 480) + Math.round(rand() * 40); // where one board ends and the next begins
+      g.fillRect(x, joint, 64, 2);
     }
   }, [repeatX, repeatY]);
 }
 
-// a soft pink tiled floor, 21 cm tiles
-function floorTex(repeatX, repeatY) {
-  return canvasTex(128, 128, (g, w, h) => {
-    g.fillStyle = '#f6dbe2';
-    g.fillRect(0, 0, w, h);
-    g.fillStyle = '#ead0d8';
-    for (const p of [0, w / 2]) {
-      g.fillRect(p, 0, 2, h);
-      g.fillRect(0, p, w, 2);
+// the lower walls: vertical slats of pale hinoki, like a bathhouse; the canvas is 60 cm wide
+function slatTex(repeatX) {
+  return canvasTex(256, 256, (g) => {
+    const rand = seeded(17);
+    for (let k = 0; k < 6; k++) {
+      const x = k * 42.6;
+      const tone = 0.95 + rand() * 0.07;
+      g.fillStyle = `rgb(${Math.round(222 * tone)}, ${Math.round(196 * tone)}, ${Math.round(158 * tone)})`;
+      g.fillRect(x, 0, 42.6, 256);
+      for (let n = 0; n < 8; n++) {
+        g.strokeStyle = `rgba(170, 130, 90, ${0.1 + rand() * 0.12})`;
+        g.beginPath();
+        const gx = x + 3 + rand() * 36;
+        g.moveTo(gx, 0);
+        g.lineTo(gx + (rand() - 0.5) * 4, 256);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(110, 80, 50, 0.45)';
+      g.fillRect(x, 0, 2, 256);
     }
+  }, [repeatX, 1]);
+}
+
+// the upper walls: smooth lime plaster, faintly mottled
+function plasterTex(repeatX, repeatY) {
+  return canvasTex(128, 128, (g) => {
+    const rand = seeded(29);
+    g.fillStyle = '#ece6da';
+    g.fillRect(0, 0, 128, 128);
+    for (let k = 0; k < 500; k++) {
+      g.fillStyle = rand() < 0.5 ? 'rgba(205, 195, 178, 0.3)' : 'rgba(250, 247, 240, 0.4)';
+      g.fillRect(rand() * 128, rand() * 128, 1 + rand() * 4, 1 + rand() * 3);
+    }
+  }, [repeatX, repeatY]);
+}
+
+// the ceiling: light wooden battens
+function ceilingTex(repeatX, repeatY) {
+  return canvasTex(128, 128, (g) => {
+    g.fillStyle = '#e6d3b4';
+    g.fillRect(0, 0, 128, 128);
+    g.fillStyle = 'rgba(120, 90, 60, 0.35)';
+    for (let x = 0; x < 128; x += 16) g.fillRect(x, 0, 2, 128);
   }, [repeatX, repeatY]);
 }
 
@@ -140,22 +181,27 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   // ---------- floor, walls, ceiling: a closed box, so the camera is always inside ----------
   const depth = D + FRONT;
   const midZ = (FRONT - D) / 2;
-  const floor = add(new THREE.PlaneGeometry(W, depth), lambert('#ffffff', { map: floorTex(W / 0.42, depth / 0.42) }), 0, 0, midZ, { cast: false });
+  const floor = add(new THREE.PlaneGeometry(W, depth), lambert('#ffffff', { map: floorTex(W / 0.48, depth / 1.2) }), 0, 0, midZ, { cast: false });
   floor.rotation.x = -Math.PI / 2;
+  // each wall: hinoki slats up to a rail at 1.05 m, lime plaster above
+  const PANEL = 1.05;
   const wall = (w, rotY, x, z) => {
-    const m = add(new THREE.PlaneGeometry(w, H), lambert('#ffffff', { map: brickTex(w / 1.2, H / 0.6) }), x, H / 2, z, { cast: false });
-    m.rotation.y = rotY;
-    return m;
+    const upper = add(new THREE.PlaneGeometry(w, H - PANEL), lambert('#ffffff', { map: plasterTex(w / 1.2, (H - PANEL) / 1.2) }), x, PANEL + (H - PANEL) / 2, z, { cast: false });
+    upper.rotation.y = rotY;
+    const lower = add(new THREE.PlaneGeometry(w, PANEL), lambert('#ffffff', { map: slatTex(w / 0.6) }), x, PANEL / 2, z, { cast: false });
+    lower.rotation.y = rotY;
+    return upper;
   };
   wall(W, 0, 0, -D);                       // back
   wall(depth, Math.PI / 2, -W / 2, midZ);  // left
   wall(depth, -Math.PI / 2, W / 2, midZ);  // right
   wall(W, Math.PI, 0, FRONT);              // front, behind the camera
-  const ceiling = add(new THREE.PlaneGeometry(W, depth), lambert('#fbf3e8'), 0, H, midZ, { cast: false });
+  const ceiling = add(new THREE.PlaneGeometry(W, depth), lambert('#ffffff', { map: ceilingTex(W / 0.8, depth / 0.8) }), 0, H, midZ, { cast: false });
   ceiling.rotation.x = Math.PI / 2;
-  const trim = lambert('#d8b48f');
-  for (const x of [-W / 2 + 0.02, W / 2 - 0.02]) box(0.04, 0.1, depth, trim, x, 0.05, midZ, { cast: false }); // skirting
-  box(W, 0.1, 0.04, trim, 0, 0.05, -D + 0.02, { cast: false });
+  // a dark wooden rail along the top of the slats
+  const trim = lambert('#7a5a3c');
+  for (const x of [-W / 2 + 0.02, W / 2 - 0.02]) box(0.04, 0.05, depth, trim, x, PANEL, midZ, { cast: false });
+  box(W, 0.05, 0.04, trim, 0, PANEL, -D + 0.02, { cast: false });
 
   // ---------- the window on the left wall, with the sky behind it ----------
   const cream = lambert('#fbf6ea');
@@ -191,18 +237,18 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   cyl(0.012, 0.012, 0.55, lambert('#f2efe8'), tx + 0.98, 0.32, TOILET.z + 0.05, 8);
 
   // ---------- the sink on a stand, towels, a mirror ----------
-  const steel = lambert('#9aa3a0');
+  const steel = lambert('#8a6a4a'); // a wooden washstand
   const sx = 0.85;
   const sz = -1.25;
   box(0.04, 0.8, 0.42, steel, sx + 0.18, 0.4, sz);
   box(0.04, 0.8, 0.42, steel, sx - 0.2, 0.4, sz);
-  box(0.42, 0.04, 0.46, lambert('#f6efe0'), sx - 0.02, 0.79, sz);
+  box(0.42, 0.04, 0.46, lambert('#a4825e'), sx - 0.02, 0.79, sz);
   box(0.38, 0.03, 0.4, steel, sx - 0.02, 0.35, sz);
-  box(0.3, 0.1, 0.3, lambert('#f8e7c9'), sx - 0.02, 0.42, sz);
+  box(0.3, 0.1, 0.3, lambert('#ece6da'), sx - 0.02, 0.42, sz); // folded linen towels
   cyl(0.17, 0.12, 0.14, porcelain, sx - 0.02, 0.88, sz);
   const tap = cyl(0.015, 0.015, 0.22, lambert('#e9e6df'), W / 2 - 0.12, 1.02, sz, 10);
   tap.rotation.z = Math.PI / 2;
-  box(0.03, 0.62, 0.5, lambert('#8fa79d'), W / 2 - 0.02, 1.55, sz);
+  box(0.03, 0.62, 0.5, lambert('#5a4330'), W / 2 - 0.02, 1.55, sz); // a dark wooden mirror frame
   box(0.01, 0.54, 0.42, new THREE.MeshPhongMaterial({ color: '#dfeef0', shininess: 120 }), W / 2 - 0.04, 1.55, sz, { cast: false });
 
   // ---------- a chest of drawers with a diffuser ----------

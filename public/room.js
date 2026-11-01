@@ -2,7 +2,8 @@
 // sees their own room, and nobody else's. A roomy, hotel-like bathroom you can get up and walk about in:
 // warm stone tiles, walnut panelling under dark plaster, a cove of soft light round the ceiling and a skylight in it,
 // the toilet in a lit niche on the back wall, a long floating vanity with two basins under a glowing round mirror,
-// a big window with a bench of folded towels below it. The room is closed all round so the camera sits inside it.
+// a big window with a bench of folded towels below it, and the door out in the same wall.
+// The room is closed all round so the camera sits inside it.
 import * as THREE from '/vendor/three.module.js';
 
 export const ROOM = { W: 4.0, D: 3.6, FRONT: 1.7, H: 3.0 }; // width, depth to the back wall, room in front of the origin, height
@@ -330,6 +331,18 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   for (const [z, c] of [[wz - 0.3, '#ece6da'], [wz + 0.05, '#d9cbb8'], [wz + 0.35, '#ece6da']]) box(0.32, 0.12, 0.26, lambert(c), -W / 2 + 0.25, 0.54, z);
   block(-W / 2 + 0.25, wz, 0.5, 1.45);
 
+  // ---------- the door out, in the left wall near the front: oak, a brass handle, the room number on a plaque ----------
+  const doorZ = 0.95;
+  const doorWood = lambert('#6b4a32', { map: slatTex(1) });
+  box(0.06, 2.15, 0.94, doorWood, -W / 2 + 0.03, 1.075, doorZ);
+  for (const z of [doorZ - 0.5, doorZ + 0.5]) box(0.08, 2.25, 0.07, lambert('#3a2c22'), -W / 2 + 0.04, 1.125, z); // the frame
+  box(0.08, 0.07, 1.07, lambert('#3a2c22'), -W / 2 + 0.04, 2.215, doorZ);
+  for (const y of [0.55, 1.6]) box(0.015, 0.5, 0.7, lambert('#5e412c'), -W / 2 + 0.065, y, doorZ, { cast: false }); // two raised panels
+  const handle = cyl(0.014, 0.014, 0.16, brass, -W / 2 + 0.1, 1.0, doorZ - 0.33, 10);
+  handle.rotation.x = Math.PI / 2;
+  cyl(0.03, 0.03, 0.03, brass, -W / 2 + 0.075, 1.0, doorZ - 0.38, 14).rotation.z = Math.PI / 2;
+  box(0.012, 0.09, 0.2, brass, -W / 2 + 0.065, 1.95, doorZ, { cast: false }); // a little brass plaque
+
   // ---------- a round upholstered stool in the back corner, to sit and rest on (facing into the room) ----------
   const stoolAt = { x: 0.75, z: -2.85 };
   const seatTop = 0.46;
@@ -361,6 +374,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   return {
     group, seat, windowMat, blockers,
     stool: new THREE.Vector3(stoolAt.x, seatTop - HIP_Y, stoolAt.z), // where the hips go, sitting on the stool (local)
+    door: { x: -W / 2, z: doorZ, half: 0.42 }, // walk into it and you're out (local)
     bounds: { x0: -W / 2 + 0.3, x1: W / 2 - 0.3, z0: -D + 0.3, z1: FRONT - 0.35 }, // where you can walk
     aim: new THREE.Vector3(-0.2, 0, -2.4),              // what the camera looks at, sitting down (local)
     bowl: new THREE.Vector3(tx, 0.6, tz + 0.1),         // where a poop leaves from (local)

@@ -1658,6 +1658,7 @@ function readMoveInput() {
 
 // walking about my own private room (only I see it, so it stays on this page): round the furniture, inside the walls
 const roomWalk = { x: 0, z: 0, turn: 0, walking: false, phase: 0 };
+let leavingRoom = false; // walked out through the door, waiting for the server to say so
 const nearStool = () => inRoom && roomStanding && !roomOnStool && Math.hypot(roomWalk.x - room.stool.x, roomWalk.z - room.stool.z) < 0.95;
 
 function moveInRoom(dt) {
@@ -1681,6 +1682,12 @@ function moveInRoom(dt) {
   }
   roomWalk.x = x;
   roomWalk.z = z;
+  // walked up to the door: out you go
+  const door = room.door;
+  if (vx < 0 && x <= b.x0 + 0.05 && Math.abs(z - door.z) < door.half && !leavingRoom) {
+    leavingRoom = true;
+    exitStall();
+  }
   roomWalk.turn = lerpAngle(roomWalk.turn, Math.atan2(vx, vy), Math.min(1, dt * 12));
   roomWalk.phase += dt * (running ? 14 : 9);
 }
@@ -1879,11 +1886,20 @@ function clearDist(fx, fz, yaw, pitch, dist) {
 function updateCamera(dt) {
   if (me.ready && GROUNDS) focusCamera();
   if (me.ready) followWalk(dt);
-  if (me.s !== -1 && LAYOUT[me.s]) {
+  if (inRoom && roomStanding && !roomOnStool) {
+    // walking about the room: the camera keeps to the middle of the room and looks out at me, so by a wall
+    // (or at the door) you see the wall, not the top of your head. Turning it by hand pauses this for a moment.
+    const dx = -roomWalk.x;
+    const dz = -1.0 - roomWalk.z;
+    if (Math.hypot(dx, dz) > 0.7 && performance.now() - manualCamAt > 2500) {
+      const want = Math.atan2(dx, dz);
+      cam.tYaw += Math.atan2(Math.sin(want - cam.tYaw), Math.cos(want - cam.tYaw));
+    }
+  } else if (me.s !== -1 && LAYOUT[me.s]) {
     // in a stall the camera only swings around the front, never behind it; in the private room it stays between the walls
     const off = cam.tYaw - LAYOUT[me.s].rot;
     const rel = Math.atan2(Math.sin(off), Math.cos(off));
-    const swing = inRoom ? (roomStanding ? 1.4 : 0.35) : 1.1; // up and about in your room, you can look round more
+    const swing = inRoom ? 0.35 : 1.1;
     cam.tYaw -= rel - clamp(rel, -swing, swing);
   }
   if (inRoom) {
@@ -2104,6 +2120,7 @@ function syncRoom(t, dt) {
     inRoom = want >= 0;
     roomStanding = false; // you come in and sit down
     roomOnStool = false;
+    leavingRoom = false;
     roomSpot = '';
     room.group.visible = inRoom;
     worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
@@ -3712,8 +3729,8 @@ function pluckNote(bus, f, t, vol, decay) {
 }
 
 // ---------- what plays where ----------
-// The private room has the waltz, the public restroom a lo-fi hip-hop loop, the bushes the sound of the woods.
-// Anywhere else it's quiet, unless you asked for music too (배경음악도): then the waltz goes on outside as well.
+// With 배경음악도 on: the private room has the waltz, the public restroom a lo-fi hip-hop loop, the bushes the sound
+// of the woods. Out on the grounds it's quiet.
 
 const MUSIC_VOLUME = 0.2; // a soft background
 // a track's own volume, fading in from silence; stopping fades it out and lets it go
@@ -3944,11 +3961,11 @@ function startForest() {
 const TRACKS = { waltz: startWaltz, hiphop: startHiphop, forest: startForest };
 let track = { name: '', stop: null };
 function wantedTrack() {
-  if (!soundOn || !soundStarted) return '';
+  if (soundMode !== 'all' || !soundStarted) return ''; // the place sounds come with 배경음악도; 효과음만 keeps them off
   if (inRoom) return 'waltz';
   if ((me.s !== -1 && LAYOUT[me.s]?.type === 'public') || (GROUNDS && placeAt(me.x, me.y) === '공중화장실')) return 'hiphop';
   if (inBushHere()) return 'forest';
-  return soundMode === 'all' ? 'waltz' : '';
+  return ''; // out on the grounds it's quiet
 }
 function updateTrack() {
   const want = wantedTrack();
@@ -4025,7 +4042,7 @@ $('#recenterBtn').addEventListener('click', recenterCam);
 // the sound button opens a small menu: effects only / with music / off
 const SOUND_MODES = {
   fx: { icon: 'soundOn', label: '효과음만', toast: '효과음만 들려요' },
-  all: { icon: 'music', label: '배경음악도', toast: '배경음악도 같이 들려요' },
+  all: { icon: 'music', label: '장소 음악도', toast: '화장실과 풀숲에서 음악이 들려요' },
   off: { icon: 'soundOff', label: '소리 끄기', toast: '소리를 껐어요' },
 };
 const soundMenu = $('#soundMenu');

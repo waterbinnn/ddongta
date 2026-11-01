@@ -6,7 +6,7 @@ import * as THREE from '/vendor/three.module.js';
 import { GLTFLoader } from '/vendor/jsm/loaders/GLTFLoader.js';
 import {
   leafTexture, grassTuftTexture, stoneTexture, cardsGeometry, stoneGeometry, crownGeometry,
-  wallTileTexture, floorSlabTexture, plasterTexture, brickTexture,
+  wallTileTexture, floorSlabTexture, plasterTexture,
 } from './nature.js';
 const rep = (t, x, y) => {
   t.repeat.set(x, y);
@@ -261,7 +261,9 @@ export function buildGrounds(kit) {
     add(mirror, x1 - 0.12, 1.55, cz);
   }
 
-  // ---------- the private restroom: a closed, warmer brick cottage; each door opens into a room of its own ----------
+  // ---------- the premium restroom: a little marble temple, like one on the Acropolis. A stepped marble base round the
+  // sides and back, a fluted column between each pair of doors, an entablature (architrave, a frieze of triglyphs,
+  // a cornice) and a low pediment over the front with a golden poop in relief; a shallow marble roof behind it ----------
   {
     const p = L.private;
     const x0 = p.x0 * U;
@@ -269,33 +271,86 @@ export function buildGrounds(kit) {
     const z0 = p.y0 * U;
     const z1 = p.y1 * U;
     const WH = L.wallH * U;
-    const bricks = brickTexture();
-    bricks.repeat.set((x1 - x0) / 0.8, WH / 0.4);
-    const wall = new THREE.MeshLambertMaterial({ map: bricks, color: '#ffe9d6' });
-    block(x1 - x0, WH, z1 - z0, wall, (x0 + x1) / 2, WH / 2, (z0 + z1) / 2);
-    // a pitched roof, like a cottage: a long triangular prism, eaves hanging over the walls
-    const depth = z1 - z0 + 0.9;
-    const roof = mesh(new THREE.CylinderGeometry(depth / Math.sqrt(3), depth / Math.sqrt(3), x1 - x0 + 0.7, 3), mat('#c4694a'), { cast: true, receive: true });
-    roof.rotation.set(-Math.PI / 2, 0, Math.PI / 2); // lying along the building, one flat face down, the ridge up
-    roof.scale.set(1, 1, 0.7);
-    add(roof, (x0 + x1) / 2, WH + depth / (2 * Math.sqrt(3)) * 0.7, (z0 + z1) / 2);
-    block(x1 - x0 + 0.3, 0.32, 0.2, mat('#6b4a36'), (x0 + x1) / 2, 2.6, z1 + 0.1); // a wooden fascia over the doors
-    // a skylight in the roof over each room (inside, you can look up through it at the sky)
-    const rise = (depth / Math.sqrt(3)) * 1.5 * 0.7; // from the eaves up to the ridge
-    const run = depth / 2;
-    const n = new THREE.Vector3(0, run, rise).normalize(); // straight out of the front slope
-    const tilt = Math.atan2(n.z, n.y);
-    const glassMat = new THREE.MeshPhongMaterial({ color: '#8fc3e0', shininess: 120, specular: '#ffffff' });
-    const frameMat = mat('#5e4330');
-    for (const s of L.stalls.filter((st) => st.type === 'private')) {
-      const at = new THREE.Vector3(s.x * U, WH + rise * 0.45, (z0 + z1) / 2 + run * 0.55);
-      for (const [w, h, l, m, out] of [[0.66, 0.04, 0.82, frameMat, 0.02], [0.54, 0.03, 0.7, glassMat, 0.045]]) {
-        const pane = mesh(new THREE.BoxGeometry(w, h, l), m, { cast: false, receive: true });
-        pane.rotation.x = tilt;
-        add(pane, ...at.clone().addScaledVector(n, out).toArray());
-      }
+    const cx = (x0 + x1) / 2;
+    const cz = (z0 + z1) / 2;
+    const marble = new THREE.MeshPhongMaterial({ color: '#f1ece2', shininess: 18 });
+    const shade = new THREE.MeshPhongMaterial({ color: '#ddd5c7', shininess: 10 }); // the same marble in shadowed details
+    block(x1 - x0, WH, z1 - z0, marble, cx, WH / 2, cz); // the cella
+    // a three-step base round the sides and the back (flush at the front, where people come to the doors)
+    for (let k = 0; k < 3; k++) {
+      const out = 0.45 - k * 0.15;
+      block(x1 - x0 + out * 2, 0.15, z1 - z0 + out, shade, cx, 0.075 + k * 0.15, cz - out / 2);
     }
+    // the columns: one between each pair of doors and one at each end, just proud of the wall
+    const doors = L.stalls.filter((q) => q.type === 'private').map((q) => q.x * U).sort((a, b) => a - b);
+    const gaps = [x0 + 0.08, ...doors.slice(1).map((x, k) => (x + doors[k]) / 2), x1 - 0.08];
+    const COL_H = WH - 0.8; // up to the entablature
+    const colZ = z1 + 0.16;
+    const m4 = new THREE.Matrix4();
+    const parts = [
+      [new THREE.CylinderGeometry(0.21, 0.21, 0.1, 20), shade, 0.05], // the base
+      [new THREE.CylinderGeometry(0.135, 0.165, COL_H - 0.32, 20), marble, 0.1 + (COL_H - 0.32) / 2], // the fluted shaft
+      [new THREE.CylinderGeometry(0.21, 0.14, 0.12, 20), marble, COL_H - 0.16], // the capital's cushion
+      [new THREE.BoxGeometry(0.44, 0.1, 0.44), shade, COL_H - 0.05], // and its square slab
+    ];
+    for (const [geo, material, y] of parts) {
+      const im = new THREE.InstancedMesh(geo, material, gaps.length);
+      gaps.forEach((x, k) => im.setMatrixAt(k, m4.makeTranslation(x, y, colZ)));
+      im.castShadow = im.receiveShadow = true;
+      root.add(im);
+    }
+    // the flutes: thin shadowed grooves down each shaft
+    const flute = new THREE.InstancedMesh(new THREE.BoxGeometry(0.018, COL_H - 0.4, 0.018), shade, gaps.length * 8);
+    gaps.forEach((x, k) => {
+      for (let f = 0; f < 8; f++) {
+        const a = (f / 8) * Math.PI * 2;
+        flute.setMatrixAt(k * 8 + f, m4.makeTranslation(x + Math.cos(a) * 0.15, 0.1 + (COL_H - 0.32) / 2, colZ + Math.sin(a) * 0.15));
+      }
+    });
+    root.add(flute);
+    // the entablature, all round: the architrave, the frieze with its triglyphs, the cornice
+    const W = x1 - x0;
+    const D = z1 - z0;
+    block(W + 0.5, 0.32, D + 0.5, marble, cx, COL_H + 0.16, cz + 0.04);
+    block(W + 0.48, 0.3, D + 0.48, shade, cx, COL_H + 0.47, cz + 0.04);
+    const triglyphs = Math.round(W / 0.6);
+    for (let k = 0; k <= triglyphs; k++) block(0.18, 0.3, 0.04, marble, x0 - 0.2 + (k * (W + 0.4)) / triglyphs, COL_H + 0.47, z1 + 0.3);
+    block(W + 0.7, 0.14, D + 0.7, marble, cx, COL_H + 0.69, cz + 0.04); // the cornice, jutting out
+    // a warm light hidden under the architrave's front edge, for the doors at night
+    const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
+    block(W, 0.02, 0.04, strip, cx, COL_H - 0.01, z1 + 0.28);
+    glows.push((dark) => (strip.emissiveIntensity = 0.2 + 0.9 * dark));
+    // the roof: a low gable over the whole thing, the ridge running front to back, a pediment on the front
+    const top = COL_H + 0.76;
+    const rise = 1.0;
+    const hx = (W + 0.7) / 2;
+    const zf = z1 + 0.39;
+    const zb = z0 - 0.31;
+    const v = [[cx - hx, top, zf], [cx + hx, top, zf], [cx, top + rise, zf], [cx - hx, top, zb], [cx + hx, top, zb], [cx, top + rise, zb]];
+    const tris = [[0, 1, 2], [4, 3, 5], [3, 0, 2], [3, 2, 5], [1, 4, 5], [1, 5, 2]];
+    const roofGeo = new THREE.BufferGeometry();
+    roofGeo.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat().flatMap((k) => v[k]), 3));
+    roofGeo.computeVertexNormals();
+    root.add(mesh(roofGeo, new THREE.MeshPhongMaterial({ color: '#e6dfd2', shininess: 10, side: THREE.DoubleSide }), { cast: true, receive: true }));
+    // the pediment's raking cornices, and the golden poop in relief in the middle of it
+    const slope = Math.atan2(rise, hx);
+    for (const side of [-1, 1]) {
+      const rake = mesh(new THREE.BoxGeometry(Math.hypot(hx, rise) + 0.1, 0.14, 0.16), marble, { cast: true });
+      rake.rotation.z = side * slope;
+      add(rake, cx - (side * hx) / 2, top + rise / 2 + 0.06, zf + 0.03);
+    }
+    const relief = new THREE.MeshPhongMaterial({ color: '#ffd400', shininess: 70, emissive: '#7a5a00', emissiveIntensity: 0.25 });
+    [[0.38, 0.11, top + 0.18], [0.27, 0.1, top + 0.36], [0.16, 0.09, top + 0.52]].forEach(([r, h, y]) => {
+      const tier = mesh(new THREE.CylinderGeometry(r * 0.85, r, h, 24), relief, { cast: false });
+      tier.scale.z = 0.35; // flattened against the pediment
+      add(tier, cx, y, zf + 0.04);
+    });
+    const tip = mesh(new THREE.ConeGeometry(0.09, 0.16, 16), relief, { cast: false });
+    tip.scale.z = 0.35;
+    add(tip, cx, top + 0.66, zf + 0.04);
   }
+
+
 
   // ---------- the 쾌변 exercise ground: a wide open lawn in a clearing, mats in rows, walk in from any side ----------
   {

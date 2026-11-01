@@ -250,27 +250,6 @@ export function plasterTexture() {
   }), { repeat: true });
 }
 
-// the private restroom's bricks: little pixel bricks in warm reds, kept crisp (it was nicer that way)
-export function brickTexture() {
-  const c = canvasOf(16, 8, (g) => {
-    g.fillStyle = '#d6b39a';
-    g.fillRect(0, 0, 16, 8);
-    const bricks = ['#b5523b', '#a9492f', '#bd5c44'];
-    for (let y = 0; y < 2; y++) {
-      for (let x = -1; x < 3; x++) {
-        g.fillStyle = bricks[(x + y * 2 + 3) % 3];
-        g.fillRect(x * 8 + (y % 2) * 4, y * 4, 7, 3);
-      }
-    }
-  });
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = THREE.NearestFilter;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
 // the stall doors: painted sky blue, a little brushed, lighter at the top
 export function doorWoodCanvas() {
   return canvasOf(160, 104, (g) => {

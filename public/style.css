@@ -266,6 +266,7 @@ body:not(.wish-near) .chat { display: none; }
 }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.actions .break { flex-basis: 100%; height: 0; } /* starts a new line of buttons */
 
 /* the side rail: a column of small buttons at the right edge, out of the way of the main bar */
 .rail {

@@ -491,7 +491,7 @@ wss.on('connection', (ws, req) => {
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
       if (!validStall || room.stalls[i] || !nearStall(i)) return;
       sit(room, user, i);
-      const where = LAYOUT[i].type === 'private' ? `개인 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i].no}번 칸`;
+      const where = LAYOUT[i].type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i].no}번 칸`;
       broadcast(room, { t: 'toast', text: `${user.name}님이 ${where}에 들어갔어요` });
     } else if (m.t === 'knock' && user.stall === -1 && !user.roll) {
       if (!validStall || !room.stalls[i] || !nearStall(i)) return;

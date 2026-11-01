@@ -34,11 +34,12 @@ const toonRamp = (() => {
   return t;
 })();
 const mats = new Map();
-function matOf(color) {
-  let m = mats.get(color);
+function matOf(color, both = false) {
+  const key = both ? `${color}|both` : color;
+  let m = mats.get(key);
   if (!m) {
-    m = new THREE.MeshToonMaterial({ color, gradientMap: toonRamp });
-    mats.set(color, m);
+    m = new THREE.MeshToonMaterial({ color, gradientMap: toonRamp, side: both ? THREE.DoubleSide : THREE.FrontSide });
+    mats.set(key, m);
   }
   return m;
 }
@@ -161,7 +162,7 @@ export function makePerson(hair = LOOK.hair) {
   });
   const paint = (names, color) => names.forEach((n) => parts[n] && (parts[n].material = matOf(color)));
   paint(['head', 'ear_L', 'ear_R', 'hand_L', 'hand_R', 'leg_L', 'leg_R'], LOOK.skin);
-  paint(['hair', 'tuft'], hair);
+  if (parts.hair) parts.hair.material = matOf(hair, true); // an open shell: its inside can show at the edge
   paint(['torso', 'arm_L', 'arm_R'], LOOK.shirt);
   paint(['hips', 'cuff_L', 'cuff_R'], LOOK.pants);
   paint(['shoe_L', 'shoe_R'], LOOK.shoes);

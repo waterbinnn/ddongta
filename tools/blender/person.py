@@ -8,7 +8,7 @@ its pivot at its joint, so the page can swing legs and arms and turn the head in
 Colours are not set here: the page paints each part by name (skin, hair, shirt, pants, shoes), and draws the face.
 
 Parts (Blender is z-up and the person faces -y; the exporter turns this into three.js's y-up, facing +z):
-  hips (shorts) > torso (tee) > head (skin) > hair, tuft, ear_L / ear_R
+  hips (shorts) > torso (tee) > head (skin) > hair, ear_L / ear_R
                               > arm_L / arm_R (sleeves) > hand_L / hand_R
                 > leg_L / leg_R (bare legs) > shoe_L / shoe_R, cuff_L / cuff_R (shorts round the ankles, hidden by default)
 """
@@ -70,39 +70,6 @@ def ellipsoid(name, pivot, center, radii, parent=None, segs=20, rings=12):
     return new_object(name, ellipsoid_bm(center, radii, segs, rings), Vector(pivot), parent)
 
 
-def shell(keep, radius, scale=HEAD_SCALE, fringe=False):
-    """A sphere around the head, keeping only the faces `keep(local)` says yes to: a hair cut."""
-    bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=48, v_segments=26, radius=radius)
-    for v in bm.verts:
-        v.co = Vector((v.co.x * scale.x, v.co.y * scale.y, v.co.z * scale.z))
-    drop = [f for f in bm.faces if not keep(f.calc_center_median(), fringe)]
-    bmesh.ops.delete(bm, geom=drop, context='FACES')
-    # a little thickness so the edge reads as hair, not paper
-    bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.016)
-    for v in bm.verts:
-        v.co += HEAD_C
-    return bm
-
-
-# Cuts follow the sphere's own rows and columns (height and angle round the head), so the edges come out clean.
-def around(p):
-    """Angle round the head from the middle of the face (0) to the back (pi)."""
-    return abs(math.atan2(p.x, -p.y))
-
-
-HAIRLINE = 0.07  # above the middle of the head; the eyes sit about 0.07 below the middle
-
-
-def keep_hair(p, _):
-    a = around(p)
-    if a < 1.0:
-        return p.z > HAIRLINE  # the forehead is covered down to here; soft locks hang over the edge (see below)
-    if a < 1.85:
-        return p.z > 0.02  # above the ears
-    return p.z > -0.17  # down to the nape
-
-
 def capsule_bm(top, bottom, r_top, r_bottom, segs=16, rings=12):
     """A rounded rod from `top` to `bottom`, thinning from r_top to r_bottom (an arm, a forearm)."""
     top, bottom = Vector(top), Vector(bottom)
@@ -158,34 +125,67 @@ for side, tag in ((1, 'L'), (-1, 'R')):  # the person's left is +x when they fac
         v.co += hip + Vector((0, 0, -0.1))
     new_object(f'cuff_{tag}', bm, hip, leg)   # the shorts round the ankles, shown when they are pulled down
 
-# ---------- hair: soft and round, a side-parted fringe, one tuft sticking up ----------
-hair_bm = shell(keep_hair, 0.305)
-for v in hair_bm.verts:
-    v.co.z += 0.012  # a little volume on top
-# soft locks along the hairline make a wavy fringe instead of a hard cut
-# Each lock sits on the head's surface right at the hairline, half tucked under the hair cap, so there is
-# no gap to see from above; their bottoms dip by different amounts.
-LOCKS = [(-0.78, 0.012), (-0.5, 0.03), (-0.2, 0.02), (0.1, 0.035), (0.4, 0.022), (0.7, 0.03), (0.95, 0.01)]
-rx, ry, rz = HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z
-for ang, dip in LOCKS:
-    made = bmesh.ops.create_uvsphere(hair_bm, u_segments=14, v_segments=10, radius=1.0)
-    zc = HAIRLINE - dip
-    ring = math.sqrt(1 - (zc / rz) ** 2) + 0.03  # how far out the surface is at that height, plus the hair's thickness
-    spot = HEAD_C + Vector((math.sin(ang) * rx * ring, -math.cos(ang) * ry * ring, zc + 0.012))
-    rot = Matrix.Rotation(-ang, 3, 'Z')
-    for v in made['verts']:
-        local = Vector((v.co.x * 0.068, v.co.y * 0.03, v.co.z * 0.06))
-        v.co = rot @ local + spot
-new_object('hair', hair_bm, Vector((0, 0, NECK_Z)), head)
-# one tuft on top, curling forward
-bm = bmesh.new()
-bmesh.ops.create_cone(bm, cap_ends=True, segments=14, radius1=0.045, radius2=0.006, depth=0.17)
-for v in bm.verts:
-    t = (v.co.z + 0.085) / 0.17  # 0 at the root, 1 at the tip
-    v.co.y -= 0.11 * t * t       # curls forward
-    v.co.z -= 0.03 * t * t
-    v.co += HEAD_C + Vector((0.03, 0.05, HEAD_R * HEAD_SCALE.z + 0.075))
-new_object('tuft', bm, Vector((0, 0, NECK_Z)), head)
+# ---------- hair: close to the head, a spiky fringe, pointed sideburns in front of the ears ----------
+# The hair is the head's own ball, a little bigger, cut along a hairline that rises and falls round the head.
+# Points below the line are pulled onto the line, so the edge follows it exactly (spikes and all), and the
+# hair thins down to the skin at the edge instead of ending in a step.
+
+def zigzag(u):
+    """0 at the spike tips, 1 between them."""
+    return abs((u % 1) - 0.5) * 2
+
+
+def lerp_points(pts, s):
+    for (s0, h0), (s1, h1) in zip(pts, pts[1:]):
+        if s <= s1:
+            return h0 + (h1 - h0) * (s - s0) / (s1 - s0)
+    return pts[-1][1]
+
+
+SIDE = [(0.95, 0.045), (1.22, -0.13), (1.44, 0.05), (1.85, 0.06), (2.2, -0.15), (math.pi, -0.17)]
+
+
+def hairline(a):
+    """Height of the hair's edge above the middle of the head, at angle `a` round it (0 = middle of the face)."""
+    s = abs(a)
+    if s < 0.95:
+        return 0.085 - 0.085 * (1 - zigzag((a + 0.95) / 0.38))  # five spikes across the forehead
+    h = lerp_points(SIDE, s)
+    if s > 2.2:
+        h -= 0.035 * (1 - zigzag((s - 2.2) / 0.32))  # a few points at the nape
+    return h
+
+
+def hair_bm():
+    rx, ry, rz = HEAD_R * HEAD_SCALE.x, HEAD_R * HEAD_SCALE.y, HEAD_R * HEAD_SCALE.z
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=96, v_segments=48, radius=1.0)
+    under = set()
+    for v in bm.verts:
+        d = v.co.copy()
+        a = math.atan2(d.x, -d.y)
+        line = hairline(a)
+        height = d.z * rz
+        if height < line:
+            # pull it up onto the hairline, at the same angle round the head
+            under.add(v)
+            zz = max(-0.999, min(0.999, line / rz))
+            flat = Vector((d.x, d.y, 0))
+            flat = flat.normalized() if flat.length > 1e-6 else Vector((0, -1, 0))
+            ring = math.sqrt(1 - zz * zz)
+            d = Vector((flat.x * ring, flat.y * ring, zz))
+            thick = 0.006
+        else:
+            t = min(1.0, (height - line) / 0.07)
+            thick = 0.006 + 0.022 * (t * t * (3 - 2 * t))  # thin at the edge, full a little above it
+            thick += 0.01 * max(0.0, d.z) ** 2  # a touch more on the crown
+        v.co = Vector((d.x * (rx + thick), d.y * (ry + thick), d.z * (rz + thick))) + HEAD_C
+    gone = [f for f in bm.faces if all(v in under for v in f.verts)]
+    bmesh.ops.delete(bm, geom=gone, context='FACES')
+    return bm
+
+
+new_object('hair', hair_bm(), Vector((0, 0, NECK_Z)), head)
 
 # ---------- export ----------
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
@@ -214,7 +214,7 @@ if PREVIEW:
         return m
 
     skin, hair, shirt, pants, shoe = mat('skin', (1, 0.9, 0.84)), mat('hair', (0.12, 0.07, 0.05)), mat('shirt', (1, 0.66, 0.08)), mat('pants', (0.07, 0.16, 0.38)), mat('shoe', (0.1, 0.08, 0.1))
-    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'tuft': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'cuff': pants, 'shoe': shoe}
+    paint = {'head': skin, 'ear': skin, 'hand': skin, 'leg': skin, 'hair': hair, 'torso': shirt, 'arm': shirt, 'hips': pants, 'cuff': pants, 'shoe': shoe}
     for o in scene.objects:
         if o.type == 'MESH':
             o.data.materials.append(next(v for k, v in paint.items() if o.name.startswith(k)))

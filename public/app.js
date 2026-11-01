@@ -188,6 +188,9 @@ const ICONS = {
   rub: icon(['.k.....k.', '...FF....', '..FFFF.k.', '.FFFFFF..', '.FFffFF..', '..FFFF...', '...FF....']),
   pray: icon(['...FF...', '..FffF..', '..FffF..', '..FffF..', '.FFffFF.', 'FFF..FFF']),
   poop: asIcon(PROPS.poop),
+  drink: icon(['..xx..', '..xx..', '.YYYY.', 'YWWWWY', 'YWWWWY', 'YYYYYY', 'YYYYYY', '.yyyy.']),
+  kick: icon(['...FF....', '...FF....', '...FF....', '..DDD....', '.DDDDDDD.', 'DDDDDDDDD', 'ddddddddd']),
+  lunch: icon(['DDDDDDDDD', 'DWWWWkxAD', 'DWWWWkkAD', 'DWWWWxkAD', 'DDDDDDDDD']),
   // the push button: an empty (pale) poop that fills up with the real one
   poopEmpty: asIcon(sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f6ecdf', P: '#e3d1b8', h: '#ffffff' })),
 };
@@ -2864,65 +2867,82 @@ function renderActions() {
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => push.addEventListener(ev, () => setHold(false)));
     push.insertAdjacentHTML('beforeend', '<kbd>Space</kbd>');
     pad.append(push); // only the poop button lives in the bottom-right
-    if ((me.pk || []).length) bar.append(mainBtn('wash', '쾌변음료 마시기', drinkNow, 'drink'));
-    if (me.un) bar.append(miniBtn('poop', '줍기', () => send({ t: 'pick' }))); // the poop under you, onto your head
-    if (mode === 'squatting') bar.append(miniBtn('exit', '일어나기', () => send({ t: 'squat', on: false })));
-    else {
-      if (inRoom) bar.append(miniBtn('bench', '일어나기', () => { setHold(false); roomStanding = true; }));
-      bar.append(miniBtn(null, '도시락 먹기', () => send({ t: 'lunch' })), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
-    }
+  }
+  // the bottom bar: the one main thing to do here (Space), and only what belongs to this place
+  if (mode === 'inside') {
+    if (inRoom) bar.append(withKey(miniBtn('jump', '일어나기', () => { setHold(false); roomStanding = true; }), 'F'));
+    bar.append(withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+  } else if (mode === 'squatting') {
+    bar.append(withKey(miniBtn('jump', '일어나기', () => send({ t: 'squat', on: false })), 'F'));
   } else if (mode === 'standing') {
     // standing in my own room: sit back down whenever
-    bar.append(mainBtn('bench', '다시 앉기', () => { roomStanding = false; }), miniBtn('bird', '에티켓벨', ringBell), miniBtn('wash', '손 씻기', washFromStall), miniBtn('exit', '나가기', exitStall));
+    bar.append(withKey(mainBtn('bench', '앉기', () => { roomStanding = false; }), 'F'), withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
     bar.append(b);
   } else if (mode === 'benched') {
-    bar.append(mainBtn('exit', '일어나기', () => send({ t: 'bench', on: false })));
+    bar.append(withKey(mainBtn('jump', '일어나기', () => send({ t: 'bench', on: false })), 'F'));
   } else if (mode === 'sink') {
     bar.append(mainBtn('wash', '손 씻기', washHands));
   } else if (mode === 'near') {
-    bar.append(mainBtn('door', '이 칸에 앉기', () => tryEnter(nearestEmptyStall(me.x, me.y))));
+    bar.append(mainBtn('door', '이 칸에 들어가기', () => tryEnter(nearestEmptyStall(me.x, me.y))));
   } else if (mode.startsWith('knock')) {
     const stage = Number(mode.slice(5));
     bar.append(mainBtn('knock', KNOCK_LABELS[stage], () => tryKnock(nearestOccupiedStall(me.x, me.y)), `knock k${stage}`));
   } else if (mode.startsWith('bench')) {
     bar.append(mainBtn('bench', '돗자리에 앉기', () => goSitOnBench(bench)));
   } else if (mode === 'wish') {
-    // at the golden poop: rub it, put your palms together, and write a wish in the box below
-    bar.append(mainBtn('rub', '황금똥 문지르기', () => send({ t: 'rub' })), mainBtn('pray', '합장하기', () => send({ t: 'pray' })));
+    // at the golden poop: rub it, or put your palms together; a wish goes in the box below
+    bar.append(mainBtn('rub', '황금똥 문지르기', () => send({ t: 'rub' })), miniBtn('pray', '합장하기', () => send({ t: 'pray' })));
   } else if (mode === 'vend') {
-    bar.append(mainBtn('knock', '자판기 차기', () => send({ t: 'kick' })));
+    bar.append(mainBtn('kick', '자판기 차기', () => send({ t: 'kick' })));
   } else if (mode === 'bean') {
     bar.append(mainBtn('sprout', `비료로 뿌리기 · ${me.pl}개`, fertilize));
   } else if (mode === 'bush') {
-    bar.append(mainBtn('door', '똥 누기', () => send({ t: 'squat', on: true })));
+    bar.append(mainBtn('poop', '똥 누기', () => send({ t: 'squat', on: true })));
   } else if (mode === 'lawn') {
-    // 쾌변 체조: any move, any time; a few of them and the signal comes
+    // 쾌변 체조: any move, any time (1 to 4)
     for (const [move, label] of EX_MOVES) bar.append(miniBtn(null, label, () => doExercise(move)));
   } else {
-    bar.append(mainBtn('find', '똥 누러 가기', goPoop));
+    bar.append(mainBtn('find', '똥 누러 가기', goPoop), withKey(miniBtn('bench', '앉기', sitHere), 'F')); // 앉기: right where you are
   }
-  // 앉기: sit down right where you are, anywhere, while just walking about (not where a place has its own buttons;
-  // on a mat 돗자리에 앉기 takes you to a place on it instead)
-  if (mode === 'far') bar.append(miniBtn('bench', '앉기', sitHere));
-  if (!['inside', 'standing', 'rolling', 'squatting'].includes(mode) && nearDropHere()) bar.append(miniBtn('poop', '줍기', () => send({ t: 'pick' }))); // a poop on the ground right in front
-  if ((me.pk || []).length && !['inside', 'rolling', 'squatting'].includes(mode)) bar.append(miniBtn('wash', '쾌변음료 마시기', drinkNow)); // a drink in hand
   const canMove = !['inside', 'standing', 'rolling', 'squatting'].includes(mode);
   $('#moveBtn').disabled = !canMove;
   if (!canMove) setMoveMenu(false);
+
+  // the side rail: what you carry or can do anywhere it applies, each always on the same key
+  const rail = $('#rail');
+  rail.innerHTML = '';
+  if ((me.pk || []).length && mode !== 'rolling') {
+    const b = withKey(miniBtn('drink', '쾌변음료 마시기', drinkNow), 'C');
+    if (me.cn) b.classList.add('urge'); // stuck: this is the way out
+    rail.append(b);
+  }
+  const pickHere = ((mode === 'inside' || mode === 'squatting') && me.un) || (canMove && mode !== 'rolling' && nearDropHere());
+  if (pickHere) rail.append(withKey(miniBtn('poop', '줍기', () => send({ t: 'pick' })), 'G'));
+  if (mode === 'inside') rail.append(withKey(miniBtn('lunch', '도시락 먹기', () => send({ t: 'lunch' })), 'L'));
+  if (mode === 'inside' || mode === 'standing') rail.append(withKey(miniBtn('bird', '에티켓벨', ringBell), 'B'));
+  labelKeys(rail);
   labelKeys(bar);
 }
 
+// a button that always answers to the same key, wherever it shows up
+function withKey(b, key) {
+  b.dataset.key = key;
+  return b;
+}
+
 // every button shows its key beside it, like the sauna's bar: Space for the main one, then 1, 2, 3 …
+// (buttons with their own key keep it)
 // (in a stall or a squat, Space is the push button)
 function labelKeys(bar) {
   let n = 1;
   let spaceTaken = Boolean($('#pushPad .act.push'));
   for (const b of bar.querySelectorAll('button')) {
     let key;
-    if (!spaceTaken && b.classList.contains('main')) {
+    if (b.dataset.key) key = b.dataset.key; // a button with its own key (F, G, C, H, Esc …)
+    else if (!spaceTaken && b.classList.contains('main')) {
       key = 'Space';
       spaceTaken = true;
     } else key = String(n++);
@@ -3791,7 +3811,7 @@ window.addEventListener('keydown', (e) => {
     // holding a direction: Space means run, not sit or knock
     if (MOVE_KEYS.some((k) => keys.has(k))) return;
     // otherwise Space is the main button, whatever it is right now (knocks repeat while held)
-    const main = $('#actions').querySelector('button[data-key="Space"]');
+    const main = $('#actions').querySelector('button[data-key="Space"]') || $('#actions').querySelector('button.main'); // a main button with its own key answers to Space too
     if (main && !main.disabled && (!e.repeat || main.classList.contains('knock'))) main.click();
   } else if (/^Digit[1-9]$/.test(e.code)) {
     const b = $('#actions').querySelector(`button[data-key="${e.code.slice(5)}"]`);
@@ -3806,6 +3826,11 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'KeyE') {
     cam.tYaw = clamp(cam.tYaw - 0.35, -YAW_MAX, YAW_MAX);
     manualCamAt = performance.now();
+  } else if (/^Key[A-Z]$/.test(e.code)) {
+    // the buttons with their own letter key: 앉기·일어나기 F, 줍기 G, 쾌변음료 C, 손 씻기 H, 도시락 L, 에티켓벨 B
+    const k = e.code.slice(3);
+    const b = document.querySelector(`#actions button[data-key="${k}"], #rail button[data-key="${k}"]`);
+    if (b && !b.disabled && !e.repeat) b.click();
   } else if (e.key === '=' || e.key === '+') {
     cam.tDist = clamp(cam.tDist * 0.8, DIST_MIN, DIST_MAX);
     manualCamAt = performance.now();

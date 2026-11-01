@@ -267,6 +267,24 @@ body:not(.wish-near) .chat { display: none; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 
+/* the side rail: a column of small buttons at the right edge, out of the way of the main bar */
+.rail {
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 20;
+}
+.rail:empty { display: none; }
+.rail .act { height: 38px; }
+/* stuck with 변비 and a drink in hand: the drink is the way out */
+.rail .act.urge { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; animation: urge 1.2s ease-in-out infinite; }
+@keyframes urge { 50% { transform: scale(1.06); } }
+
 .act {
   display: flex;
   align-items: center;

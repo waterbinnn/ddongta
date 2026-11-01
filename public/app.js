@@ -1169,44 +1169,64 @@ const wishHits = []; // the golden poop statue: tapping it walks you up to it
 // what a stall is called: "공중화장실 3번 칸" or "프리미엄 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
 
-// A private room's door: a tall dark walnut door in the building's front wall, with a brass number and a lock light.
-// Whoever is inside is in their own room, so nobody shows out here; an empty room stands ajar, warm light inside.
-const privateGlow = new THREE.MeshBasicMaterial({ color: '#f6d3a4' });
+// A premium room's way in: an open doorway in the temple's wall, framed in marble, going into the shadow; only its
+// number is carved above it, with a small light beside (green free, red in use). Whoever is inside is in their own
+// room, so nobody shows out here.
+const doorwayShadow = (() => {
+  const c = canvas(32, 96, (g) => {
+    const grad = g.createLinearGradient(0, 0, 0, 96);
+    grad.addColorStop(0, '#1f1813');
+    grad.addColorStop(0.75, '#2e241c');
+    grad.addColorStop(1, '#4a3a2c'); // a little light on the floor inside
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 32, 96);
+    g.fillStyle = 'rgba(0, 0, 0, 0.35)'; // darker at the sides, for depth
+    g.fillRect(0, 0, 5, 96);
+    g.fillRect(27, 0, 5, 96);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: t });
+})();
+const doorFrame = new THREE.MeshPhongMaterial({ color: '#f4efe6', shininess: 20 });
 function makePrivateDoor(i) {
   const L = LAYOUT[i];
   const g = new THREE.Group();
   g.position.set(toX(L.cx), 0, toZ(L.cy));
-  const doorCanvas = canvas(48, 112, (c) => {
-    c.fillStyle = '#5a3d2a'; // deep walnut, like a good hotel's doors
-    c.fillRect(0, 0, 48, 112);
-    c.fillStyle = '#6b4a33'; // two raised panels
-    c.fillRect(6, 8, 36, 44);
-    c.fillRect(6, 60, 36, 44);
-    c.fillStyle = '#4e3424'; // the grain
-    for (let y = 12; y < 104; y += 9) c.fillRect(9, y, 30, 1);
-    c.fillStyle = '#c9a15a'; // a brass number plate
-    c.fillRect(14, 18, 20, 16);
-    c.fillStyle = '#3a2a1c';
-    c.font = 'bold 14px -apple-system, sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText(String(L.no), 24, 27);
-    c.fillStyle = '#d8b46a'; // a brass handle
-    c.fillRect(38, 56, 4, 10);
-  });
+  const doorCanvas = canvas(48, 112, () => {}); // (no door to draw; kept so the stall code can treat every stall alike)
   const doorTex = new THREE.CanvasTexture(doorCanvas);
   doorTex.colorSpace = THREE.SRGBColorSpace;
-  const face = new THREE.MeshLambertMaterial({ map: doorTex });
-  const edge = mat('#4a3324');
-  const doorway = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 2.1), privateGlow); // the warm room behind the door
+  const doorway = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 2.1), doorwayShadow); // open, into the shadow
   doorway.position.set(0.55, 1.05, 0.004);
-  const hinge = new THREE.Group();
-  hinge.position.set(0.12, 0, 0.03);
-  const door = mesh(new THREE.BoxGeometry(0.86, 2.1, 0.05), [edge, edge, edge, edge, face, face], { cast: true });
-  door.position.set(0.43, 1.05, 0);
+  for (const x of [0.08, 1.02]) {
+    const jamb = mesh(new THREE.BoxGeometry(0.08, 2.22, 0.06), doorFrame, { cast: true });
+    jamb.position.set(x, 1.11, 0.03);
+    g.add(jamb);
+  }
+  const lintel = mesh(new THREE.BoxGeometry(1.06, 0.1, 0.07), doorFrame, { cast: true });
+  lintel.position.set(0.55, 2.2, 0.035);
+  g.add(lintel);
+  // the number, carved into a small marble tablet above the doorway
+  const plate = canvas(64, 36, (c) => {
+    c.fillStyle = '#ece6da';
+    c.fillRect(0, 0, 64, 36);
+    c.fillStyle = '#6b5a44';
+    c.font = '600 24px Georgia, "Times New Roman", serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(String(L.no), 32, 19);
+  });
+  const plateTex = new THREE.CanvasTexture(plate);
+  plateTex.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.MeshLambertMaterial({ map: plateTex }); // (lights up under the pointer)
+  const tablet = mesh(new THREE.PlaneGeometry(0.34, 0.19), face);
+  tablet.position.set(0.55, 2.48, 0.03);
+  g.add(tablet);
   const lock = mesh(G.lock, M.lockGreen);
-  lock.position.set(0.74, 1.35, 0.03);
-  hinge.add(door, lock);
+  lock.position.set(0.8, 2.48, 0.035);
+  g.add(lock);
+  const hinge = new THREE.Group(); // no door to swing any more
+  hinge.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.visible = false;
   const hit = new THREE.Mesh(G.hit, M.hit);

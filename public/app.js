@@ -247,29 +247,44 @@ let roomWashUntil = 0; // washing at the room's sink until then
 let roomStanding = false; // up off the toilet, standing in the room
 let roomSeat = -1; // sitting on one of the room's seats (the stool, the sofa), resting; -1 when not
 let roomLastSeat = 0; // the last one, to get up beside it
-let readUntil = 0; // reading the magazine until then
+let bookOpen = false; // reading the book, until you close it
+let bookPage = 0; // which spread it's open at
 let danceUntil = 0; // dancing until then
-const reading = () => performance.now() < readUntil;
+const reading = () => bookOpen;
 const dancing = () => performance.now() < danceUntil;
-// 오늘의 한 줄: what the magazine says today
-const LINES = [
-  '급할수록 천천히, 힘줄수록 숨 쉬기.',
-  '오늘 하루도 무사히 내보내는 중입니다.',
-  '변기 위의 5분은 누구에게도 방해받지 않는 시간.',
-  '물은 하루 여덟 잔, 고민은 하루 한 번만.',
-  '나오지 않는 날도 있다. 그런 날은 바나나우유.',
-  '좋은 생각은 대개 변기 위에서 떠오른다.',
-  '쾌변은 기다림의 기술입니다.',
-  '오늘의 운세: 뒤가 시원한 하루.',
-  '인생은 들어가는 것보다 나오는 게 중요하다.',
-  '휴지는 넉넉히, 마음도 넉넉히.',
-  '신호가 오면 미루지 말 것. 사랑도, 똥도.',
-  '다리 저리기 전에 일어나기.',
+// the book on the shelf: 『쾌변의 기술』, two pages a spread
+const BOOK = [
+  ['제1장 · 신호', '모든 일에는 때가 있다. 똥도 그렇다. 신호가 오면 하던 일을 내려놓고 일어서라. 미룬 신호는 다시 오지 않거나, 가장 곤란할 때 다시 온다.', '몸이 보내는 신호를 듣는 사람은 하루가 가볍다. 오늘 아침 당신의 배는 무엇이라 말했는가.'],
+  ['제2장 · 자세', '무릎을 엉덩이보다 조금 높이 두면 길이 곧아진다. 옛사람들이 쪼그려 앉았던 데에는 다 이유가 있다.', '허리를 살짝 숙이고 숨을 길게 내쉬어라. 힘은 주는 것이 아니라 흘려보내는 것이다.'],
+  ['제3장 · 기다림', '나오지 않는 날도 있다. 그런 날에는 물을 한 잔 마시고 창밖을 보라. 조급함은 장을 굳게 만든다.', '기다림은 패배가 아니다. 좋은 것은 대개 천천히 온다.'],
+  ['제4장 · 비움', '다 비우고 일어설 때의 가벼움을 기억하라. 그것이 오늘을 버티게 하는 작은 승리다.', '비워야 채울 수 있다. 장도, 마음도, 메일함도.'],
+  ['맺음말', '이 책을 변기 위에서 다 읽었다면, 당신은 이미 너무 오래 앉아 있었다.', '다리 저리기 전에 일어나라. 그리고 손을 씻어라.\n\n— 끝 —'],
 ];
-function readMagazine() {
-  readUntil = performance.now() + 2000; // a glance at today's line
+function showBookPage() {
+  const [chapter, left, right] = BOOK[bookPage];
+  $('#book .chapter').textContent = chapter;
+  $('#book .left p').textContent = left;
+  $('#book .right p').textContent = right;
+  $('#book .left .no').textContent = bookPage * 2 + 1;
+  $('#book .right .no').textContent = bookPage * 2 + 2;
+}
+// 책 읽기 / 책 덮기: open it where you left off, close it whenever
+function toggleBook() {
+  bookOpen = !bookOpen;
+  if (bookOpen) {
+    setHold(false);
+    showBookPage();
+  }
+}
+function turnPage() {
+  bookPage = (bookPage + 1) % BOOK.length;
+  showBookPage();
+}
+// up off the toilet, the stool or the sofa (there's no button for it: tap anywhere, or press the down arrow)
+function standUpInRoom() {
   setHold(false);
-  $('#readCard p').textContent = LINES[Math.floor(Math.random() * LINES.length)];
+  roomSeat = -1;
+  roomStanding = true;
 }
 function dance() {
   // up you get (off the toilet, the stool or the sofa) and a little two-second dance
@@ -1169,26 +1184,9 @@ const wishHits = []; // the golden poop statue: tapping it walks you up to it
 // what a stall is called: "공중화장실 3번 칸" or "프리미엄 화장실 5호"
 const stallName = (i) => (LAYOUT[i]?.type === 'private' ? `프리미엄 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i]?.no}번 칸`);
 
-// A premium room's way in: an open doorway in the temple's wall, framed in marble, going into the shadow; only its
-// number is carved above it, with a small light beside (green free, red in use). Whoever is inside is in their own
+// A premium room's spot: a bay of the open temple's colonnade. There is no door; only the room's number is carved
+// on the architrave above, with a small light beside it (green free, red in use). Whoever is inside is in their own
 // room, so nobody shows out here.
-const doorwayShadow = (() => {
-  const c = canvas(32, 96, (g) => {
-    const grad = g.createLinearGradient(0, 0, 0, 96);
-    grad.addColorStop(0, '#1f1813');
-    grad.addColorStop(0.75, '#2e241c');
-    grad.addColorStop(1, '#4a3a2c'); // a little light on the floor inside
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 32, 96);
-    g.fillStyle = 'rgba(0, 0, 0, 0.35)'; // darker at the sides, for depth
-    g.fillRect(0, 0, 5, 96);
-    g.fillRect(27, 0, 5, 96);
-  });
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.MeshBasicMaterial({ map: t });
-})();
-const doorFrame = new THREE.MeshPhongMaterial({ color: '#f4efe6', shininess: 20 });
 function makePrivateDoor(i) {
   const L = LAYOUT[i];
   const g = new THREE.Group();
@@ -1196,17 +1194,8 @@ function makePrivateDoor(i) {
   const doorCanvas = canvas(48, 112, () => {}); // (no door to draw; kept so the stall code can treat every stall alike)
   const doorTex = new THREE.CanvasTexture(doorCanvas);
   doorTex.colorSpace = THREE.SRGBColorSpace;
-  const doorway = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 2.1), doorwayShadow); // open, into the shadow
-  doorway.position.set(0.55, 1.05, 0.004);
-  for (const x of [0.08, 1.02]) {
-    const jamb = mesh(new THREE.BoxGeometry(0.08, 2.22, 0.06), doorFrame, { cast: true });
-    jamb.position.set(x, 1.11, 0.03);
-    g.add(jamb);
-  }
-  const lintel = mesh(new THREE.BoxGeometry(1.06, 0.1, 0.07), doorFrame, { cast: true });
-  lintel.position.set(0.55, 2.2, 0.035);
-  g.add(lintel);
-  // the number, carved into a small marble tablet above the doorway
+  // the number, carved into a small marble tablet on the architrave above this bay of the colonnade
+  const archY = GROUNDS.wallH * U - 0.64;
   const plate = canvas(64, 36, (c) => {
     c.fillStyle = '#ece6da';
     c.fillRect(0, 0, 64, 36);
@@ -1220,10 +1209,10 @@ function makePrivateDoor(i) {
   plateTex.colorSpace = THREE.SRGBColorSpace;
   const face = new THREE.MeshLambertMaterial({ map: plateTex }); // (lights up under the pointer)
   const tablet = mesh(new THREE.PlaneGeometry(0.34, 0.19), face);
-  tablet.position.set(0.55, 2.48, 0.03);
+  tablet.position.set(0.55, archY, 0.43);
   g.add(tablet);
   const lock = mesh(G.lock, M.lockGreen);
-  lock.position.set(0.8, 2.48, 0.035);
+  lock.position.set(0.8, archY, 0.435);
   g.add(lock);
   const hinge = new THREE.Group(); // no door to swing any more
   hinge.visible = false;
@@ -1232,7 +1221,7 @@ function makePrivateDoor(i) {
   const hit = new THREE.Mesh(G.hit, M.hit);
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
-  g.add(doorway, hinge, hit);
+  g.add(hinge, hit);
   stallRoot.add(g);
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
@@ -1723,16 +1712,16 @@ let leavingRoom = false; // walked out through the door, waiting for the server 
 // the seat (stool or sofa) I'm standing by, or -1
 const nearSeat = () => (inRoom && roomStanding && roomSeat < 0 ? room.seats.findIndex((st) => Math.hypot(roomWalk.x - st.at.x, roomWalk.z - st.at.z) < st.near) : -1);
 let partyLit = false;
-// holding the magazine open in both hands, looking down into it
+// holding the book open in both hands, looking down into it
 function readFor(p, on) {
-  if (!p.magazine) {
+  if (!p.book) {
     if (!on) return;
-    p.magazine = room.magazine();
-    p.magazine.position.set(0, HIP_Y + 0.2, 0.34); // held low and out in front, below the chin
-    p.magazine.rotation.x = -0.55; // tipped up toward the eyes
-    p.group.add(p.magazine);
+    p.book = room.book();
+    p.book.position.set(0, HIP_Y + 0.2, 0.34); // held low and out in front, below the chin
+    p.book.rotation.x = -0.55; // tipped up toward the eyes
+    p.group.add(p.book);
   }
-  p.magazine.visible = on;
+  p.book.visible = on;
   if (!on) return;
   p.parts.arm_L?.rotation.set(-0.95, 0, -0.3);
   p.parts.arm_R?.rotation.set(-0.95, 0, 0.3);
@@ -1950,8 +1939,9 @@ function followWalk(dt) {
 // how far the camera can sit from (fx, fz) along this yaw and pitch before a restroom wall gets in the way
 function clearDist(fx, fz, yaw, pitch, dist) {
   const P = GROUNDS.public;
+  const T = GROUNDS.private;
   const walls = [
-    GROUNDS.private,
+    { x0: T.x0 - 35, x1: T.x1 + 35, y0: T.y0 - 50, y1: T.y1 + 50, lo: GROUNDS.wallH * U - 0.85, h: GROUNDS.wallH * U + 1.3 }, // the open temple's roof, overhead
     { x0: P.x0, x1: P.x1, y0: P.y0, y1: P.doorLine }, // the stalls and the back wall
     { x0: P.x0 - 20, x1: P.x0 + 20, y0: P.y0, y1: P.y1 }, // the side walls
     { x0: P.x1 - 20, x1: P.x1 + 20, y0: P.y0, y1: P.y1 },
@@ -1962,7 +1952,7 @@ function clearDist(fx, fz, yaw, pitch, dist) {
     const x = (fx + Math.sin(yaw) * cp * k) / U;
     const z = (fz + Math.cos(yaw) * cp * k) / U;
     const y = 0.9 + Math.sin(pitch) * k;
-    if (walls.some((w) => y < (w.h ?? GROUNDS.wallH * U + 0.5) && x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
+    if (walls.some((w) => y >= (w.lo ?? -1) && y < (w.h ?? GROUNDS.wallH * U + 0.5) && x > w.x0 - 15 && x < w.x1 + 15 && z > w.y0 - 15 && z < w.y1 + 15)) {
       return Math.max(1.8, k - 0.35);
     }
   }
@@ -2216,7 +2206,8 @@ function syncRoom(t, dt) {
     inRoom = want >= 0;
     roomStanding = true; // you come in standing, just inside the door
     roomSeat = -1;
-    readUntil = danceUntil = 0;
+    bookOpen = false;
+    danceUntil = 0;
     leavingRoom = false;
     roomSpot = '';
     room.group.visible = inRoom;
@@ -2293,9 +2284,9 @@ function syncRoom(t, dt) {
     lunchFor(roomPerson, meId, t / 1000, spot === 'seat');
     readFor(roomPerson, spot !== 'wash' && reading());
   }
-  if (spot === 'wash') readUntil = 0;
+  if (spot === 'wash') bookOpen = false;
   if (spot !== 'stand') danceUntil = 0;
-  $('#readCard').hidden = !reading();
+  $('#book').hidden = !bookOpen;
   room.mood.tick(t / 1000, dancing());
   if (!dancing() && room.mood.name !== 'party' && partyLit) room.mood.set(room.mood.name); // the party's over: back to how it was
   partyLit = dancing() || room.mood.name === 'party';
@@ -3050,7 +3041,7 @@ function renderActions() {
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}seat${nearSeat()}${choosingToilet ? 'choose' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}seat${nearSeat()}${choosingToilet ? 'choose' : ''}${bookOpen ? 'book' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -3139,10 +3130,8 @@ function renderActions() {
   // out walking about (the exercise lawn too): sit or lie down right where you are
   if (mode === 'far' || mode === 'lawn') rail.append(withKey(miniBtn('bench', '앉기', sitHere), 'F'), withKey(miniBtn('lie', '눕기', lieDown), 'Z'));
   if (inRoom) {
-    // first, sitting down or getting up (highlighted; Space works it too)
-    if (mode === 'inside') rail.append(withKey(mainBtn('jump', '일어나기', () => { setHold(false); roomStanding = true; }), 'F'));
-    else if (mode === 'resting') rail.append(withKey(mainBtn('jump', '일어나기', () => { roomSeat = -1; roomStanding = true; }), 'F'));
-    else if (mode === 'standing') {
+    // first, sitting down (highlighted; Space works it too). To get up, tap anywhere or press the down arrow
+    if (mode === 'standing') {
       // sit on the stool or the sofa when you're by it, or back on the toilet whenever
       const by = nearSeat();
       const toilet = () => { roomStanding = false; danceUntil = 0; };
@@ -3151,7 +3140,7 @@ function renderActions() {
     }
     // then my own room's little things, standing or sitting: read, dance, the lights, wash, go
     rail.append(
-      withKey(miniBtn('read', '잡지 읽기', readMagazine), 'N'),
+      withKey(miniBtn('read', bookOpen ? '책 덮기' : '책 읽기', toggleBook), 'N'),
       withKey(miniBtn('dance', '춤추기', dance), 'K'),
       withKey(miniBtn('lamp', '조명 바꾸기', nextMood), 'T'),
       withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'),
@@ -4181,6 +4170,7 @@ document.addEventListener('keydown', startSoundOnce, true);
 
 $('#recenterBtn').innerHTML = icoImg('recenter');
 $('#recenterBtn').addEventListener('click', recenterCam);
+$('#turnPage').addEventListener('click', turnPage);
 // the sound button opens a small menu: effects only / with music / off
 const SOUND_MODES = {
   fx: { icon: 'soundOn', label: '효과음만', toast: '효과음만 들려요' },
@@ -4244,8 +4234,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     // sitting or squatting: the down arrow gets you up (on the toilet in your room, the stool or sofa, a mat, the grass)
     if ((e.code === 'ArrowDown' || e.code === 'KeyS') && ((inRoom && !roomStanding) || roomSeat >= 0 || me.b || me.q)) {
-      const up = [...document.querySelectorAll('#actions button')].find((b) => b.textContent.startsWith('일어나기'));
-      if (up && !e.repeat) up.click();
+      if (e.repeat) return;
+      if (inRoom) standUpInRoom();
+      else [...document.querySelectorAll('#actions button')].find((b) => b.textContent.startsWith('일어나기'))?.click();
       return;
     }
     if (me.s !== -1 && !(inRoom && roomStanding)) return; // in a stall the arrows do nothing (up and about in your own room, they walk)
@@ -4336,6 +4327,11 @@ function pick(clientX, clientY) {
 // two quick taps close together mean "run there"
 let lastTap = { t: 0, x: 0, y: 0 };
 function handleTap(x, y) {
+  // sitting in my own room (the toilet, the stool, the sofa): a tap anywhere gets me up
+  if (inRoom && (!roomStanding || roomSeat >= 0)) {
+    standUpInRoom();
+    return;
+  }
   if (pick(x, y)?.object.userData.wish && me.ready && me.s === -1 && !me.rolling) {
     // walk up to the golden poop (wishing happens right here, not on another page)
     const w = GROUNDS.wish;

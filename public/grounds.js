@@ -261,9 +261,10 @@ export function buildGrounds(kit) {
     add(mirror, x1 - 0.12, 1.55, cz);
   }
 
-  // ---------- the premium restroom: a little marble temple, like one on the Acropolis. A stepped marble base round the
-  // sides and back, a fluted column between each pair of doors, an entablature (architrave, a frieze of triglyphs,
-  // a cornice) and a low pediment over the front with a golden poop in relief; a shallow marble roof behind it ----------
+  // ---------- the premium restroom: an open marble temple, like one on the Acropolis. A colonnade all round with
+  // nothing between the columns, so you see straight through to the trees beyond; an entablature (architrave, a frieze
+  // of triglyphs, a cornice) on top, a low roof with a pediment at each end, a golden poop in relief in the front one,
+  // and a marble floor with a key-pattern border underneath. Bronze braziers burn inside at night ----------
   {
     const p = L.private;
     const x0 = p.x0 * U;
@@ -273,71 +274,93 @@ export function buildGrounds(kit) {
     const WH = L.wallH * U;
     const cx = (x0 + x1) / 2;
     const cz = (z0 + z1) / 2;
+    const W = x1 - x0;
+    const D = z1 - z0;
     const marble = new THREE.MeshPhongMaterial({ color: '#f1ece2', shininess: 18 });
     const shade = new THREE.MeshPhongMaterial({ color: '#ddd5c7', shininess: 10 }); // the same marble in shadowed details
-    block(x1 - x0, WH, z1 - z0, marble, cx, WH / 2, cz); // the cella
-    // a three-step base round the sides and the back (flush at the front, where people come to the doors)
-    for (let k = 0; k < 3; k++) {
-      const out = 0.45 - k * 0.15;
-      block(x1 - x0 + out * 2, 0.15, z1 - z0 + out, shade, cx, 0.075 + k * 0.15, cz - out / 2);
-    }
-    // the columns: one between each pair of doors and one at each end, just proud of the wall
-    const doors = L.stalls.filter((q) => q.type === 'private').map((q) => q.x * U).sort((a, b) => a - b);
-    const gaps = [x0 + 0.08, ...doors.slice(1).map((x, k) => (x + doors[k]) / 2), x1 - 0.08];
+    // the floor: a marble platform barely above the grass, a Greek key running round its edge
+    const keyTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 256;
+      const g = c.getContext('2d');
+      g.fillStyle = '#efe9dd';
+      g.fillRect(0, 0, 512, 256);
+      g.strokeStyle = '#b9ac96';
+      g.lineWidth = 3;
+      for (let k = 0; k < 2; k++) g.strokeRect(10 + k * 14, 10 + k * 14, 492 - k * 28, 236 - k * 28);
+      const step = 16;
+      g.lineWidth = 2.5;
+      const meander = (x, y, dir) => {
+        g.beginPath();
+        g.moveTo(x, y);
+        for (const [dx, dy] of [[0, -step], [step * 1.5, 0], [0, step * 0.75], [-step * 0.75, 0], [0, -step * 0.4]]) g.lineTo((x += dx * dir), (y += dy));
+        g.stroke();
+      };
+      for (let x = 44; x < 470; x += step * 2) meander(x, 32, 1);
+      for (let x = 44; x < 470; x += step * 2) meander(x, 236, 1);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    block(W + 1.2, 0.04, D + 1.2, new THREE.MeshPhongMaterial({ map: keyTex, shininess: 20 }), cx, 0.02, cz, { receive: true });
+    // the columns: base, fluted shaft, capital
+    const cols = L.templeColumns.map((c) => [c.x * U, c.y * U]);
     const COL_H = WH - 0.8; // up to the entablature
-    const colZ = z1 + 0.16;
     const m4 = new THREE.Matrix4();
     const parts = [
-      [new THREE.CylinderGeometry(0.21, 0.21, 0.1, 20), shade, 0.05], // the base
-      [new THREE.CylinderGeometry(0.135, 0.165, COL_H - 0.32, 20), marble, 0.1 + (COL_H - 0.32) / 2], // the fluted shaft
-      [new THREE.CylinderGeometry(0.21, 0.14, 0.12, 20), marble, COL_H - 0.16], // the capital's cushion
-      [new THREE.BoxGeometry(0.44, 0.1, 0.44), shade, COL_H - 0.05], // and its square slab
+      [new THREE.CylinderGeometry(0.21, 0.23, 0.12, 20), shade, 0.1],
+      [new THREE.CylinderGeometry(0.135, 0.165, COL_H - 0.34, 20), marble, 0.16 + (COL_H - 0.34) / 2],
+      [new THREE.CylinderGeometry(0.21, 0.14, 0.12, 20), marble, COL_H - 0.16],
+      [new THREE.BoxGeometry(0.44, 0.1, 0.44), shade, COL_H - 0.05],
     ];
     for (const [geo, material, y] of parts) {
-      const im = new THREE.InstancedMesh(geo, material, gaps.length);
-      gaps.forEach((x, k) => im.setMatrixAt(k, m4.makeTranslation(x, y, colZ)));
+      const im = new THREE.InstancedMesh(geo, material, cols.length);
+      cols.forEach(([x, z], k) => im.setMatrixAt(k, m4.makeTranslation(x, y, z)));
       im.castShadow = im.receiveShadow = true;
       root.add(im);
     }
-    // the flutes: thin shadowed grooves down each shaft
-    const flute = new THREE.InstancedMesh(new THREE.BoxGeometry(0.018, COL_H - 0.4, 0.018), shade, gaps.length * 8);
-    gaps.forEach((x, k) => {
+    const flute = new THREE.InstancedMesh(new THREE.BoxGeometry(0.018, COL_H - 0.42, 0.018), shade, cols.length * 8);
+    cols.forEach(([x, z], k) => {
       for (let f = 0; f < 8; f++) {
         const a = (f / 8) * Math.PI * 2;
-        flute.setMatrixAt(k * 8 + f, m4.makeTranslation(x + Math.cos(a) * 0.15, 0.1 + (COL_H - 0.32) / 2, colZ + Math.sin(a) * 0.15));
+        flute.setMatrixAt(k * 8 + f, m4.makeTranslation(x + Math.cos(a) * 0.15, 0.16 + (COL_H - 0.34) / 2, z + Math.sin(a) * 0.15));
       }
     });
     root.add(flute);
-    // the entablature, all round: the architrave, the frieze with its triglyphs, the cornice
-    const W = x1 - x0;
-    const D = z1 - z0;
-    block(W + 0.5, 0.32, D + 0.5, marble, cx, COL_H + 0.16, cz + 0.04);
-    block(W + 0.48, 0.3, D + 0.48, shade, cx, COL_H + 0.47, cz + 0.04);
-    const triglyphs = Math.round(W / 0.6);
-    for (let k = 0; k <= triglyphs; k++) block(0.18, 0.3, 0.04, marble, x0 - 0.2 + (k * (W + 0.4)) / triglyphs, COL_H + 0.47, z1 + 0.3);
-    block(W + 0.7, 0.14, D + 0.7, marble, cx, COL_H + 0.69, cz + 0.04); // the cornice, jutting out
-    // a warm light hidden under the architrave's front edge, for the doors at night
+    // the entablature, on the columns all round (its underside the ceiling, seen from inside)
+    const ow = W + 0.5;
+    const od = D + 0.82;
+    block(ow, 0.32, od, marble, cx, COL_H + 0.16, cz);
+    block(ow - 0.02, 0.3, od - 0.02, shade, cx, COL_H + 0.47, cz);
+    const triglyphs = Math.round(ow / 0.6);
+    for (let k = 0; k <= triglyphs; k++) {
+      const x = cx - ow / 2 + 0.1 + (k * (ow - 0.2)) / triglyphs;
+      for (const z of [cz + od / 2, cz - od / 2]) block(0.18, 0.3, 0.04, marble, x, COL_H + 0.47, z);
+    }
+    block(ow + 0.2, 0.14, od + 0.2, marble, cx, COL_H + 0.69, cz); // the cornice
+    // a warm light hidden under the architrave's front edge, for the room spots at night
     const strip = new THREE.MeshLambertMaterial({ color: '#fff1d6', emissive: '#ffc070', emissiveIntensity: 0.2 });
-    block(W, 0.02, 0.04, strip, cx, COL_H - 0.01, z1 + 0.28);
-    glows.push((dark) => (strip.emissiveIntensity = 0.2 + 0.9 * dark));
-    // the roof: a low gable over the whole thing, the ridge running front to back, a pediment on the front
+    block(ow - 0.2, 0.02, 0.04, strip, cx, COL_H - 0.01, cz + od / 2 - 0.02);
+    // the roof: a low gable, the ridge front to back, a pediment at each end
     const top = COL_H + 0.76;
     const rise = 1.0;
-    const hx = (W + 0.7) / 2;
-    const zf = z1 + 0.39;
-    const zb = z0 - 0.31;
+    const hx = (ow + 0.2) / 2;
+    const zf = cz + (od + 0.2) / 2;
+    const zb = cz - (od + 0.2) / 2;
     const v = [[cx - hx, top, zf], [cx + hx, top, zf], [cx, top + rise, zf], [cx - hx, top, zb], [cx + hx, top, zb], [cx, top + rise, zb]];
     const tris = [[0, 1, 2], [4, 3, 5], [3, 0, 2], [3, 2, 5], [1, 4, 5], [1, 5, 2]];
     const roofGeo = new THREE.BufferGeometry();
     roofGeo.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat().flatMap((k) => v[k]), 3));
     roofGeo.computeVertexNormals();
     root.add(mesh(roofGeo, new THREE.MeshPhongMaterial({ color: '#e6dfd2', shininess: 10, side: THREE.DoubleSide }), { cast: true, receive: true }));
-    // the pediment's raking cornices, and the golden poop in relief in the middle of it
     const slope = Math.atan2(rise, hx);
-    for (const side of [-1, 1]) {
-      const rake = mesh(new THREE.BoxGeometry(Math.hypot(hx, rise) + 0.1, 0.14, 0.16), marble, { cast: true });
-      rake.rotation.z = side * slope;
-      add(rake, cx - (side * hx) / 2, top + rise / 2 + 0.06, zf + 0.03);
+    for (const z of [zf + 0.03, zb - 0.03]) {
+      for (const side of [-1, 1]) {
+        const rake = mesh(new THREE.BoxGeometry(Math.hypot(hx, rise) + 0.1, 0.14, 0.16), marble, { cast: true });
+        rake.rotation.z = side * slope;
+        add(rake, cx - (side * hx) / 2, top + rise / 2 + 0.06, z);
+      }
     }
     const relief = new THREE.MeshPhongMaterial({ color: '#ffd400', shininess: 70, emissive: '#7a5a00', emissiveIntensity: 0.25 });
     [[0.38, 0.11, top + 0.18], [0.27, 0.1, top + 0.36], [0.16, 0.09, top + 0.52]].forEach(([r, h, y]) => {
@@ -348,7 +371,29 @@ export function buildGrounds(kit) {
     const tip = mesh(new THREE.ConeGeometry(0.09, 0.16, 16), relief, { cast: false });
     tip.scale.z = 0.35;
     add(tip, cx, top + 0.66, zf + 0.04);
+    // two bronze braziers inside, their fire glowing at night
+    const bronze = new THREE.MeshPhongMaterial({ color: '#8a5a2b', shininess: 60, specular: '#ffcf80' });
+    const fire = new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a1c', emissiveIntensity: 0.3 });
+    for (const x of [x0 + W * 0.25, x1 - W * 0.25]) {
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        const leg = mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.9, 6), bronze);
+        leg.rotation.set(Math.sin(a) * 0.18, 0, -Math.cos(a) * 0.18);
+        add(leg, x + Math.cos(a) * 0.12, 0.45, cz + Math.sin(a) * 0.12);
+      }
+      add(mesh(new THREE.SphereGeometry(0.22, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), bronze), x, 0.98, cz); // the bowl
+      add(mesh(new THREE.ConeGeometry(0.14, 0.3, 10), fire, { cast: false }), x, 1.08, cz); // the flame
+      const flameLight = new THREE.PointLight('#ff9a3c', 0, 5, 1.6);
+      flameLight.position.set(x, 1.3, cz);
+      lamps.add(flameLight);
+      glows.push((dark) => (flameLight.intensity = 2.2 * dark));
+    }
+    glows.push((dark) => {
+      strip.emissiveIntensity = 0.2 + 0.9 * dark;
+      fire.emissiveIntensity = 0.3 + 0.9 * dark;
+    });
   }
+
 
 
 

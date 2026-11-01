@@ -1,9 +1,9 @@
-// The private toilet room behind a door of the private restroom (프리미엄 화장실). There is only one: whoever goes in
-// sees their own room, and nobody else's. A roomy, hotel-like bathroom you can get up and walk about in:
-// bright white marble floor and walls with a brass line, a cove of soft light round the ceiling and a skylight in it,
-// the toilet in a lit niche on the back wall, a long floating vanity with two basins under a glowing round mirror,
-// a big window with a bench of folded towels below it, and the door out in the same wall.
-// The room is closed all round so the camera sits inside it.
+// The private toilet room inside the premium restroom (프리미엄 화장실). There is only one: whoever goes in sees their
+// own room, and nobody else's. A temple of a bathroom you can get up and walk about in: white marble walls over a dado
+// of warmer marble, engaged columns with gilded capitals, a Greek key frieze, a coffered ceiling with a skylight, the
+// toilet before a gold mosaic apse, a floating vanity with two basins under a glowing round mirror, a big window with
+// a bench of towels, a loveseat, a stool, a bronze brazier, and the door out. The room is closed all round so the
+// camera sits inside it.
 import * as THREE from '/vendor/three.module.js';
 
 export const ROOM = { W: 4.0, D: 3.6, FRONT: 1.7, H: 3.0 }; // width, depth to the back wall, room in front of the origin, height
@@ -57,7 +57,44 @@ function stoneTileTex(repeatX, repeatY) {
   }, [repeatX, repeatY]);
 }
 
-// wooden slats (tinted for the door and the niche behind the toilet); the canvas is 60 cm wide
+// a Greek key running along a band: gold on a deep red ground; the canvas is 60 cm long
+function keyFriezeTex(repeatX) {
+  return canvasTex(256, 64, (g) => {
+    g.fillStyle = '#7a2e24';
+    g.fillRect(0, 0, 256, 64);
+    g.strokeStyle = '#d9b25e';
+    g.lineWidth = 5;
+    g.strokeRect(2, 4, 252, 56);
+    g.lineWidth = 4;
+    // one hook of the key every 64 px, joined along the bottom
+    for (let x = 8; x < 256; x += 64) {
+      g.beginPath();
+      g.moveTo(x - 8, 50);
+      for (const [px, py] of [[x, 50], [x, 14], [x + 44, 14], [x + 44, 42], [x + 18, 42], [x + 18, 26], [x + 32, 26]]) g.lineTo(px, py);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(x, 50);
+      g.lineTo(x + 56, 50);
+      g.stroke();
+    }
+  }, [repeatX, 1]);
+}
+
+// gold mosaic: little tiles of gold leaf, each catching the light a little differently
+function goldMosaicTex() {
+  return canvasTex(256, 256, (g) => {
+    const rand = seeded(53);
+    for (let y = 0; y < 256; y += 8) {
+      for (let x = 0; x < 256; x += 8) {
+        const t = 0.8 + rand() * 0.35;
+        g.fillStyle = `rgb(${Math.min(255, Math.round(222 * t))}, ${Math.round(176 * t)}, ${Math.round(82 * t)})`;
+        g.fillRect(x + 0.5, y + 0.5, 7, 7);
+      }
+    }
+  }, [2, 4]);
+}
+
+// wooden slats (tinted for the door); the canvas is 60 cm wide
 function slatTex(repeatX) {
   return canvasTex(256, 256, (g) => {
     const rand = seeded(17);
@@ -192,6 +229,37 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   wall(depth, Math.PI / 2, -W / 2, midZ);  // left
   wall(depth, -Math.PI / 2, W / 2, midZ);  // right
   wall(W, Math.PI, 0, FRONT);              // front, behind the camera
+  // a dado of warm, darker marble round the bottom of the walls
+  const dado = (w, rotY, x, z) => {
+    const d = add(new THREE.PlaneGeometry(w, 0.9), phong('#d9c4ad', { map: stoneTileTex(w / 1.2, 0.6), shininess: 40, specular: '#3a3a3a' }), x, 0.45, z, { cast: false });
+    d.rotation.y = rotY;
+  };
+  dado(W, 0, 0, -D + 0.005);
+  dado(depth, Math.PI / 2, -W / 2 + 0.005, midZ);
+  dado(depth, -Math.PI / 2, W / 2 - 0.005, midZ);
+  dado(W, Math.PI, 0, FRONT - 0.005);
+  // a frieze with a Greek key running round the top of the walls
+  const frieze = (w, rotY, x, z) => {
+    const f = add(new THREE.PlaneGeometry(w, 0.26), lambert('#ffffff', { map: keyFriezeTex(w / 0.6) }), x, H - 0.42, z, { cast: false });
+    f.rotation.y = rotY;
+  };
+  frieze(W, 0, 0, -D + 0.01);
+  frieze(depth, Math.PI / 2, -W / 2 + 0.01, midZ);
+  frieze(depth, -Math.PI / 2, W / 2 - 0.01, midZ);
+  frieze(W, Math.PI, 0, FRONT - 0.01);
+  // engaged columns, half out of the walls: in the corners, flanking the apse, one on the right wall
+  const colMat = phong('#f4efe6', { shininess: 25 });
+  const capMat = phong('#d9b25e', { shininess: 70, specular: '#fff1c8' }); // gilded capitals
+  const column = (x, z) => {
+    cyl(0.15, 0.17, H - 0.75, colMat, x, (H - 0.75) / 2 + 0.1, z, 20);
+    cyl(0.2, 0.2, 0.1, colMat, x, 0.05, z, 20);
+    cyl(0.22, 0.15, 0.14, capMat, x, H - 0.6, z, 20);
+    box(0.44, 0.08, 0.44, capMat, x, H - 0.5, z);
+  };
+  for (const [x, z] of [[-W / 2 + 0.12, -D + 0.12], [W / 2 - 0.12, -D + 0.12], [-W / 2 + 0.12, FRONT - 0.12], [W / 2 - 0.12, FRONT - 0.12], [TOILET.x - 0.7, -D + 0.08], [TOILET.x + 0.7, -D + 0.08], [W / 2 - 0.08, -2.6]]) {
+    column(x, z);
+    blockers.push([x - 0.2, x + 0.2, z - 0.2, z + 0.2]);
+  }
   const brass = phong('#c9a15a', { shininess: 90, specular: '#fff1c8' });
   for (const x of [-W / 2 + 0.015, W / 2 - 0.015]) box(0.03, 0.035, depth, brass, x, PANEL, midZ, { cast: false });
   for (const z of [-D + 0.015, FRONT - 0.015]) box(W, 0.035, 0.03, brass, 0, PANEL, z, { cast: false });
@@ -220,6 +288,17 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   const pane = add(new THREE.PlaneGeometry(SKY.hw * 2, SKY.hd * 2), new THREE.MeshBasicMaterial({ color: '#dff0fa', transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }), 0, H + SKY.well, SKY.z, { cast: false, receive: false });
   pane.rotation.x = Math.PI / 2;
   box(SKY.hw * 2 + 0.04, 0.03, 0.03, oak, 0, H + SKY.well, SKY.z, { cast: false });
+  // the ceiling coffered like a temple's: a grid of marble beams with a gilded boss where they cross
+  const beam = phong('#efe9de', { shininess: 15 });
+  for (let x = -W / 2 + 0.8; x < W / 2 - 0.3; x += 0.8) {
+    const clear = Math.abs(x) > SKY.hw + 0.05;
+    if (clear) box(0.09, 0.12, depth - 0.2, beam, x, H - 0.06, midZ, { cast: false });
+    else for (const [z0b, z1b] of [[-D + 0.1, SKY.z - SKY.hd], [SKY.z + SKY.hd, FRONT - 0.1]]) box(0.09, 0.12, z1b - z0b, beam, x, H - 0.06, (z0b + z1b) / 2, { cast: false });
+  }
+  for (let z = -D + 0.8; z < FRONT - 0.3; z += 0.8) {
+    if (Math.abs(z - SKY.z) < SKY.hd + 0.05) continue;
+    box(W - 0.2, 0.12, 0.09, beam, 0, H - 0.06, z, { cast: false });
+  }
   const cove = glow('#ffd79a');
   for (const x of [-W / 2 + 0.04, W / 2 - 0.04]) box(0.02, 0.02, depth - 0.1, cove, x, H - 0.12, midZ, { cast: false, receive: false });
   for (const z of [-D + 0.04, FRONT - 0.04]) box(W - 0.1, 0.02, 0.02, cove, 0, H - 0.12, z, { cast: false, receive: false });
@@ -230,7 +309,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   const porcelain = phong('#fbfaf6', { shininess: 80 });
   const tx = TOILET.x;
   const tz = TOILET.z;
-  box(1.1, 2.2, 0.02, lambert('#8a6446', { map: slatTex(1.8) }), tx, 1.1, -D + 0.01, { cast: false }); // the niche's back: warm walnut against the marble
+  box(1.1, 2.4, 0.02, phong('#ffffff', { map: goldMosaicTex(), shininess: 80, specular: '#7a5a20' }), tx, 1.2, -D + 0.01, { cast: false }); // the apse behind it: gold mosaic
   box(1.1, 0.04, 0.2, lambert('#3a2c22'), tx, 1.45, -D + 0.1); // a shelf
   box(1.06, 0.015, 0.015, glow('#ffd79a'), tx, 1.43, -D + 0.19, { cast: false, receive: false }); // lit from under its lip
   box(0.5, 0.36, 0.18, porcelain, tx, 0.66, tz - 0.2); // a slim cistern
@@ -334,15 +413,20 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
     pillow.rotation.set(tilt, 0, 0.18);
   }
   block(sofaAt.x, sofaAt.z, 0.8, 1.35);
-  // the floor lamp in the back right corner, behind the stool: a brass stem, a linen drum shade glowing warm
-  const flX = W / 2 - 0.35;
-  const flZ = -D + 0.35;
-  cyl(0.16, 0.18, 0.03, brass, flX, 0.015, flZ, 24);
-  cyl(0.012, 0.012, 1.45, brass, flX, 0.74, flZ, 8);
-  const shadeMat = new THREE.MeshLambertMaterial({ color: '#f1e6d2', emissive: '#ffbf75', emissiveIntensity: 0.6, side: THREE.DoubleSide });
-  cyl(0.2, 0.24, 0.3, shadeMat, flX, 1.52, flZ, 32, { cast: false });
-  const floorLight = new THREE.PointLight('#ffcf98', 0.9, 4, 1.6);
-  floorLight.position.set(flX, 1.45, flZ);
+  // a bronze brazier on a tripod in the back right corner, its fire glowing
+  const flX = W / 2 - 0.45;
+  const flZ = -D + 0.5;
+  const bronze = phong('#8a5a2b', { shininess: 60, specular: '#ffcf80' });
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    const leg = cyl(0.014, 0.018, 0.95, bronze, flX + Math.cos(a) * 0.12, 0.47, flZ + Math.sin(a) * 0.12, 6);
+    leg.rotation.set(Math.sin(a) * 0.18, 0, -Math.cos(a) * 0.18);
+  }
+  add(new THREE.SphereGeometry(0.22, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), bronze, flX, 1.0, flZ); // the bowl
+  const shadeMat = new THREE.MeshLambertMaterial({ color: '#ffb347', emissive: '#ff8a1c', emissiveIntensity: 0.6 }); // the fire
+  add(new THREE.ConeGeometry(0.13, 0.3, 10), shadeMat, flX, 1.12, flZ, { cast: false });
+  const floorLight = new THREE.PointLight('#ffa860', 1.1, 4.5, 1.6);
+  floorLight.position.set(flX, 1.4, flZ);
   group.add(floorLight);
   block(flX, flZ, 0.35, 0.35);
 
@@ -402,7 +486,24 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
       { label: '스툴에 앉기', at: new THREE.Vector3(stoolAt.x, seatTop - HIP_Y, stoolAt.z), turn: 0, up: { x: stoolAt.x, z: stoolAt.z + 0.55 }, near: 0.95 },
       { label: '소파에 앉기', at: new THREE.Vector3(W / 2 - 0.55, 0.45 - HIP_Y, sofaAt.z), turn: -Math.PI / 2, up: { x: W / 2 - 1.15, z: sofaAt.z }, near: 1.25 },
     ],
-    mood, magazine: () => new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.008, 0.21), new THREE.MeshLambertMaterial({ map: magazineTex() })),
+    mood,
+    // a hardback, open: a red cloth cover and two cream pages either side of the spine
+    book: () => {
+      const g = new THREE.Group();
+      const cover = new THREE.MeshLambertMaterial({ color: '#7a2e24' });
+      const paper = new THREE.MeshLambertMaterial({ color: '#f6efdf' });
+      for (const side of [-1, 1]) {
+        const half = new THREE.Group();
+        half.rotation.z = side * 0.18; // the pages rise a little from the spine
+        const c = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.008, 0.21), cover);
+        c.position.x = side * 0.075;
+        const pages = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.014, 0.2), paper);
+        pages.position.set(side * 0.072, 0.011, 0);
+        half.add(c, pages);
+        g.add(half);
+      }
+      return g;
+    },
     door: { x: -W / 2, z: doorZ, half: 0.42 }, // walk into it and you're out (local)
     entry: { x: -W / 2 + 0.75, z: doorZ, turn: Math.PI / 2 }, // where you stand on coming in, facing into the room (local)
     bounds: { x0: -W / 2 + 0.3, x1: W / 2 - 0.3, z0: -D + 0.3, z1: FRONT - 0.35 }, // where you can walk

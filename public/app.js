@@ -242,6 +242,7 @@ let roomPersonFor = '';
 let roomShake = 0;
 let roomWashUntil = 0; // washing at the room's sink until then
 let roomStanding = false; // up off the toilet, standing in the room
+let roomOnStool = false; // sitting on the stool in the corner, resting
 let roomSpot = ''; // where I am in the room: 'seat', 'stand' or 'wash'
 let snapCam = false; // jump the camera instead of flying it (going into or out of the room)
 
@@ -1657,6 +1658,8 @@ function readMoveInput() {
 
 // walking about my own private room (only I see it, so it stays on this page): round the furniture, inside the walls
 const roomWalk = { x: 0, z: 0, turn: 0, walking: false, phase: 0 };
+const nearStool = () => inRoom && roomStanding && !roomOnStool && Math.hypot(roomWalk.x - room.stool.x, roomWalk.z - room.stool.z) < 0.95;
+
 function moveInRoom(dt) {
   const { vx, vy, joyRun } = readMoveInput();
   roomWalk.walking = Boolean(vx || vy);
@@ -2100,6 +2103,7 @@ function syncRoom(t, dt) {
     roomFor = want;
     inRoom = want >= 0;
     roomStanding = false; // you come in and sit down
+    roomOnStool = false;
     roomSpot = '';
     room.group.visible = inRoom;
     worldRoot.visible = stallRoot.visible = charRoot.visible = !inRoom;
@@ -2121,7 +2125,7 @@ function syncRoom(t, dt) {
     roomPersonFor = meId;
   }
   const washing = performance.now() < roomWashUntil;
-  const spot = washing ? 'wash' : roomStanding ? 'stand' : 'seat';
+  const spot = washing ? 'wash' : roomOnStool ? 'stool' : roomStanding ? 'stand' : 'seat';
   const g = roomPerson.group;
   document.body.classList.toggle('seated', spot !== 'stand'); // the stick shows while you can walk about
   if (spot !== roomSpot) {
@@ -2139,6 +2143,11 @@ function syncRoom(t, dt) {
       if (spot === 'wash') {
         g.position.copy(room.washSpot);
         g.rotation.y = Math.PI / 2;
+      } else if (spot === 'stool') {
+        g.position.copy(room.stool);
+        g.rotation.y = 0; // facing into the room, toward the camera
+      } else if (from === 'stool') {
+        Object.assign(roomWalk, { x: room.stool.x, z: room.stool.z + 0.55, turn: 0, walking: false }); // up, just in front of it
       } else {
         const at = from === 'wash' ? room.washSpot : room.standSpot;
         Object.assign(roomWalk, { x: at.x, z: at.z, turn: from === 'wash' ? Math.PI / 2 : 0, walking: false });
@@ -2151,10 +2160,11 @@ function syncRoom(t, dt) {
   }
   if (u) {
     syncTower(roomPerson, meId, u.pl, dt);
-    setFlush(roomPerson, ...(spot === 'seat' ? flushOf(u) : [0, u.cn ? 1 : 0]));
+    setFlush(roomPerson, ...(spot === 'seat' ? flushOf(u) : [0, u.cn ? 1 : 0])); // (only on the toilet does the face go red)
     syncUnder(roomPerson, meId, Boolean(u.un) && spot === 'seat', false);
     setFace(roomPerson, washing ? 'bliss' : exprOf(u, me.s));
     if (washing) pose(roomPerson, { mode: 'wash', t: t / 1000, seed: me.s });
+    else if (spot === 'stool') pose(roomPerson, { mode: 'sit', t: t / 1000, seed: me.s, upright: true });
     else if (spot === 'stand') pose(roomPerson, { mode: roomWalk.walking ? 'walk' : 'stand', phase: roomWalk.phase, t: t / 1000, seed: me.s, upright: true });
     else {
       pose(roomPerson, { mode: 'sit', t: t / 1000, strain: Boolean(u.h), seed: me.s });
@@ -2879,7 +2889,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastFrame) / 1000);
   lastFrame = t;
   if (me.ready && me.s === -1) moveMe(dt);
-  else if (inRoom && roomStanding && performance.now() >= roomWashUntil) moveInRoom(dt);
+  else if (inRoom && roomStanding && !roomOnStool && performance.now() >= roomWashUntil) moveInRoom(dt);
   syncRoom(t, dt);
   updatePlaceName();
   placeWalkers(dt, t);
@@ -2910,11 +2920,11 @@ function renderActions() {
   const near = out && nearestEmptyStall(me.x, me.y) >= 0;
   const nearOcc = out && nearestOccupiedStall(me.x, me.y) >= 0;
   const bench = out && !me.b ? nearBench() : -1;
-  const mode = inStall ? (inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.ly ? 'lying' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
+  const mode = inStall ? (inRoom && roomOnStool ? 'resting' : inRoom && roomStanding ? 'standing' : 'inside') : me.rolling ? 'rolling' : me.ly ? 'lying' : me.b ? 'benched' : me.q ? 'squatting' : me.pl > 0 && nearBean() ? 'bean'
     : nearVendingHere() ? 'vend' : nearWishHere() ? 'wish' : nearSink() ? 'sink'
     : near ? 'near' : nearOcc ? `knock${knockStage(hp[nearestOccupiedStall(me.x, me.y)] ?? 100)}` : bench >= 0 ? `bench${bench}`
       : inBushHere() ? 'bush' : onLawnHere() ? 'lawn' : 'far';
-  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
+  const key = `${mode === 'bean' ? `bean${me.pl}` : mode}${inRoom ? '@room' : ''}|${me.cn ? 'stuck' : ''}${me.un ? 'under' : ''}${nearDropHere() ? 'drop' : ''}${nearStool() ? 'stool' : ''}${(me.pk || []).length}`; // the fertilizer button shows how many you carry; the room adds 일어나기
   if (key === actionMode) return;
   actionMode = key;
   const bar = $('#actions');
@@ -2945,8 +2955,12 @@ function renderActions() {
   } else if (mode === 'squatting') {
     bar.append(withKey(miniBtn('jump', '일어나기', () => send({ t: 'squat', on: false })), 'F'));
   } else if (mode === 'standing') {
-    // standing in my own room: sit back down whenever
-    bar.append(withKey(mainBtn('bench', '앉기', () => { roomStanding = false; }), 'F'), withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+    // up and about in my own room: sit on the stool when you're by it, or back on the toilet whenever
+    if (nearStool()) bar.append(mainBtn('bench', '스툴에 앉기', () => { roomOnStool = true; }));
+    bar.append(withKey(nearStool() ? miniBtn('bench', '변기에 앉기', () => { roomStanding = false; }) : mainBtn('bench', '변기에 앉기', () => { roomStanding = false; }), 'F'), withKey(miniBtn('wash', '손 씻기', washFromStall), 'H'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
+  } else if (mode === 'resting') {
+    // sitting on the stool, just resting
+    bar.append(withKey(mainBtn('jump', '일어나기', () => { roomOnStool = false; roomStanding = true; }), 'F'), withKey(miniBtn('exit', '나가기', exitStall), 'Esc'));
   } else if (mode === 'rolling') {
     const b = mainBtn('knock', '데굴데굴~', null);
     b.disabled = true;
@@ -3697,57 +3711,252 @@ function pluckNote(bus, f, t, vol, decay) {
   o.stop(t + decay + 0.05);
 }
 
+// ---------- what plays where ----------
+// The private room has the waltz, the public restroom a lo-fi hip-hop loop, the bushes the sound of the woods.
+// Anywhere else it's quiet, unless you asked for music too (배경음악도): then the waltz goes on outside as well.
+
 const MUSIC_VOLUME = 0.2; // a soft background
-let music = null;
-function startMusic() {
-  if (music) return;
+// a track's own volume, fading in from silence; stopping fades it out and lets it go
+function trackBus(volume, fade = 2) {
   const ctx = actx();
   const bus = ctx.createGain();
   bus.gain.setValueAtTime(0.0001, ctx.currentTime);
-  bus.gain.linearRampToValueAtTime(MUSIC_VOLUME, ctx.currentTime + 2.5);
+  bus.gain.linearRampToValueAtTime(volume, ctx.currentTime + fade);
+  bus.connect(out());
+  return bus;
+}
+function endTrack(bus, cleanup) {
+  const now = actx().currentTime;
+  bus.gain.cancelScheduledValues(now);
+  bus.gain.setValueAtTime(bus.gain.value, now);
+  bus.gain.linearRampToValueAtTime(0.0001, now + 0.8);
+  setTimeout(() => {
+    cleanup();
+    bus.disconnect();
+  }, 1000);
+}
+// a scheduler that keeps notes queued a little ahead of time, until stopped
+function scheduler(tick) {
+  let alive = true;
+  const run = () => alive && tick(actx().currentTime + (document.hidden ? 1.6 : 0.5)); // hidden tabs tick slowly
+  run();
+  const timer = setInterval(run, 120);
+  return () => {
+    alive = false;
+    clearInterval(timer);
+  };
+}
+let noiseBuf = null;
+const noise = () => {
+  if (!noiseBuf) {
+    const ctx = actx();
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const ch = noiseBuf.getChannelData(0);
+    for (let k = 0; k < ch.length; k++) ch[k] = Math.random() * 2 - 1;
+  }
+  return noiseBuf;
+};
+
+// the waltz: violin over an oom-pah-pah
+function startWaltz() {
+  const ctx = actx();
+  const bus = trackBus(MUSIC_VOLUME, 2.5);
   const dry = ctx.createGain();
   dry.gain.value = 0.85;
   const wet = ctx.createGain();
   wet.gain.value = 0.4;
   const verb = ctx.createConvolver();
   verb.buffer = reverbImpulse(2.6);
-  bus.connect(dry).connect(out());
-  bus.connect(verb).connect(wet).connect(out());
-  const state = { bus, t0: ctx.currentTime + 0.2, loop: 0, i: 0, timer: 0 };
-  music = state;
-  const schedule = () => {
-    if (music !== state) return; // stopped (or restarted) since this timer was set
-    const horizon = actx().currentTime + (document.hidden ? 1.6 : 0.5); // hidden tabs tick slowly
+  const mix = ctx.createGain();
+  mix.connect(dry).connect(bus);
+  mix.connect(verb).connect(wet).connect(bus);
+  const t0 = ctx.currentTime + 0.2;
+  let loop = 0;
+  let i = 0;
+  const stop = scheduler((horizon) => {
     for (;;) {
-      const ev = SONG.events[music.i];
-      const t = music.t0 + (music.loop * SONG.beats + ev.beat) * BEAT;
+      const ev = SONG.events[i];
+      const t = t0 + (loop * SONG.beats + ev.beat) * BEAT;
       if (t > horizon) break;
-      const low = music.loop % 2 === 1; // every other time round, the tune drops an octave
-      if (ev.kind === 'violin') violinNote(bus, low ? ev.f / 2 : ev.f, t, ev.len * BEAT, low ? 0.16 : 0.12);
-      else if (ev.kind === 'bass') pluckNote(bus, ev.f, t, 0.3, 0.9);
-      else pluckNote(bus, ev.f, t, 0.06, 0.35);
-      if (++music.i === SONG.events.length) {
-        music.i = 0;
-        music.loop++;
+      const low = loop % 2 === 1; // every other time round, the tune drops an octave
+      if (ev.kind === 'violin') violinNote(mix, low ? ev.f / 2 : ev.f, t, ev.len * BEAT, low ? 0.16 : 0.12);
+      else if (ev.kind === 'bass') pluckNote(mix, ev.f, t, 0.3, 0.9);
+      else pluckNote(mix, ev.f, t, 0.06, 0.35);
+      if (++i === SONG.events.length) {
+        i = 0;
+        loop++;
       }
     }
+  });
+  return () => endTrack(bus, stop);
+}
+
+// the public restroom: a lazy boom-bap loop at 86 bpm, swung hats, soft electric-piano 7th chords and a round bass
+function startHiphop() {
+  const ctx = actx();
+  const bus = trackBus(0.26, 1.5);
+  const warm = ctx.createBiquadFilter(); // a little dull, like an old record
+  warm.type = 'lowpass';
+  warm.frequency.value = 3400;
+  warm.connect(bus);
+  const hit = (t, build) => {
+    const g = ctx.createGain();
+    g.connect(warm);
+    build(g, t);
   };
-  schedule();
-  music.timer = setInterval(schedule, 120);
+  const kick = (t) => hit(t, (g) => {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+    g.gain.setValueAtTime(0.9, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+    o.connect(g);
+    o.start(t);
+    o.stop(t + 0.4);
+  });
+  const noisy = (t, type, freq, vol, decay) => hit(t, (g) => {
+    const src = ctx.createBufferSource();
+    src.buffer = noise();
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+    src.connect(f).connect(g);
+    src.start(t, Math.random());
+    src.stop(t + decay + 0.02);
+  });
+  const snare = (t) => {
+    noisy(t, 'bandpass', 1900, 0.45, 0.2);
+    hit(t, (g) => {
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = 190;
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      o.connect(g);
+      o.start(t);
+      o.stop(t + 0.12);
+    });
+  };
+  const tone = (f, t, len, vol, type = 'sine') => hit(t, (g) => {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(vol * 0.35, t + len * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g);
+    o.start(t);
+    o.stop(t + len + 0.05);
+  });
+  const CHORDS = [
+    [174.6, 220.0, 261.6, 329.6], // Fmaj7
+    [164.8, 196.0, 246.9, 293.7], // Em7
+    [146.8, 174.6, 220.0, 261.6], // Dm7
+    [130.8, 164.8, 196.0, 246.9], // Cmaj7
+  ];
+  const STEP = 60 / 86 / 4; // a sixteenth
+  const t0 = ctx.currentTime + 0.15;
+  let step = 0;
+  const stop = scheduler((horizon) => {
+    for (;;) {
+      const s = step % 16;
+      const bar = Math.floor(step / 16) % 4;
+      const t = t0 + step * STEP + (s % 2 ? STEP * 0.2 : 0); // swung
+      if (t > horizon) break;
+      if (s === 0 || s === 7 || s === 10 || (bar % 2 && s === 14)) kick(t);
+      if (s === 4 || s === 12) snare(t);
+      if (s % 2 === 0) noisy(t, 'highpass', 7500, s % 4 ? 0.05 : 0.08, 0.05);
+      if (s === 0) {
+        CHORDS[bar].forEach((f, k) => {
+          tone(f, t + k * 0.012, STEP * 14, 0.045); // rolled a touch, like fingers on keys
+          tone(f * 2, t + k * 0.012, STEP * 6, 0.012);
+        });
+        tone(CHORDS[bar][0] / 2, t, STEP * 7, 0.22);
+      }
+      if (s === 10) tone(CHORDS[bar][0] / 2, t, STEP * 5, 0.18);
+      if (Math.random() < 0.08) noisy(t, 'highpass', 3000, 0.02, 0.01); // vinyl crackle
+      step++;
+    }
+  });
+  return () => endTrack(bus, stop);
 }
-function stopMusic() {
-  if (!music) return;
-  const { bus, timer } = music;
-  music = null;
-  const now = actx().currentTime;
-  bus.gain.cancelScheduledValues(now);
-  bus.gain.setValueAtTime(bus.gain.value, now);
-  bus.gain.linearRampToValueAtTime(0.0001, now + 0.6);
-  setTimeout(() => {
-    clearInterval(timer);
-    bus.disconnect();
-  }, 800);
+
+// the bushes: wind in the leaves, rising and falling, and birds now and then
+function startForest() {
+  const ctx = actx();
+  const bus = trackBus(0.5, 2);
+  const sources = [];
+  const bed = (type, freq, vol, sway) => {
+    const src = ctx.createBufferSource();
+    src.buffer = noise();
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = 0.6;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = sway;
+    const depth = ctx.createGain();
+    depth.gain.value = vol * 0.7;
+    lfo.connect(depth).connect(g.gain);
+    src.connect(f).connect(g).connect(bus);
+    src.start();
+    lfo.start();
+    sources.push(src, lfo);
+  };
+  bed('bandpass', 450, 0.12, 0.07); // the wind
+  bed('highpass', 2600, 0.03, 0.21); // the leaves
+  const chirp = (t, f, pan) => {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * 1.35, t + 0.06);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.05, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    o.connect(g).connect(p).connect(bus);
+    o.start(t);
+    o.stop(t + 0.1);
+  };
+  let next = ctx.currentTime + 1;
+  const stop = scheduler((horizon) => {
+    while (next < horizon) {
+      const f = 2200 + Math.random() * 1600;
+      const pan = Math.random() * 1.6 - 0.8;
+      const n = 2 + Math.floor(Math.random() * 4);
+      for (let k = 0; k < n; k++) chirp(next + k * 0.13, f * (1 + (k % 2) * 0.08), pan);
+      next += 1.5 + Math.random() * 4;
+    }
+  });
+  return () => endTrack(bus, () => {
+    stop();
+    for (const s of sources) s.stop();
+  });
 }
+
+const TRACKS = { waltz: startWaltz, hiphop: startHiphop, forest: startForest };
+let track = { name: '', stop: null };
+function wantedTrack() {
+  if (!soundOn || !soundStarted) return '';
+  if (inRoom) return 'waltz';
+  if ((me.s !== -1 && LAYOUT[me.s]?.type === 'public') || (GROUNDS && placeAt(me.x, me.y) === '공중화장실')) return 'hiphop';
+  if (inBushHere()) return 'forest';
+  return soundMode === 'all' ? 'waltz' : '';
+}
+function updateTrack() {
+  const want = wantedTrack();
+  if (want === track.name) return;
+  track.stop?.();
+  track = { name: want, stop: want ? TRACKS[want]() : null };
+}
+setInterval(updateTrack, 400);
 
 // Phones only let a page make sound after a tap, and iPhones mute Web Audio when the silent switch is on.
 // So on the tap that turns sound on: ask for "playback" audio, loop a silent <audio> (which also switches
@@ -3805,7 +4014,7 @@ const startSoundOnce = () => {
   if (!soundOn || soundStarted) return;
   soundStarted = true;
   unlockAudio();
-  if (soundMode === 'all') startMusic();
+  updateTrack();
   loadSounds();
 };
 document.addEventListener('pointerdown', startSoundOnce, true);
@@ -3845,8 +4054,7 @@ async function setSoundMode(mode) {
     soundStarted = true;
     unlockAudio();
   } else silentLoop?.pause();
-  if (mode === 'all') startMusic(); // queued now, heard as soon as the phone lets the sound through
-  else stopMusic();
+  updateTrack(); // queued now, heard as soon as the phone lets the sound through
   if (soundOn) await loadSounds();
 }
 $('#soundBtn').addEventListener('click', () => setSoundMenu(soundMenu.hidden));
@@ -3875,15 +4083,21 @@ window.addEventListener('keydown', (e) => {
   }
   if (MOVE_KEYS.includes(e.code)) {
     e.preventDefault();
+    // sitting, lying or squatting: the down arrow gets you up (on the toilet in your room, the stool, a mat, the grass)
+    if ((e.code === 'ArrowDown' || e.code === 'KeyS') && ((inRoom && !roomStanding) || roomOnStool || me.b || me.ly || me.q)) {
+      const up = [...document.querySelectorAll('#actions button')].find((b) => b.textContent.startsWith('일어나기'));
+      if (up && !e.repeat) up.click();
+      return;
+    }
     if (me.s !== -1 && !(inRoom && roomStanding)) return; // in a stall the arrows do nothing (up and about in your own room, they walk)
     keys.add(e.code);
   } else if (e.code === 'Space') {
     e.preventDefault();
     spaceHeld = true;
     if (me.s !== -1 || me.q) {
-      if (inRoom && roomStanding) {
+      if (inRoom && (roomStanding || roomOnStool)) {
         if (MOVE_KEYS.some((k) => keys.has(k))) return; // walking about the room: Space runs
-        if (!e.repeat) roomStanding = false; // otherwise it sits you back down
+        if (!e.repeat) $('#actions button.main')?.click(); // otherwise the main button: sit down, or get up
         return;
       }
       if (!e.repeat) setHold(true);

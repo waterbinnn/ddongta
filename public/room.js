@@ -283,14 +283,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   cyl(0.14, 0.16, 0.02, brass, tx + 0.65, 0.01, tz + 0.1);
   const mag = box(0.28, 0.012, 0.2, lambert('#ffffff', { map: magazineTex() }), tx + 0.65, 0.572, tz + 0.1);
   mag.rotation.y = -0.3;
-  // a 쾌변 footstool: walnut, U-shaped round the toilet's foot, to put your feet up on
-  const stool = lambert('#5a4130');
-  box(0.6, 0.035, 0.12, stool, tx, 0.2, tz + 0.46); // the front bar
-  for (const sx of [-1, 1]) {
-    box(0.13, 0.035, 0.32, stool, tx + sx * 0.235, 0.2, tz + 0.3); // the arms either side
-    for (const sz of [0.18, 0.46]) box(0.05, 0.18, 0.05, stool, tx + sx * 0.25, 0.09, tz + sz); // legs
-  }
-  block(tx, tz + 0.05, 0.65, 1.0);
+  block(tx, tz, 0.6, 0.9);
   block(tx + 0.65, tz + 0.1, 0.45, 0.45);
 
   // ---------- the vanity along the right wall: floating walnut, a stone top, two basins, a glowing round mirror ----------
@@ -337,6 +330,18 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
   for (const [z, c] of [[wz - 0.3, '#ece6da'], [wz + 0.05, '#d9cbb8'], [wz + 0.35, '#ece6da']]) box(0.32, 0.12, 0.26, lambert(c), -W / 2 + 0.25, 0.54, z);
   block(-W / 2 + 0.25, wz, 0.5, 1.45);
 
+  // ---------- a round upholstered stool in the back corner, to sit and rest on (facing into the room) ----------
+  const stoolAt = { x: 0.75, z: -2.85 };
+  const seatTop = 0.46;
+  cyl(0.26, 0.24, 0.14, lambert('#b5835a'), stoolAt.x, seatTop - 0.07, stoolAt.z, 32); // a camel leather cushion
+  cyl(0.27, 0.27, 0.02, brass, stoolAt.x, seatTop - 0.15, stoolAt.z, 32); // a brass band under it
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+    const leg = cyl(0.015, 0.012, 0.34, brass, stoolAt.x + Math.cos(a) * 0.17, 0.16, stoolAt.z + Math.sin(a) * 0.17, 8);
+    leg.rotation.set(Math.sin(a) * 0.15, 0, -Math.cos(a) * 0.15); // splayed out a little
+  }
+  block(stoolAt.x, stoolAt.z, 0.5, 0.5);
+
   // ---------- light: soft and low, a warm point in the middle and a little fill from behind the camera ----------
   const lamp = new THREE.PointLight('#ffcf98', 3.2, 9, 1.4);
   lamp.position.set(0, H - 0.5, -1.6);
@@ -355,6 +360,7 @@ export function buildPrivateRoom({ SEAT_TOP, HIP_Y }) {
 
   return {
     group, seat, windowMat, blockers,
+    stool: new THREE.Vector3(stoolAt.x, seatTop - HIP_Y, stoolAt.z), // where the hips go, sitting on the stool (local)
     bounds: { x0: -W / 2 + 0.3, x1: W / 2 - 0.3, z0: -D + 0.3, z1: FRONT - 0.35 }, // where you can walk
     aim: new THREE.Vector3(-0.2, 0, -2.4),              // what the camera looks at, sitting down (local)
     bowl: new THREE.Vector3(tx, 0.6, tz + 0.1),         // where a poop leaves from (local)

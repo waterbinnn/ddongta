@@ -89,15 +89,6 @@ function drawFace(expr) {
       g.arc(x, EYE_Y, r, 0, Math.PI * 2);
       g.fill();
     });
-  const sweat = () => {
-    g.fillStyle = '#9fd3f5';
-    g.beginPath();
-    g.moveTo(214, 52);
-    g.quadraticCurveTo(226, 72, 214, 80);
-    g.quadraticCurveTo(202, 72, 214, 52);
-    g.fill();
-    g.fillStyle = INK;
-  };
   // flat round blush
   g.fillStyle = 'rgba(240, 160, 165, 0.5)';
   eyes((x, s) => {
@@ -110,10 +101,8 @@ function drawFace(expr) {
   if (expr === 'strain') {
     // > <  squeezing hard
     eyes((x, s) => line([[x + s * 9, EYE_Y - 9], [x - s * 7, EYE_Y], [x + s * 9, EYE_Y + 9]]));
-    sweat();
   } else if (expr === 'urgent') {
     dots();
-    sweat();
   } else if (expr === 'bliss') {
     // ^ ^  done, ahh
     eyes((x) => {
@@ -134,7 +123,6 @@ function drawFace(expr) {
     g.beginPath();
     g.ellipse(cx, EYE_Y + 30, 6, 8, 0, 0, Math.PI * 2);
     g.fill();
-    sweat();
   } else {
     dots(); // idle, ok, neutral: just the dots
   }
@@ -208,7 +196,7 @@ export function makePerson(hair = LOOK.hair) {
     const world = b.getWorldQuaternion(new THREE.Quaternion());
     bones[n] = { bone: b, local: b.quaternion.clone(), world, worldInv: world.clone().invert() };
   }
-  return { group, spin, root, parts, face, rest, bones, expr: 'idle', down: false, skin: LOOK.skin, height: HEIGHT, size: 1 };
+  return withCrown({ group, spin, root, parts, face, rest, bones, expr: 'idle', down: false, skin: LOOK.skin, height: HEIGHT, size: 1 });
 }
 
 // an animal: the same joints as a person, in fur. Its colours come with the model (by part), drawn in the same
@@ -246,8 +234,25 @@ export function makeAnimal(kind) {
   for (const n of ['hips', 'torso', 'head', 'neck', 'arm_L', 'arm_R', 'leg_L', 'leg_R', 'hand_L', 'hand_R', 'tail']) if (parts[n]) rest[n] = parts[n].position.clone();
   root.updateMatrixWorld(true);
   const height = new THREE.Box3().setFromObject(root).max.y; // the top of the head, or of the ears
-  return { group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size, quad: fourLegs(parts, BODY[kind] || 1) };
+  return withCrown({ group, spin, root, parts, face, rest, bones: {}, expr: 'idle', down: false, kind, skin: `#${parts.head.material.color.getHexString()}`, height, size, quad: fourLegs(parts, BODY[kind] || 1) });
 }
+
+// The top of someone as they are posed right now, in world height: the crown of the head, plus what stands up
+// above it (hair, a rabbit's ears). Name tags and pops go here, so they come down with an animal on all fours.
+const crownV = new THREE.Vector3();
+function crownY(p) {
+  const h = p.parts.head;
+  if (!h.geometry.boundingBox) h.geometry.computeBoundingBox();
+  h.updateWorldMatrix(true, false);
+  return h.localToWorld(crownV.set(0, h.geometry.boundingBox.max.y, 0)).y;
+}
+function withCrown(p) {
+  if (!p.parts.head) return p;
+  p.group.updateMatrixWorld(true);
+  p.above = Math.max(0, p.height - crownY(p));
+  return p;
+}
+export const crownOf = (p) => (p.parts.head ? crownY(p) : p.group.position.y + p.height);
 
 // On all fours: the body stretches out long (more for the cat and the rabbit, whose chibi bodies are stubby) and
 // tips forward at the waist, just far enough that the front legs (made like the hind legs) stand on the ground.
@@ -363,7 +368,7 @@ export function pose(p, { mode = 'stand', phase = 0, t = 0, strain = false, seed
       P[n].position.y = rest[n].y + p.quad.handY;
     }
     if (P.neck) P.neck.rotation.x = -pitch - 0.05; // the giraffe holds its neck up
-    else P.head.rotation.x = -pitch + 0.05; // looking ahead
+    else P.head.rotation.x = -pitch - 0.35; // chin up, so the face shows to the camera above
     if (mode === 'walk') {
       // a walking gait: each front leg goes with the hind leg on the other side
       const s = Math.sin(phase);

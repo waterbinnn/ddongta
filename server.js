@@ -164,7 +164,7 @@ const DRINKS = ['banana', 'latte', 'americano', 'yogurt', 'prune'];
 const KICK_DROP = 0.3; // about one kick in three drops a drink
 const GOLD_CAN = 0.01;
 
-// 변비 goes with one drink or one 쾌변 체조 move: the colour comes back to the face and the signal comes.
+// 변비 goes with one drink or two 쾌변 체조 moves: the colour comes back to the face and the signal comes.
 // Sitting down, it all comes out at once; walking about, the next sitting goes smoothly.
 function unstick(room, u) {
   if (!u.stuck) return;
@@ -312,11 +312,12 @@ setInterval(() => {
       if (!u.holding || (u.stall === -1 && !u.squat)) continue;
       u.progress += PUSH_PER_TICK;
       room.dirty = true;
-      // halfway through, now and then it gets stuck: 변비. One drink or one 쾌변 체조 move gets it going again (and the signal keeps it away)
+      // halfway through, now and then it gets stuck: 변비. One drink or two 쾌변 체조 moves get it going again (and the signal keeps it away)
       if (u.progress >= 50 && !u.checked) {
         u.checked = true;
         if (!u.signal && Math.random() < STUCK_CHANCE) {
           u.stuck = true;
+          u.stuckMoves = 0;
           broadcast(room, { t: 'stuck', id: u.id });
         }
       }
@@ -418,6 +419,7 @@ wss.on('connection', (ws, req) => {
     under: false, // a poop under you, where you sit or squat
     pocket: [], // the drink in your hand (one at most)
     stuck: false, // 변비: halfway and going nowhere
+    stuckMoves: 0, // 체조 moves done since getting stuck
     checked: false, // whether this poop has already had its chance of getting stuck
     lastKick: 0,
   };
@@ -460,8 +462,6 @@ wss.on('connection', (ws, req) => {
       room.dirty = true;
     } else if (m.t === 'enter' && user.stall === -1 && !user.roll) {
       if (!validStall || room.stalls[i] || !nearStall(i)) return;
-      // the restrooms are for people; animals go in the bushes
-      if (user.kind !== 'person') return send(ws, { t: 'toast', text: '여기는 사람 화장실이에요. 풀숲으로 가 보세요', direct: 1 });
       sit(room, user, i);
       const where = LAYOUT[i].type === 'private' ? `개인 화장실 ${LAYOUT[i].no}호` : `공중화장실 ${LAYOUT[i].no}번 칸`;
       broadcast(room, { t: 'toast', text: `${user.name}님이 ${where}에 들어갔어요` });
@@ -573,7 +573,10 @@ wss.on('connection', (ws, req) => {
       user.bench = false;
       user.exCount++;
       room.dirty = true;
-      if (user.stuck) unstick(room, user);
+      if (user.stuck) {
+        user.stuckMoves++;
+        if (user.stuckMoves >= 2) unstick(room, user); // two 체조 moves get it going again
+      }
       else if (user.exCount >= EX_FOR_SIGNAL && !user.signal) {
         user.signal = true;
         broadcast(room, { t: 'signal', id: user.id });

@@ -1,6 +1,6 @@
 // 똥타 — a roomy three.js restroom rendered at low resolution, with hand-drawn pixel sprites standing in it.
 import * as THREE from '/vendor/three.module.js';
-import { peopleReady, makePerson, makeCharacter, hairFor, disposePerson, setFace, setFlush, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
+import { peopleReady, makeCharacter, crownOf, hairFor, disposePerson, setFace, setFlush, setPantsDown, pose, HIP_Y, HEIGHT } from './person.js';
 import { buildGrounds } from './grounds.js';
 import { RoomEnvironment } from '/vendor/jsm/environments/RoomEnvironment.js';
 import { buildPrivateRoom } from './room.js';
@@ -132,7 +132,6 @@ const PROPS = {
   goldPoop: sprite(['....p...', '...ppP..', '..phpPP.', '.ppppppP', '..PPPPP.', '.phpppPP', 'pppppppP', '.PPPPPP.'], { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' }),
   sparkle: sprite(['..Y..', '..Y..', 'YYWYY', '..Y..', '..Y..'], { Y: '#ffd84a', W: '#ffffff' }, null, null),
   note: sprite(['..NNN', '..N.N', '..N.N', '..N..', 'NNN..', 'NNN..'], { N: '#ffd84a' }),
-  marker: sprite(['MMMMM', '.MMM.', '..M..'], { M: '#ffd84a' }),
   bubble: sprite(['.bbb.', 'bWccb', 'bcccb', 'bcccb', '.bbb.'], { b: '#bfe8ff', W: '#ffffff', c: '#eaf7ff' }, null, null),
   drop: sprite(['.d.', 'ddd', '.d.'], { d: '#8fd6ff' }, null, null),
 };
@@ -151,12 +150,11 @@ const POOPS = Object.fromEntries(
     [sprite(rows, { p: '#8a5228', P: '#5e3517', h: '#c88a50' }), sprite(rows, { p: '#f2c94c', P: '#c9952a', h: '#fff4b8' })],
   ]),
 );
-// [shape, size of the one left under you], and the sound it makes
+// [shape, size of the one left under you]
 const POOP_OF = {
   person: ['swirl', 1], elephant: ['swirl', 1.9], dog: ['swirl', 0.65], cat: ['swirl', 0.6],
   rabbit: ['pellets', 0.8], giraffe: ['log', 1.2], wombat: ['cube', 0.9],
 };
-const POOP_SOUND = { elephant: '쿵', dog: '톡', cat: '사각', rabbit: '톡톡톡톡', giraffe: '휘이이… 퐁', wombat: '또각' };
 const kindOf = (id) => (id === meId ? me.k : users.get(id)?.data.k) || 'person';
 const poopArt = (id, gold = false) => POOPS[(POOP_OF[kindOf(id)] || POOP_OF.person)[0]][gold ? 1 : 0];
 const poopSize = (id) => (POOP_OF[kindOf(id)] || POOP_OF.person)[1];
@@ -422,13 +420,6 @@ function mesh(geo, material, { cast = false, receive = false } = {}) {
 
 // a pixel sprite planted in the world, sized by its pixel count
 // the arrow over my head: drawn last and never hidden (not by my own poop tower either)
-function frontMarker() {
-  const m = pixelSprite(PROPS.marker);
-  m.material.depthTest = false;
-  m.renderOrder = 10;
-  return m;
-}
-
 function pixelSprite(c, density = PX_M) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texOf(c), transparent: true, alphaTest: 0.5 }));
   s.center.set(0.5, 0);
@@ -1214,20 +1205,17 @@ function makePrivateDoor(i) {
   const lock = mesh(G.lock, M.lockGreen);
   lock.position.set(0.74, 1.35, 0.03);
   hinge.add(door, lock);
-  const marker = frontMarker();
-  marker.position.set(0.55, 2.55, 0.3);
-  marker.visible = false;
   const feet = pixelSprite(PROPS.poop);
   feet.visible = false;
   const hit = new THREE.Mesh(G.hit, M.hit);
   hit.position.set(STALL_M / 2, 1, 0.1);
   hit.userData.stall = i;
-  g.add(doorway, hinge, marker, hit);
+  g.add(doorway, hinge, hit);
   stallRoot.add(g);
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet, marker,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot: new THREE.Group(), person: null, personFor: '', feet,
     open: 1, shake: 0, gone: 0, regrow: 1, private: true,
   };
 }
@@ -1283,9 +1271,6 @@ function makeStall(i) {
   const feet = pixelSprite(PROPS.poop);
   feet.position.set(STALL_M / 2, 0, -0.12);
   feet.visible = false;
-  const marker = frontMarker();
-  marker.position.set(STALL_M / 2, 1.6, SEAT_Z);
-  marker.visible = false;
 
 
   const hit = new THREE.Mesh(G.hit, M.hit);
@@ -1293,7 +1278,7 @@ function makeStall(i) {
   hit.userData.stall = i;
 
 
-  g.add(part, cap, post, hinge, toilet, seatSpot, feet, marker, hit);
+  g.add(part, cap, post, hinge, toilet, seatSpot, feet, hit);
 
   // the last stall in a bank has no neighbour closing its right side, so give it its own wall
   const endX = L.cx + Math.cos(L.rot) * STALL_W;
@@ -1311,7 +1296,7 @@ function makeStall(i) {
   g.updateMatrixWorld(true);
   stallHits[i] = hit;
   return {
-    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot, person: null, personFor: '', feet, marker,
+    i, group: g, hinge, lock, face, doorCanvas, doorTex, crack: 0, seatSpot, person: null, personFor: '', feet,
     open: 1, shake: 0, gone: 0, regrow: 1,
   };
 }
@@ -1347,21 +1332,19 @@ function makeWalker(u) {
   const blob = new THREE.Mesh(G.blob, M.blob);
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.01;
-  const marker = frontMarker();
-  marker.visible = false;
-  charRoot.add(p.group, blob, marker);
-  // a small name tag over the head (not on me: I have the arrow)
+  charRoot.add(p.group, blob);
+  // a small name tag over the head; mine is in yellow, so I can find myself
   const tag = document.createElement('div');
-  tag.className = 'nametag';
+  tag.className = u.id === meId ? 'nametag me' : 'nametag';
   tag.textContent = u.name || '';
   tag.hidden = true;
-  if (u.id !== meId) $('#labels').append(tag);
-  return { data: u, p, blob, marker, tag, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
+  $('#labels').append(tag);
+  return { data: u, p, blob, tag, rx: u.x, ry: u.y, facing: 0, turn: 0, phase: 0, idle: 9, walking: false };
 }
 
 function removeWalker(e) {
   e.tag.remove();
-  charRoot.remove(e.p.group, e.blob, e.marker);
+  charRoot.remove(e.p.group, e.blob);
   if (e.cup) charRoot.remove(e.cup);
   disposePerson(e.p);
 }
@@ -1558,8 +1541,7 @@ function applyState(st) {
 
 // ---------- movement ----------
 
-const isAnimal = () => Boolean(me.k) && me.k !== 'person'; // animals go in the bushes, not the restrooms
-const freeFor = (i) => !stalls[i] && !isAnimal();
+const freeFor = (i) => !stalls[i];
 
 function nearestStall(x, y, ok, range = ENTER_RANGE) {
   let best = -1;
@@ -1978,10 +1960,6 @@ function updateCamera(dt) {
 // head-top markers float "up" on screen, not straight up in the world, so looking down from above
 // they still sit over the head instead of landing on the face
 const camUp = new THREE.Vector3();
-function overHead(obj, x, baseY, z, h) {
-  obj.position.set(x, baseY, z).addScaledVector(camUp, h);
-}
-
 // people on benches face out, away from the wash island
 // sitting on a picnic mat (else just on the grass, wherever you are)
 const onAMat = (x, y) => GROUNDS.terrace.picnics.some((m) => Math.hypot(m.x - x, m.y - y) < 110);
@@ -2011,7 +1989,6 @@ function placeWalkers(dt, t) {
     const p = e.p;
     p.group.visible = !inStall;
     e.blob.visible = !inStall;
-    e.marker.visible = mine && !inStall;
     if (inStall) {
       if (e.cup) e.cup.visible = false;
       continue;
@@ -2069,13 +2046,12 @@ function placeWalkers(dt, t) {
     setPantsDown(p, pantsDown || squatting);
     p.group.rotation.y = e.turn;
     e.blob.position.set(X, 0.01, Z);
-    const bob = (Math.floor(t / 300) % 2) * 0.04;
     placeCup(e, u, X, Z);
     if (benched) {
       pose(p, { mode: 'sit', t: sec, seed: id });
       handFor(p, id, u, false); // at the table the drink stands in front of you, as a cup
       p.group.position.set(X, BENCH_TOP - HIP_Y + lift, Z);
-      overHead(e.marker, X, BENCH_TOP - HIP_Y + lift, Z, p.height + 0.2 + bob + towerHeight(u.pl));
+      e.crown = crownOf(p);
       continue;
     }
     if (e.kickT > 0) {
@@ -2091,7 +2067,7 @@ function placeWalkers(dt, t) {
     handFor(p, id, u, true);
     if (squatting && u.h) p.group.position.x += Math.floor(t / 70) % 2 ? 0.012 : 0;
     p.group.position.set(X, lift, Z);
-    overHead(e.marker, X, lift, Z, p.height + 0.22 + bob + towerHeight(u.pl));
+    e.crown = crownOf(p);
   }
 }
 
@@ -2119,7 +2095,7 @@ function syncRoom(t, dt) {
       room.seat.remove(roomPerson.group);
       disposePerson(roomPerson);
     }
-    roomPerson = makePerson(hairFor(meId));
+    roomPerson = makeCharacter(me.k, hairFor(meId));
     setPantsDown(roomPerson, true);
     room.seat.add(roomPerson.group);
     roomPersonFor = meId;
@@ -2185,7 +2161,6 @@ function animateStalls(dt, t) {
 
     const occ = occId ? users.get(occId) : null;
     s.feet.visible = false;
-    s.marker.visible = occId === meId;
     // the sitter: a 3D person with pants down, made for whoever is in here now (private rooms keep theirs out of sight)
     const key = occ && !s.private ? String(occId) : '';
     if (key !== s.personFor) {
@@ -2195,7 +2170,7 @@ function animateStalls(dt, t) {
         s.person = null;
       }
       if (occ) {
-        s.person = makePerson(hairFor(occId));
+        s.person = makeCharacter(occ?.data.k, hairFor(occId)); // a person or an animal, on the toilet
         setPantsDown(s.person, true);
         s.seatSpot.add(s.person.group);
       }
@@ -2214,7 +2189,6 @@ function animateStalls(dt, t) {
         lunchFor(s.person, occId, t / 1000, true);
         s.person.group.position.x = u.h && Math.floor(t / 70) % 2 ? 0.015 : 0;
       }
-      s.marker.position.y = (s.private ? 2.55 : 1.6 + towerHeight(occ.data.pl)) + (Math.floor(t / 300) % 2) * 0.04;
     }
   });
 }
@@ -2236,7 +2210,7 @@ function onPoop(m) {
   const inside = byMe && inRoom;
   const h = headOf(m.id);
   if (h) {
-    const sound = POOP_SOUND[kindOf(m.id)] || (m.bush ? '뿌직' : '퐁당');
+    const sound = m.bush ? '뿌직' : '퐁당';
     pop(h.clone(), m.gold ? (byMe ? '황금똥!! 대박' : '황금똥!') : byMe ? `${sound}! 오늘 ${m.n}번째` : sound, inside);
     if (m.gold && !inside) sparkle(h);
   }
@@ -2250,7 +2224,7 @@ function onPoop(m) {
   if (byMe) {
     flashUntil = performance.now() + 1300;
     buzz([30, 40, 90]);
-    poopSound(kindOf(m.id)); // only your own poop makes a sound; a room of dozens would be a racket
+    plop(1); // only your own poop makes a sound; a room of dozens would be a racket
   }
 }
 
@@ -2304,6 +2278,18 @@ function poopSpot(k, out, height = HEIGHT) {
   const r = 0.27 + layer * 0.07;
   return out.set(Math.sin(a) * r, ROWS[row] * height - 0.03, Math.cos(a) * r);
 }
+// on an animal: rows all round its body, from the shoulders to the bottom, in its own frame
+const coatAt = new THREE.Vector3();
+function bodySpot(k, fit, out) {
+  const j = k - HEAD_STACK;
+  const perLayer = RING * ROWS.length;
+  const layer = Math.floor(j / perLayer);
+  const row = Math.floor((j % perLayer) / RING);
+  const col = j % RING;
+  const a = (col / RING) * Math.PI * 2 + row * 0.39 + layer * 0.21;
+  const r = fit.r + 0.015 + layer * 0.05;
+  return out.set(Math.sin(a) * r, fit.y1 - ((fit.y1 - fit.y0) * (row + 0.5)) / ROWS.length, Math.cos(a) * r);
+}
 function syncTower(p, id, count, dt) {
   if (!p.tower) {
     // two groups: the stack riding on the head, and the coat of poops round the body (turning with it, lying down too)
@@ -2319,7 +2305,13 @@ function syncTower(p, id, count, dt) {
       p.tower.position.y = HEIGHT;
       p.group.add(p.tower);
     }
-    p.spin.add(p.coat);
+    if (p.parts.body) {
+      // an animal's coat hangs on its body, so it lies along it on all fours
+      p.parts.torso.add(p.coat);
+      p.parts.body.geometry.computeBoundingBox();
+      const bb = p.parts.body.geometry.boundingBox;
+      p.coatFit = { y0: bb.min.y * 0.8, y1: bb.max.y * 0.85, r: Math.max(bb.max.x, bb.max.z) };
+    } else p.spin.add(p.coat);
   }
   const want = Math.min(count || 0, DRAW_MOST);
   const onHead = Math.min(want, HEAD_STACK);
@@ -2330,11 +2322,14 @@ function syncTower(p, id, count, dt) {
     while (group.children.length < n) {
       const k = offset + group.children.length;
       const s = pixelSprite(poopArt(id, golds?.has(k)), POOP_PX);
-      s.userData.to = poopSpot(k, new THREE.Vector3(), p.height);
+      const onBody = group === p.coat && p.coatFit;
+      s.userData.to = onBody ? bodySpot(k, p.coatFit, new THREE.Vector3()) : poopSpot(k, new THREE.Vector3(), p.height);
+      if (onBody) s.scale.multiplyScalar(1 / p.size); // the same size of poop on a small animal
       s.position.copy(s.userData.to).add(new THREE.Vector3(0, 0.6, 0)); // drops in from above
       group.add(s);
     }
-    for (const s of group.children) s.position.lerp(s.userData.to, Math.min(1, dt * 10));
+    const stretch = group === p.coat && p.coatFit ? p.parts.body.scale.y : 1; // the body stretched out on all fours
+    for (const s of group.children) s.position.lerp(coatAt.copy(s.userData.to).setY(s.userData.to.y * stretch), Math.min(1, dt * 10));
   };
   fill(p.tower, onHead, 0);
   fill(p.coat, onBody, HEAD_STACK);
@@ -2710,14 +2705,17 @@ function toScreen(v) {
   return { x: ((tmp.x + 1) / 2) * W, y: ((1 - tmp.y) / 2) * H, on: tmp.z < 1 && Math.abs(tmp.x) < 1.2 && Math.abs(tmp.y) < 1.2 };
 }
 
-function headOf(id) {
+// just over someone's head (gap in metres): where pops come from; name tags use gap 0 and sit a few pixels up
+function headOf(id, gap = 0.04) {
   const e = users.get(id);
   if (!e) return null;
   const seat = id === meId ? me.s : e.data.s;
   const tower = towerHeight(e.data.pl);
   if (id === meId && inRoom) return roomWorld(room.head).add(new THREE.Vector3(0, tower, 0));
   if (seat !== -1) return stallWorld(seat, STALL_M / 2, 1.55 + tower, SEAT_Z);
-  return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, e.p.height + 0.15 + tower); // screen-up, like the markers
+  // right over the head as it is posed now (lower for an animal on all fours), over the ears or the poop tower
+  const crown = e.crown ?? e.p.height;
+  return new THREE.Vector3(toX(e.rx), Math.max(crown + e.p.above, crown + tower) + gap, toZ(e.ry));
 }
 
 // a crisp label pinned under the golden poop statue (text drawn in 3D would blur)
@@ -2741,18 +2739,18 @@ function placeWishLink() {
 const tagAt = new THREE.Vector3();
 function placeNameTags() {
   for (const [id, e] of users) {
-    if (id === meId) continue;
     const seat = e.data.s;
     const hide = inRoom || OG || (seat !== -1 && LAYOUT[seat]?.type === 'private');
-    const h = hide ? null : headOf(id);
+    const h = hide ? null : headOf(id, 0);
     if (!h || h.distanceTo(camera.position) > 24) {
       e.tag.hidden = true;
       continue;
     }
-    tagAt.copy(h).addScaledVector(camUp, 0.12);
+    tagAt.copy(h);
     const p = toScreen(tagAt);
     e.tag.hidden = !p.on;
-    if (p.on) e.tag.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
+    // 12 pixels over the top of the head, however far the camera is zoomed
+    if (p.on) e.tag.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y) - 12}px) translate(-50%, -100%)`;
   }
 }
 
@@ -2965,7 +2963,7 @@ function sitHere() {
 
 // 똥 누러 가기: off to the nearest free stall, or to the bushes when every stall is taken
 function goPoop() {
-  const i = isAnimal() ? -1 : closestAnywhere(freeFor);
+  const i = closestAnywhere(freeFor);
   if (i >= 0) {
     walkToStall(i);
     return;
@@ -2974,7 +2972,7 @@ function goPoop() {
   target = settleLocal({ x: b.x, y: b.y });
   pendingEnter = -1;
   showTapMark(toX(target.x), toZ(target.y));
-  toast(isAnimal() ? '가까운 풀숲으로 가요' : '칸이 다 찼어요. 가까운 풀숲으로 가요');
+  toast('칸이 다 찼어요. 가까운 풀숲으로 가요');
 }
 
 // ---------- the vending machines, the drink in your hand, and 변비 ----------
@@ -3144,7 +3142,7 @@ function onStuck(m) {
   const h = headOf(m.id);
   if (m.id === meId) {
     buzz([60, 40, 60]);
-    toast((me.pk || []).length ? '변비에 걸렸어요! 쾌변음료를 마시면 풀려요' : '변비에 걸렸어요! 쾌변음료를 한 병 마시거나 체조를 한 번 하면 풀려요');
+    toast((me.pk || []).length ? '변비에 걸렸어요! 쾌변음료를 마시면 풀려요' : '변비에 걸렸어요! 쾌변음료를 한 병 마시거나 체조를 두 번 하면 풀려요');
   } else if (h) pop(h.clone(), '끄으응…');
 }
 
@@ -3432,27 +3430,6 @@ function plop(volume) {
   if (!soundOn) return;
   if (buffers.plop) playSound('plop', volume);
   else tone('square', 620, 120, 0.2, volume * 0.5);
-}
-
-// each kind's poop lands with its own sound (a person's is the plop from the sound file)
-function poopSound(kind) {
-  if (!soundOn) return;
-  if (kind === 'elephant') {
-    tone('sine', 95, 38, 0.55, 0.7);
-    noiseBurst(0.25, 0.25, 80);
-    roomShake = 0.3; // the ground shakes a little
-  } else if (kind === 'dog') tone('triangle', 900, 480, 0.09, 0.45);
-  else if (kind === 'cat') {
-    noiseBurst(0.1, 0.25, 3200);
-    noiseBurst(0.1, 0.2, 3600, 0.13);
-  } else if (kind === 'rabbit') for (let k = 0; k < 4; k++) tone('triangle', 1100 - k * 60, 600, 0.06, 0.35, k * 0.09);
-  else if (kind === 'giraffe') {
-    tone('sine', 1500, 320, 0.9, 0.18); // a long way down...
-    tone('square', 620, 120, 0.2, 0.4, 0.9); // ...퐁
-  } else if (kind === 'wombat') {
-    tone('triangle', 820, 790, 0.05, 0.5);
-    tone('triangle', 760, 740, 0.06, 0.45, 0.11);
-  } else plop(1);
 }
 
 // knocks get heavier as the door weakens: a polite tap-tap, then thumps, then bangs

@@ -132,6 +132,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- labels over the scene ---------- */
 
+/* the way to the wish page, pinned under the golden poop on the back wall */
+.wish-link {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(90, 58, 12, 0.78);
+  color: #ffe08a;
+  font-size: 12px;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: 0 0 12px rgba(255, 210, 90, 0.45);
+}
+.wish-link[hidden] { display: none; }
+.og .wish-link { display: none !important; }
+
 .labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
 
 .bubble,

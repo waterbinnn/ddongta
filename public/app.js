@@ -840,6 +840,8 @@ function buildRoom() {
   halo.position.set(rw / 2, 3.6, back + 0.03);
   const emblem = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: pixelTex(PROPS.goldPoop), transparent: true, alphaTest: 0.5 }));
   emblem.position.set(rw / 2, 3.6, back + 0.05);
+  emblem.userData.wish = true;
+  wishHits.push(emblem);
   worldRoot.add(halo, emblem);
   buildEntrance(rw / 2, rd + 0.2);
 
@@ -1547,6 +1549,7 @@ function stallWorld(i, lx, ly, lz) {
 
 const stallObjs = [];
 const stallHits = [];
+const wishHits = []; // the golden poop on the back wall and its sign: tapping them opens the wish page
 
 function makeStall(i) {
   const g = new THREE.Group();
@@ -2672,7 +2675,22 @@ function headOf(id) {
   return new THREE.Vector3(toX(e.rx), 0, toZ(e.ry)).addScaledVector(camUp, 1.2); // screen-up, like the markers
 }
 
+// a crisp link pinned under the golden poop on the back wall (text drawn in the 3D room would blur)
+const wishAt = new THREE.Vector3();
+function placeWishLink() {
+  const link = $('#wishLink');
+  const emblem = wishHits[0];
+  if (!emblem) return;
+  emblem.getWorldPosition(wishAt);
+  wishAt.y -= 0.72;
+  wishAt.project(camera);
+  const on = wishAt.z < 1 && Math.abs(wishAt.x) < 0.95 && wishAt.y > -0.6 && wishAt.y < 0.95;
+  link.hidden = !on;
+  if (on) link.style.transform = `translate(${((wishAt.x + 1) / 2) * W}px, ${((1 - wishAt.y) / 2) * H}px) translate(-50%, 0)`;
+}
+
 function updateLabels(dt) {
+  placeWishLink();
   for (let i = floats.length - 1; i >= 0; i--) {
     const f = floats[i];
     f.age += dt;
@@ -3463,7 +3481,7 @@ let pinchDist = 0;
 function pick(clientX, clientY) {
   const ndc = new THREE.Vector2((clientX / W) * 2 - 1, -(clientY / H) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  const objs = stallHits.filter(Boolean);
+  const objs = [...wishHits, ...stallHits.filter(Boolean)];
   if (floorMesh) objs.push(floorMesh);
   return raycaster.intersectObjects(objs, false)[0] || null;
 }
@@ -3471,6 +3489,10 @@ function pick(clientX, clientY) {
 // two quick taps close together mean "run there"
 let lastTap = { t: 0, x: 0, y: 0 };
 function handleTap(x, y) {
+  if (pick(x, y)?.object.userData.wish) {
+    location.href = '/wish';
+    return;
+  }
   if (!me.ready || me.s !== -1 || me.rolling) return;
   const now = performance.now();
   const run = now - lastTap.t < 380 && Math.hypot(x - lastTap.x, y - lastTap.y) < 40;
@@ -3516,7 +3538,7 @@ canvasEl.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
       const hit = pick(e.clientX, e.clientY);
       hoverStall = hit && hit.object.userData.stall !== undefined && me.s === -1 ? hit.object.userData.stall : -1;
-      canvasEl.style.cursor = hoverStall >= 0 ? 'pointer' : '';
+      canvasEl.style.cursor = hoverStall >= 0 || hit?.object.userData.wish ? 'pointer' : '';
     }
     return;
   }

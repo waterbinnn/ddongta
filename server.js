@@ -2,10 +2,13 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const { createWish } = require('./lib/wish');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const VENDOR = { '/vendor/three.module.js': path.join(__dirname, 'node_modules/three/build/three.module.js') };
+// three.js add-ons (environment maps, model loaders) for the wish page
+const JSM_DIR = path.join(__dirname, 'node_modules/three/examples/jsm');
 
 // world layout (shared with public/app.js)
 // The room is a plaza: stalls line three walls in a U (20 at the back, 15 down each side),
@@ -63,6 +66,7 @@ const TYPES = {
   '.m4a': 'audio/mp4',
   '.woff2': 'font/woff2',
   '.png': 'image/png',
+  '.glb': 'model/gltf-binary',
 };
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -105,6 +109,9 @@ if (process.env.REDIS_URL) {
     })
     .catch((err) => console.warn('key value unavailable:', err.message));
 }
+// the wish page's golden poop, shared by everyone
+const wish = createWish({ kv: () => kv, kstDate, clean: cleanChat });
+
 function countPoop() {
   flushedToday++;
   if (kv?.isReady) kv.multi().incr(`flushed:${today}`).expire(`flushed:${today}`, 3 * 86400).exec().catch(() => {});
@@ -321,6 +328,7 @@ setInterval(() => {
         m.pile++; // every stall keeps its own poop tower
         const gold = Math.random() < GOLD_CHANCE;
         broadcast(room, { t: 'poop', id: u.id, n: u.count, stall: u.stall, pile: m.pile, ...(gold && { gold: 1 }) });
+        if (gold) wish.gild(); // a golden poop puts a little gold back on the wish page's poop
       }
     }
     room.meta.forEach((m, i) => {
@@ -357,8 +365,10 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify(rooms.map((r) => ({ id: r.id, theme: r.theme, label: r.label, no: r.no, online: r.users.size, max: ROOM_CAP }))));
   }
-  const file = VENDOR[url.pathname] || path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : path.normalize(url.pathname));
-  if (!VENDOR[url.pathname] && !file.startsWith(PUBLIC_DIR)) {
+  const jsm = url.pathname.startsWith('/vendor/jsm/') && path.join(JSM_DIR, path.normalize(url.pathname.slice('/vendor/jsm/'.length)));
+  const page = { '/': 'index.html', '/wish': 'wish.html' }[url.pathname];
+  const file = VENDOR[url.pathname] || jsm || path.join(PUBLIC_DIR, page || path.normalize(url.pathname));
+  if (jsm ? !jsm.startsWith(JSM_DIR + path.sep) : !VENDOR[url.pathname] && !file.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     return res.end();
   }
@@ -378,6 +388,11 @@ let nextId = 1;
 
 wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://localhost').searchParams;
+  if (q.get('wish')) {
+    ws.isAlive = true;
+    ws.on('pong', () => (ws.isAlive = true));
+    return wish.join(ws);
+  }
   const wanted = rooms.find((r) => r.id === q.get('room')) || rooms[0];
   let room = !isFull(wanted) ? wanted : rooms.find((r) => r.theme === wanted.theme && !isFull(r)) || rooms.find((r) => !isFull(r));
   if (!room && rooms.length < MAX_ROOMS) room = openRoom(wanted.theme);

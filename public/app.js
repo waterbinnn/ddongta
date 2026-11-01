@@ -3264,7 +3264,9 @@ function renderActions() {
   const rail = $('#rail');
   rail.innerHTML = '';
   if ((me.pk || []).length && mode !== 'rolling') {
-    const b = miniBtn('drink', '쾌변음료 마시기', drinkNow);
+    // a round button like 앉기 and 눕기, always out (never folded behind the +)
+    const b = miniBtn('drink', '쾌변음료', drinkNow);
+    b.classList.add('pose');
     if (me.cn) b.classList.add('urge'); // stuck: this is the way out
     rail.append(b);
   }
